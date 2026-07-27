@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using LinuxHub.Common.Diagnostics;
 
 namespace LinuxHub.Features.InstallWizard.Services
 {
@@ -44,10 +45,19 @@ namespace LinuxHub.Features.InstallWizard.Services
 
                 string output = File.Exists(logPath) ? File.ReadAllText(logPath) : string.Empty;
 
+                // Arquiva script + saída ANTES de qualquer throw: o `finally` apaga os dois
+                // arquivos temporários, e sem isso uma falha não deixava nenhum rastro pra
+                // diagnosticar depois (ver DiagnosticLog).
+                DiagnosticLog.Write(
+                    $"{operationDescription} (exit={process.ExitCode})",
+                    $"--- script ---{Environment.NewLine}{script}{Environment.NewLine}" +
+                    $"--- saída ---{Environment.NewLine}{output}");
+
                 if (process.ExitCode != 0)
                 {
                     throw new InvalidOperationException(
-                        $"Falha na {operationDescription} (código {process.ExitCode}). Saída: {output}");
+                        $"Falha na {operationDescription} (código {process.ExitCode}). " +
+                        $"Log completo em {DiagnosticLog.CurrentLogFile}. Saída: {output}");
                 }
 
                 return output;

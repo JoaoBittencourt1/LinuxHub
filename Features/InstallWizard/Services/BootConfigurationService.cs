@@ -109,7 +109,11 @@ bcdedit /set '{{fwbootmgr}}' displayorder $guid /addlast
 if ($LASTEXITCODE -ne 0) {{ throw ""bcdedit /set {{fwbootmgr}} displayorder falhou"" }}
 bcdedit /set '{{fwbootmgr}}' bootsequence $guid
 if ($LASTEXITCODE -ne 0) {{ throw ""bcdedit /set {{fwbootmgr}} bootsequence falhou"" }}
-Write-Output ""BCDGUID:$guid""";
+Write-Output ""BCDGUID:$guid""
+Write-Output '--- estado final: bcdedit /enum {{fwbootmgr}} ---'
+bcdedit /enum '{{fwbootmgr}}'
+Write-Output '--- estado final: entrada criada ---'
+bcdedit /enum $guid";
 
         internal static string BuildAddFirmwareBootEntryScript(string description, char driveLetter, string efiPathOnVolume) =>
             $"$ErrorActionPreference = 'Stop'\n{BuildAddFirmwareBootEntryCommands(description, driveLetter, efiPathOnVolume)}";
