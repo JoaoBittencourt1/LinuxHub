@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using LinuxHub.Common.Diagnostics;
 
 namespace LinuxHub.Features.InstallWizard.Services
@@ -21,12 +22,19 @@ namespace LinuxHub.Features.InstallWizard.Services
             string scriptPath = Path.Combine(Path.GetTempPath(), $"linuxhub_{Guid.NewGuid():N}.ps1");
             string logPath = Path.Combine(Path.GetTempPath(), $"linuxhub_{Guid.NewGuid():N}.log");
 
-            File.WriteAllText(scriptPath, script);
+            // UTF-8 COM BOM: o Windows PowerShell 5.1 interpreta um .ps1 sem BOM usando a
+            // codepage ANSI do sistema, então todo acento vira mojibake ("Não" -> "NÃ£o") —
+            // inclusive dentro das mensagens de erro que os scripts lançam. O BOM é o que faz
+            // ele reconhecer o arquivo como UTF-8. (File.WriteAllText grava sem BOM.)
+            File.WriteAllText(scriptPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
 
             var startInfo = new ProcessStartInfo
             {
                 FileName = "cmd.exe",
-                Arguments = $"/c powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\" > \"{logPath}\" 2>&1",
+                // `chcp 65001` põe o console em UTF-8 antes de rodar, senão a saída das
+                // ferramentas nativas (bcdedit, diskpart) sai na codepage OEM e é lida aqui
+                // como UTF-8, virando "vers�o" no log e nas mensagens de erro.
+                Arguments = $"/c chcp 65001 > nul && powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"{scriptPath}\" > \"{logPath}\" 2>&1",
                 Verb = "runas",
                 // CreateNoWindow só tem efeito com UseShellExecute=false — incompatível com
                 // Verb=runas (elevação via UAC exige ShellExecute). WindowStyle é o que
