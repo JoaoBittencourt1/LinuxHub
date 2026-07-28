@@ -34,7 +34,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // devem produzir o mesmo hash no /etc/shadow.
             string passwordHash = Sha512Crypt.Hash(config.Password, Sha512Crypt.GenerateSalt());
 
-            string userData = AutoinstallBuilder.BuildUserData(config, layout, passwordHash);
+            string userData = AutoinstallBuilder.BuildUserData(config, layout, passwordHash, seedPartitionNumber);
             string metaData = AutoinstallBuilder.BuildMetaData($"linuxhub-{Guid.NewGuid():N}");
 
             _seedWriter.WriteSeedFiles(diskIndex, seedPartitionNumber, userData, metaData);

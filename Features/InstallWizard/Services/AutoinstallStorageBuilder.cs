@@ -34,13 +34,13 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// </summary>
         public const long MinimumRootSizeBytes = 12L * 1024 * 1024 * 1024;
 
-        public static string Build(DiskLayout disk, InstallMode mode, bool isUefi, int indentSpaces)
+        public static string Build(DiskLayout disk, InstallMode mode, bool isUefi, int indentSpaces, int seedPartitionNumber)
         {
             ArgumentNullException.ThrowIfNull(disk);
 
             return mode == InstallMode.Replace
-                ? BuildWholeDiskLayout(disk, indentSpaces)
-                : BuildDualBootConfig(disk, isUefi, indentSpaces);
+                ? BuildWholeDiskLayout(disk, indentSpaces, seedPartitionNumber)
+                : BuildDualBootConfig(disk, isUefi, indentSpaces, seedPartitionNumber);
         }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// caminho mais testado do instalador. Escrever uma lista explícita aqui seria
         /// assumir risco sem ganho nenhum.
         /// </summary>
-        private static string BuildWholeDiskLayout(DiskLayout disk, int indentSpaces)
+        private static string BuildWholeDiskLayout(DiskLayout disk, int indentSpaces, int seedPartitionNumber)
         {
             string indent = new(' ', indentSpaces);
 
@@ -57,7 +57,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine($"{indent}layout:");
             yaml.AppendLine($"{indent}  name: direct");
             yaml.AppendLine($"{indent}  match:");
-            yaml.AppendLine($"{indent}    {BuildDiskMatch(disk)}");
+            yaml.AppendLine($"{indent}    {BuildDiskMatch(disk, seedPartitionNumber)}");
 
             return yaml.ToString();
         }
@@ -65,34 +65,72 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// <summary>
         /// Como identificar, do lado Linux, o disco que o Windows escolheu.
         ///
-        /// NÃO usa o número de série. Num NVMe o Windows reporta o EUI-64 do namespace
-        /// (<c>0000_0000_0000_0000_6D1C_0035_0218_7C70.</c>, derivado do <c>UniqueId</c>
-        /// <c>eui.…</c>) enquanto o Linux expõe em <c>serial</c> o número de série do
-        /// CONTROLADOR — campos diferentes do mesmo dispositivo, que nunca coincidem. Isso
-        /// custou uma instalação real, que morreu em
+        /// NÃO usa o número de série do Windows como veio do WMI. Num NVMe o Windows reporta o
+        /// EUI-64 do namespace (<c>0000_0000_0000_0000_6D1C_0035_0218_7C70.</c>, derivado do
+        /// <c>UniqueId</c> <c>eui.…</c>) enquanto o Linux expõe em <c>serial</c> o número de
+        /// série do CONTROLADOR — campos diferentes do mesmo dispositivo, que nunca coincidem.
+        /// Isso custou uma instalação real, que morreu em
         /// <c>Filesystem/apply_autoinstall_config</c> com "matched no disk".
         ///
-        /// Sobra <c>size</c>, que compara número e não texto: é a única chave do
-        /// <c>MatchDirective</c> que não depende de os dois sistemas darem o mesmo nome ao
-        /// mesmo dispositivo. Ela aceita <c>largest</c> e <c>smallest</c>, o que cobre
-        /// qualquer máquina em que o disco alvo seja o maior ou o menor — não só as de um
-        /// disco só, onde ele é as duas coisas ao mesmo tempo.
+        /// Em vez disso, a identidade vem de dado de TABELA DE PARTIÇÃO — GUID da partição
+        /// semente em GPT, assinatura de disco em MBR — que o Windows escreve e o Linux lê com
+        /// o parser dele mesmo, sem tradução de driver/fabricante no meio. Como o `match:` do
+        /// subiquity não sabe ler tabela de partições (só compara valores já conhecidos), a
+        /// resolução PARTUUID/assinatura → disco acontece em tempo de execução via
+        /// `early-commands` (<see cref="BuildEarlyCommands"/>), que substitui
+        /// <see cref="EarlyCommandsBuilder.DiskPathPlaceholder"/> pelo path real do disco
+        /// resolvido antes do curtin ler o arquivo. Usa <c>path:</c>, não <c>serial:</c> —
+        /// ver <see cref="EarlyCommandsBuilder"/> para o motivo (achado numa instalação real).
         ///
-        /// Fica de fora o disco do meio (3+ unidades) e o empate de tamanho no extremo. Aí
-        /// não existe critério correto disponível, e um match errado apaga o disco errado —
-        /// então o caso é recusado, nunca chutado.
+        /// Só cai no critério de tamanho (`size: largest`/`smallest`) quando nenhum
+        /// identificador de tabela de partição está disponível com segurança — disco MBR sem
+        /// assinatura confiável, por exemplo. Nesse último recurso, fica de fora o disco do
+        /// meio (3+ unidades) e o empate de tamanho no extremo: aí não existe critério correto
+        /// disponível, e um match errado apaga o disco errado — então o caso é recusado, nunca
+        /// chutado.
         ///
         /// Somar <c>model</c> como filtro extra pareceria mais seguro e é o oposto disso: se
         /// a string do Linux divergir da do Windows em um caractere, um match que funcionava
         /// vira "matched no disk".
         /// </summary>
-        internal static string BuildDiskMatch(DiskLayout disk)
+        internal static string BuildDiskMatch(DiskLayout disk, int seedPartitionNumber) =>
+            ResolveDiskIdentity(disk, seedPartitionNumber).MatchYaml;
+
+        /// <summary>Bloco <c>early-commands:</c> a inserir no nível raiz do autoinstall (fora
+        /// de <c>storage:</c>), ou <c>null</c> quando o disco foi identificado pelo critério de
+        /// tamanho, caso em que não há nada para resolver em tempo de execução.</summary>
+        internal static string? BuildEarlyCommands(DiskLayout disk, int seedPartitionNumber, int indentSpaces) =>
+            ResolveDiskIdentity(disk, seedPartitionNumber).EarlyCommandsYaml;
+
+        private readonly record struct DiskIdentity(string MatchYaml, string? EarlyCommandsYaml);
+
+        private static DiskIdentity ResolveDiskIdentity(DiskLayout disk, int seedPartitionNumber, int earlyCommandsIndentSpaces = 4)
         {
+            if (disk.IsGpt)
+            {
+                string guid = disk.Partitions
+                    .FirstOrDefault(p => p.Number == seedPartitionNumber)?.Guid
+                    .Trim().Trim('{', '}') ?? string.Empty;
+
+                if (guid.Length > 0)
+                {
+                    return new DiskIdentity(
+                        $"path: {EarlyCommandsBuilder.DiskPathPlaceholder}",
+                        EarlyCommandsBuilder.BuildForPartuuid(guid, earlyCommandsIndentSpaces));
+                }
+            }
+            else if (disk.DiskSignatureHex.Length > 0 && disk.HasUniqueDiskSignature)
+            {
+                return new DiskIdentity(
+                    $"path: {EarlyCommandsBuilder.DiskPathPlaceholder}",
+                    EarlyCommandsBuilder.BuildForMbrSignature(disk.DiskSignatureHex, earlyCommandsIndentSpaces));
+            }
+
             if (disk.IsLargestDisk)
-                return "size: largest";
+                return new DiskIdentity("size: largest", null);
 
             if (disk.IsSmallestDisk)
-                return "size: smallest";
+                return new DiskIdentity("size: smallest", null);
 
             throw new InvalidOperationException(
                 $"A instalação automática não consegue identificar o disco {disk.Index} com " +
@@ -102,7 +140,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                 "desconecte os demais, ou use a instalação manual.");
         }
 
-        private static string BuildDualBootConfig(DiskLayout disk, bool isUefi, int indentSpaces)
+        private static string BuildDualBootConfig(DiskLayout disk, bool isUefi, int indentSpaces, int seedPartitionNumber)
         {
             if (!disk.IsGpt && isUefi)
             {
@@ -144,7 +182,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine($"{field}id: {DiskId}");
             yaml.AppendLine($"{field}ptable: {(disk.IsGpt ? "gpt" : "msdos")}");
             yaml.AppendLine($"{field}match:");
-            yaml.AppendLine($"{field}  {BuildDiskMatch(disk)}");
+            yaml.AppendLine($"{field}  {BuildDiskMatch(disk, seedPartitionNumber)}");
             yaml.AppendLine($"{field}preserve: true");
             yaml.AppendLine($"{field}grub_device: {Boolean(!isUefi)}");
 

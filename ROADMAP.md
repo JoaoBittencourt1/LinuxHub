@@ -184,3 +184,54 @@ destrutiva), ao custo de reimplementar em bash algo que o subiquity já
 resolve pronto. `lib/disk.sh`, `lib/mount.sh`, `lib/chroot.sh`,
 `lib/boot.sh` e `distros/ubuntu.sh` são, portanto, scripts reais a escrever
 — não geradores de config de um instalador nativo.
+
+> **Nota (2026-07-28):** esta decisão específica (bash manual em vez de
+> `autoinstall`) foi revertida na prática — `openspec/changes/
+> ubuntu-install-pipeline` e `identify-disk-by-partuuid` implementaram e
+> validaram (com correção pós-teste real) a geração de `autoinstall`/
+> subiquity para o Ubuntu. Ver seção 6 para o registro atualizado do porquê
+> e do que isso implica de escopo.
+
+## 6. Decisões do usuário (2026-07-28) — escopo da instalação automática por distro
+
+Depois de validar o pipeline de `autoinstall` ponta a ponta com Ubuntu
+(`identify-disk-by-partuuid`), surgiu a pergunta natural: generalizar esse
+mesmo mecanismo para toda distro do catálogo?
+
+**Decisão: não.** A instalação totalmente automática (autoinstall/preseed
+gerado pelo LinuxHub, sem intervenção do usuário) fica restrita a um
+conjunto pequeno e deliberado de distros — **Ubuntu e Linux Mint
+confirmados, mais algumas outras a avaliar caso a caso** (candidatas
+naturais: derivadas Ubuntu/Debian, que compartilham subiquity/preseed ou
+mecanismo equivalente). Para todo o resto do catálogo, o LinuxHub entrega
+a máquina até a tela do instalador nativo da distro (boot sem USB,
+particionamento/plano de dual-boot já preparado quando aplicável) e para
+aí — **o usuário conduz a instalação a partir dali**, usando o instalador
+que a própria distro já tem.
+
+Por quê:
+- **Custo de suporte não escala linearmente.** Cada distro teria seu
+  próprio formato de instalação desatendida (subiquity no Ubuntu,
+  Calamares em várias, `archinstall`/scripts no Arch, Anaconda no
+  Fedora/RHEL, `d-i`/preseed no Debian puro...) — não é "mais um item de
+  catálogo", é uma integração nova por família, com sua própria superfície
+  de bugs (o incidente do `serial:` vs `path:` em `identify-disk-by-partuuid`
+  é o tipo de problema que se paga de novo a cada mecanismo novo).
+- **Automatizar destrói o motivo de escolher certas distros.** Arch (e
+  primos no mesmo espírito) existem porque a instalação manual É o
+  produto — customização de partição, kernel, init, pacote base. Gerar um
+  `archinstall` genérico por trás das costas do usuário remove exatamente
+  o que a distro promete entregar. Não é uma economia de esforço, é
+  entregar a coisa errada.
+- Isso não é regressão do "instalador universal sem USB" — essa promessa
+  (seção 2) continua valendo para qualquer distro do catálogo. O que muda
+  é onde a responsabilidade do LinuxHub termina: ele sempre resolve "como
+  eu saio do Windows e entro num Linux capaz de instalar", mas só resolve
+  também "como esse Linux se instala sozinho" para o conjunto restrito
+  acima.
+
+Implicação de arquitetura: o catálogo de distros (`distro-catalog`) precisa
+de um jeito de marcar, por distro, se ela suporta o caminho de autoinstall
+do LinuxHub ou só o caminho de boot-staging — isso é uma mudança de spec, a
+propor formalmente em `openspec/changes/` antes de implementar (constitution
+§7), não uma flag improvisada no meio do wizard.

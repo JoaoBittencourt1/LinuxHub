@@ -24,7 +24,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         private static readonly Regex HostnamePattern =
             new("^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$", RegexOptions.Compiled);
 
-        public static string BuildUserData(InstallerConfig config, DiskLayout disk, string passwordHash)
+        public static string BuildUserData(InstallerConfig config, DiskLayout disk, string passwordHash, int seedPartitionNumber)
         {
             ArgumentNullException.ThrowIfNull(config);
             ArgumentNullException.ThrowIfNull(disk);
@@ -60,6 +60,18 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine("  refresh-installer:");
             yaml.AppendLine("    update: false");
 
+            // Precisa vir ANTES de `storage:` na ordem de leitura conceitual, mas o subiquity
+            // não exige ordem entre chaves do topo — o que importa é que early-commands roda
+            // antes da probe de storage em tempo de execução (ver EarlyCommandsBuilder). Fica
+            // ausente quando o disco foi identificado só pelo critério de tamanho: não há nada
+            // para resolver em tempo de execução nesse caso.
+            string? earlyCommands = AutoinstallStorageBuilder.BuildEarlyCommands(disk, seedPartitionNumber, indentSpaces: 4);
+            if (earlyCommands is not null)
+            {
+                yaml.AppendLine("  early-commands:");
+                yaml.Append(earlyCommands);
+            }
+
             yaml.AppendLine($"  locale: {Quote(config.Locale)}");
             yaml.AppendLine("  keyboard:");
             yaml.AppendLine($"    layout: {Quote(config.Keymap)}");
@@ -75,7 +87,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine("    install-server: false");
 
             yaml.AppendLine("  storage:");
-            yaml.Append(AutoinstallStorageBuilder.Build(disk, mode, isUefi, indentSpaces: 4));
+            yaml.Append(AutoinstallStorageBuilder.Build(disk, mode, isUefi, indentSpaces: 4, seedPartitionNumber));
 
             // Nada de chave `swap:` no topo — ela NÃO existe no autoinstall. Numa instalação
             // real o subiquity respondeu "Unrecognized top-level key 'swap'" e avisou que

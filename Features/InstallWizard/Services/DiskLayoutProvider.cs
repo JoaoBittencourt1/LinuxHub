@@ -23,7 +23,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             using var diskSearcher = new ManagementObjectSearcher(
                 scope,
                 new ObjectQuery(
-                    "SELECT Number, SerialNumber, FriendlyName, Size, PartitionStyle " +
+                    "SELECT Number, SerialNumber, FriendlyName, Size, PartitionStyle, Signature " +
                     $"FROM MSFT_Disk WHERE Number = {diskIndex}"));
 
             ManagementBaseObject disk = diskSearcher.Get().Cast<ManagementBaseObject>().FirstOrDefault()
@@ -32,17 +32,57 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "sem o layout real do disco.");
 
             long sizeBytes = Convert.ToInt64(disk["Size"] ?? 0L);
+            bool isGpt = Convert.ToUInt16(disk["PartitionStyle"] ?? (ushort)0) == GptPartitionStyle;
             IReadOnlyList<long> allSizes = ReadAllDiskSizes(scope);
+
+            // A assinatura só existe (e só identifica) em disco MBR — MSFT_Disk.Signature é
+            // 0 num disco GPT, onde quem identifica é o GUID da partição semente.
+            string signatureHex = isGpt ? string.Empty : FormatSignature(disk["Signature"]);
+            bool hasUniqueSignature = !isGpt && signatureHex.Length > 0 &&
+                IsUniqueDiskSignature(signatureHex, scope);
 
             return new DiskLayout(
                 Index: diskIndex,
                 SerialNumber: disk["SerialNumber"]?.ToString()?.Trim() ?? string.Empty,
                 Model: disk["FriendlyName"]?.ToString()?.Trim() ?? string.Empty,
                 SizeBytes: sizeBytes,
-                IsGpt: Convert.ToUInt16(disk["PartitionStyle"] ?? (ushort)0) == GptPartitionStyle,
+                IsGpt: isGpt,
                 IsLargestDisk: IsUniqueExtreme(sizeBytes, allSizes, largest: true),
                 IsSmallestDisk: IsUniqueExtreme(sizeBytes, allSizes, largest: false),
-                Partitions: ReadPartitions(scope, diskIndex));
+                Partitions: ReadPartitions(scope, diskIndex),
+                DiskSignatureHex: signatureHex,
+                HasUniqueDiskSignature: hasUniqueSignature);
+        }
+
+        /// <summary>8 dígitos hex minúsculos sem prefixo, mesmo formato que o `blkid` do Linux
+        /// reporta em <c>PTUUID</c> para tabela <c>dos</c>. Zero (disco nunca inicializado por
+        /// um Windows específico) vira string vazia — não é um identificador utilizável.</summary>
+        private static string FormatSignature(object? rawSignature)
+        {
+            uint signature = Convert.ToUInt32(rawSignature ?? 0u);
+            return signature == 0 ? string.Empty : signature.ToString("x8");
+        }
+
+        /// <summary>Verdadeiro só se nenhum outro disco da máquina reportar a mesma assinatura.
+        /// Discos clonados por imagem (`dd`, restauração de backup) podem colidir — colisão de
+        /// assinatura MBR é um problema documentado do próprio Windows, então uma assinatura
+        /// repetida não pode ser tratada como identidade.</summary>
+        private static bool IsUniqueDiskSignature(string signatureHex, ManagementScope scope)
+        {
+            using var searcher = new ManagementObjectSearcher(
+                scope, new ObjectQuery("SELECT Signature, PartitionStyle FROM MSFT_Disk"));
+
+            int matches = 0;
+            foreach (ManagementBaseObject otherDisk in searcher.Get())
+            {
+                if (Convert.ToUInt16(otherDisk["PartitionStyle"] ?? (ushort)0) == GptPartitionStyle)
+                    continue;
+
+                if (FormatSignature(otherDisk["Signature"]) == signatureHex)
+                    matches++;
+            }
+
+            return matches == 1;
         }
 
         private static List<long> ReadAllDiskSizes(ManagementScope scope)
@@ -75,7 +115,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             using var searcher = new ManagementObjectSearcher(
                 scope,
                 new ObjectQuery(
-                    "SELECT PartitionNumber, Offset, Size, GptType, MbrType, IsActive, IsHidden " +
+                    "SELECT PartitionNumber, Offset, Size, GptType, MbrType, IsActive, IsHidden, Guid " +
                     $"FROM MSFT_Partition WHERE DiskNumber = {diskIndex}"));
 
             var partitions = new List<PartitionLayout>();
@@ -95,7 +135,10 @@ namespace LinuxHub.Features.InstallWizard.Services
                     // é o mesmo WMI, e deixar de ler significaria descobrir tarde demais que
                     // o disco não era GPT.
                     MbrType: Convert.ToInt32(partition["MbrType"] ?? 0),
-                    IsActive: partition["IsActive"] is bool active && active));
+                    IsActive: partition["IsActive"] is bool active && active,
+                    // Idem para o GUID: só existe em GPT, mas ler sempre evita uma segunda
+                    // query quando a partição semente precisa ser identificada depois.
+                    Guid: partition["Guid"]?.ToString()?.Trim() ?? string.Empty));
             }
 
             return partitions.OrderBy(p => p.Number).ToList();

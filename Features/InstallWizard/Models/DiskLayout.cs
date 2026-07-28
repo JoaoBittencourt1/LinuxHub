@@ -15,6 +15,10 @@ namespace LinuxHub.Features.InstallWizard.Models
     /// <paramref name="GptType"/>.</param>
     /// <param name="IsActive">Flag "ativa" do MBR. Só existe em tabela MBR e é o que a BIOS
     /// procura para bootar — perdê-la deixa o Windows sem boot num disco legado.</param>
+    /// <param name="Guid">GUID GPT da partição (entre chaves, como o WMI reporta). Vazio numa
+    /// tabela MBR, que não tem esse conceito. É o dado que identifica o disco alvo do lado
+    /// Linux sem depender de ranking de tamanho — ver
+    /// <c>AutoinstallStorageBuilder.BuildDiskMatch</c>.</param>
     public sealed record PartitionLayout(
         int Number,
         long OffsetBytes,
@@ -22,7 +26,8 @@ namespace LinuxHub.Features.InstallWizard.Models
         string GptType,
         bool IsEfiSystemPartition,
         int MbrType = 0,
-        bool IsActive = false);
+        bool IsActive = false,
+        string Guid = "");
 
     /// <summary>
     /// Foto do disco alvo no momento em que o plano é montado. Serve de entrada para o
@@ -37,9 +42,20 @@ namespace LinuxHub.Features.InstallWizard.Models
     /// (empate de tamanho não conta). Idem <paramref name="IsSmallestDisk"/> para o menor.
     /// Numa máquina de um disco só os dois são verdadeiros.
     ///
-    /// Os dois existem porque são a única forma de identificar o disco no autoinstall sem
-    /// depender de um nome que atravesse Windows e Linux — ver
+    /// Servem hoje só de último recurso: o disco alvo agora é identificado preferencialmente
+    /// por dado de tabela de partição (GUID GPT da partição semente, ou
+    /// <paramref name="DiskSignatureHex"/> em MBR) — ver
     /// <c>AutoinstallStorageBuilder.BuildDiskMatch</c>.</param>
+    /// <param name="DiskSignatureHex">Assinatura de disco MBR (offset 0x1B8, 4 bytes), em hex
+    /// minúsculo sem prefixo. Vazia num disco GPT, que não tem esse conceito — lá quem
+    /// identifica é o GUID da partição semente. É dado de tabela de partição, escrito pelo
+    /// Windows e lido pelo Linux (`blkid`/`PTUUID`) sem tradução de driver — mesma categoria
+    /// de confiabilidade do PARTUUID GPT.</param>
+    /// <param name="HasUniqueDiskSignature">Falso quando a assinatura é zerada (disco nunca
+    /// inicializado por um Windows específico) ou quando mais de um disco da máquina reporta a
+    /// mesma assinatura (discos clonados por imagem — colisão documentada do próprio Windows).
+    /// Nesses casos a assinatura não pode ser usada para identidade, e o match cai no critério
+    /// de tamanho.</param>
     public sealed record DiskLayout(
         int Index,
         string SerialNumber,
@@ -48,7 +64,9 @@ namespace LinuxHub.Features.InstallWizard.Models
         bool IsGpt,
         bool IsLargestDisk,
         bool IsSmallestDisk,
-        IReadOnlyList<PartitionLayout> Partitions)
+        IReadOnlyList<PartitionLayout> Partitions,
+        string DiskSignatureHex = "",
+        bool HasUniqueDiskSignature = false)
     {
         /// <summary>
         /// Maior trecho contíguo não alocado do disco — onde a partição Linux nova vai
