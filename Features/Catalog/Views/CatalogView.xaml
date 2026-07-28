@@ -62,7 +62,9 @@
         <Grid Background="#CC000000"
               Visibility="{Binding FullscreenImagePath, Converter={StaticResource NullToVis}, ConverterParameter=Invert}"
               MouseLeftButtonUp="FullscreenOverlay_MouseLeftButtonUp">
-            <Image Source="{Binding FullscreenImagePath}"
+            <!-- TargetNullValue: o overlay fica colapsado sem imagem, mas o binding ainda é
+                 avaliado — e o ImageSourceConverter padrão não converte null. -->
+            <Image Source="{Binding FullscreenImagePath, TargetNullValue={x:Null}}"
                    Stretch="Uniform"
                    Margin="48"
                    HorizontalAlignment="Center"

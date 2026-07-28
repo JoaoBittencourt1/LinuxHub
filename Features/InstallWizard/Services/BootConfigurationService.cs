@@ -21,19 +21,43 @@ namespace LinuxHub.Features.InstallWizard.Services
         internal const string StagingEntryMarker = "LinuxHub staging";
 
         /// <summary>
+        /// Acha o identificador de um bloco do <c>bcdedit /enum</c> pela FORMA da linha — um
+        /// rótulo qualquer, espaços, e um GUID canônico sozinho até o fim da linha. Vive aqui,
+        /// como constante, para poder ser testado contra saída real do bcdedit em mais de um
+        /// idioma: enquanto morava embutido no script PowerShell, a suposição errada sobre o
+        /// nome do campo passou despercebida. Ver
+        /// <see cref="RemoveStaleStagingEntriesCommands"/> para o porquê da forma.
+        /// </summary>
+        internal const string BcdIdentifierPattern =
+            @"(?m)^\s*\S+\s+(\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\})\s*$";
+
+        /// <summary>
         /// Apaga entradas de staging de execuções anteriores antes de criar a nova. Sem isso
         /// cada tentativa deixava um <c>bcdedit /copy</c> órfão pra trás — inclusive as
         /// quebradas das versões que registravam no <c>{bootmgr}</c>, que continuam
         /// aparecendo (e falhando) no menu de boot do Windows pra sempre.
         ///
         /// Agrupa a saída de <c>bcdedit /enum all</c> em blocos separados por linha em branco
-        /// em vez de casar regex na saída inteira: os RÓTULOS do bcdedit são traduzidos pro
-        /// idioma do Windows, mas os nomes de datatype (<c>identifier</c>, <c>description</c>)
-        /// não são — então casar por eles funciona em qualquer locale. O regex de GUID não
-        /// pega ids conhecidos como <c>{bootmgr}</c>/<c>{fwbootmgr}</c> porque as letras deles
-        /// não são todas hexadecimais. Falhas aqui são ignoradas de propósito (sem checar
-        /// <c>$LASTEXITCODE</c>): não conseguir limpar lixo antigo não é motivo pra abortar a
-        /// instalação.
+        /// e, dentro do bloco, acha o identificador pela FORMA da linha ("um rótulo qualquer,
+        /// espaços, um GUID canônico sozinho") — nunca pelo nome do campo.
+        ///
+        /// Uma versão anterior casava <c>identifier\s+(\{…\})</c> por acreditar que os nomes de
+        /// datatype do bcdedit não eram traduzidos. São: num Windows pt-BR a saída real é
+        /// <c>identificador           {c75d0af9-…}</c>. O regex nunca casava, a limpeza saía
+        /// pelo <c>continue</c> sem rodar um único comando, e cada instalação deixava mais uma
+        /// entrada "Ubuntu (LinuxHub staging)" na lista de boot da firmware — três delas numa
+        /// máquina de teste real, todas visíveis no log de diagnóstico.
+        ///
+        /// Exigir o GUID canônico completo (8-4-4-4-12) é o que descarta os ids conhecidos que
+        /// aparecem nas outras linhas do mesmo bloco (<c>{current}</c>, <c>{globalsettings}</c>,
+        /// <c>{memdiag}</c>): as letras deles não são hexadecimais. Como o identificador é
+        /// sempre a primeira linha de dado do bloco, o primeiro casamento é ele — e não o
+        /// <c>resumeobject</c>, que também é um GUID de verdade e vem depois.
+        ///
+        /// Falhas aqui são ignoradas de propósito (sem checar <c>$LASTEXITCODE</c>): não
+        /// conseguir limpar lixo antigo não é motivo pra abortar a instalação. Mas o que foi
+        /// removido é impresso, senão o log não distingue "não havia lixo" de "a limpeza está
+        /// quebrada de novo" — foi exatamente essa ambiguidade que escondeu este bug.
         /// </summary>
         private const string RemoveStaleStagingEntriesCommands = @"
 $blocks = @()
@@ -49,9 +73,10 @@ if ($current.Count -gt 0) { $blocks += ,@($current) }
 foreach ($block in $blocks) {
     $text = $block -join ""`n""
     if ($text -notmatch '" + StagingEntryMarker + @"') { continue }
-    $found = [regex]::Match($text, 'identifier\s+(\{[0-9a-fA-F-]+\})')
+    $found = [regex]::Match($text, '" + BcdIdentifierPattern + @"')
     if (-not $found.Success) { continue }
     $stale = $found.Groups[1].Value
+    Write-Output ""LIMPEZA: removendo entrada de staging anterior $stale""
     bcdedit /set '{fwbootmgr}' displayorder $stale /remove
     bcdedit /displayorder $stale /remove
     bcdedit /delete $stale /f

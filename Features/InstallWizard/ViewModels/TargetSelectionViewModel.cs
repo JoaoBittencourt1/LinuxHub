@@ -13,6 +13,18 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
     {
         private const double DefaultSliderMaximum = 500;
         private const double DefaultSliderMinimum = 20;
+        private const double BytesPerGb = 1024d * 1024 * 1024;
+
+        /// <summary>
+        /// Folga que fica livre no Windows depois do shrink. O slider oferecia até o tamanho
+        /// TOTAL da partição, então dava pra pedir 100 GB de uma partição com 36 GB livres —
+        /// e o Windows recusava ("o tamanho de redução especificado é muito grande", erro
+        /// real em teste), já que ele nunca encolhe além do espaço livre e ainda precisa de
+        /// espaço pra atualizar, hibernar e paginar. O número autoritativo
+        /// (<c>Get-PartitionSupportedSize</c>) exige elevação e por isso só é conferido no
+        /// <see cref="Services.DiskPartitioningService"/>, na hora de encolher de fato.
+        /// </summary>
+        private const double WindowsFreeSpaceReserveGb = 10;
 
         private readonly IDiskInventoryService _diskInventory;
         private readonly IPartitionInventoryService _partitionInventory;
@@ -23,6 +35,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private double _linuxPartitionSizeGb = 100;
         private double _sliderMaximum = DefaultSliderMaximum;
         private string? _diskDetectionError;
+        private string? _partitionSpaceError;
 
         public TargetSelectionViewModel(
             IDiskInventoryService diskInventory,
@@ -109,12 +122,65 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 if (!SetProperty(ref _selectedPartition, value))
                     return;
 
-                long sizeGb = value is null ? 0 : value.SizeBytes / (1024 * 1024 * 1024);
-                SliderMaximum = Math.Max(sizeGb, DefaultSliderMinimum);
+                // Sem partição selecionada não há espaço a estimar nem alvo a reprovar —
+                // acusar "0 GB livres" aqui seria um erro sobre uma partição que não existe.
+                if (value is null)
+                {
+                    SliderMaximum = DefaultSliderMaximum;
+                    PartitionSpaceError = null;
+                    return;
+                }
+
+                double shrinkableGb = CalculateShrinkableGb(value);
+
+                SliderMaximum = Math.Max(shrinkableGb, DefaultSliderMinimum);
                 if (LinuxPartitionSizeGb > SliderMaximum)
                     LinuxPartitionSizeGb = SliderMaximum;
+
+                PartitionSpaceError = shrinkableGb < DefaultSliderMinimum
+                    ? LocalizationManager.Instance.Format(
+                        "Wizard_PartitionTooFullMessage",
+                        Math.Floor((value.FreeSpaceBytes ?? 0) / BytesPerGb),
+                        DefaultSliderMinimum + WindowsFreeSpaceReserveGb)
+                    : null;
             }
         }
+
+        /// <summary>Mensagem quando a partição escolhida não tem espaço livre suficiente pro
+        /// shrink mínimo. Diferente de <see cref="DiskDetectionError"/>, não é falha de
+        /// detecção: é um alvo inviável, e o wizard bloqueia a instalação enquanto estiver
+        /// setada (ver <c>InstallWizardViewModel.BeginInstall</c>) — sem isso o usuário só
+        /// descobria depois de confirmar, no erro cru do Windows.</summary>
+        public string? PartitionSpaceError
+        {
+            get => _partitionSpaceError;
+            private set
+            {
+                if (SetProperty(ref _partitionSpaceError, value))
+                    OnPropertyChanged(nameof(HasPartitionSpaceError));
+            }
+        }
+
+        public bool HasPartitionSpaceError => PartitionSpaceError is not null;
+
+        /// <summary>
+        /// Quanto dá pra liberar na partição, em GB: o espaço livre menos
+        /// <see cref="WindowsFreeSpaceReserveGb"/>.
+        ///
+        /// Espaço livre desconhecido devolve <c>0</c> (alvo inviável), e não o tamanho
+        /// total da partição como antes. O fallback antigo partia de "sem volume
+        /// associado, deixa a validação elevada do shrink decidir" — mas essa validação
+        /// não existe para um filesystem que o Windows não reconhece:
+        /// <c>Get-PartitionSupportedSize</c> devolve <c>SizeMin</c> = 1 MiB numa ext4
+        /// (medido em disco real), então o slider ia até o tamanho inteiro da partição e
+        /// o <c>Resize-Partition</c> truncava o filesystem. O filtro de NTFS em
+        /// <c>PartitionInventoryService</c> já impede que uma partição assim chegue até
+        /// aqui; isto é a segunda barreira.
+        /// </summary>
+        private static double CalculateShrinkableGb(PartitionInfo partition) =>
+            partition.FreeSpaceBytes is { } freeBytes
+                ? Math.Floor(freeBytes / BytesPerGb - WindowsFreeSpaceReserveGb)
+                : 0;
 
         public double SliderMinimum => DefaultSliderMinimum;
 

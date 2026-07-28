@@ -32,6 +32,11 @@ namespace LinuxHub
             IInstallerConfigWriter installerConfigWriter = new InstallerConfigWriter();
             var installerConfigBuilder = new InstallerConfigBuilder(systemInfoProvider, espLocatorService);
 
+            ICloudInitSeedWriter cloudInitSeedWriter = new CloudInitSeedWriter();
+            IDiskLayoutProvider diskLayoutProvider = new DiskLayoutProvider();
+            IAutoinstallPreparationService autoinstallPreparationService =
+                new AutoinstallPreparationService(cloudInitSeedWriter, diskLayoutProvider);
+
             IGrubAssetProvider grubAssetProvider = new GrubAssetProvider();
             IMbrBackupService mbrBackupService = new MbrBackupService();
             IBootConfigurationService bootConfigurationService = new BootConfigurationService();
@@ -50,6 +55,7 @@ namespace LinuxHub
                 installerConfigBuilder,
                 installerConfigWriter,
                 diskPartitioningService,
+                autoinstallPreparationService,
                 bootStagingService);
 
             var mainWindow = new MainWindow(catalogViewModel, installWizardViewModel);

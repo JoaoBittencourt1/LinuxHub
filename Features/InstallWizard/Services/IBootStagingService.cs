@@ -1,6 +1,15 @@
 namespace LinuxHub.Features.InstallWizard.Services
 {
-    public sealed record BootStagingRequest(string DistroName, string IsoPath, bool IsUefi, int TargetDiskIndex);
+    /// <summary><paramref name="EnableAutoinstall"/> liga o parâmetro <c>autoinstall</c> na
+    /// linha de comando do kernel — só faz sentido quando a semente do cloud-init já foi
+    /// gravada (<see cref="ICloudInitSeedWriter"/>), porque sem o <c>user-data</c> presente o
+    /// instalador para pedindo os dados que o parâmetro prometeu que existiriam.</summary>
+    public sealed record BootStagingRequest(
+        string DistroName,
+        string IsoPath,
+        bool IsUefi,
+        int TargetDiskIndex,
+        bool EnableAutoinstall = false);
 
     /// <summary>
     /// Instala o bootloader de staging (GRUB2 chainloaded) que permite bootar a ISO já

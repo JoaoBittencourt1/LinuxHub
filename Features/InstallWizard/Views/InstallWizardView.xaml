@@ -14,200 +14,252 @@
         <conv:EnumMatchConverter x:Key="EnumMatch"/>
     </UserControl.Resources>
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
-        <StackPanel MaxWidth="640" HorizontalAlignment="Stretch">
+    <Grid>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
+            <StackPanel MaxWidth="640" HorizontalAlignment="Stretch">
 
-            <TextBlock Text="{loc:Loc Wizard_Title}" FontSize="22" FontWeight="Bold" Margin="0,0,0,16"/>
+                <TextBlock Text="{loc:Loc Wizard_Title}" FontSize="22" FontWeight="Bold" Margin="0,0,0,16"/>
 
-            <!-- ISO e distro -->
-            <ui:Card Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="{loc:Loc Wizard_IsoSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
+                <!-- Fica aqui, e não no shell, porque é uma ressalva sobre a ESCOLHA da
+                     distro: o catálogo lista várias, mas só uma foi validada de ponta a
+                     ponta. O aviso geral de risco do projeto está no MainWindow. -->
+                <ui:InfoBar Margin="0,0,0,16"
+                            Severity="Warning"
+                            IsOpen="True"
+                            IsClosable="False"
+                            Title="{loc:Loc Wizard_TestedDistroWarningTitle}"
+                            Message="{loc:Loc Wizard_TestedDistroWarningMessage}"/>
 
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <RadioButton Content="{loc:Loc Wizard_DownloadHereOption}"
-                                     IsChecked="{Binding Iso.IsManualSelect, Converter={StaticResource InverseBool}}"
-                                     Margin="0,0,20,0"/>
-                        <RadioButton Content="{loc:Loc Wizard_SelectManuallyOption}"
-                                     IsChecked="{Binding Iso.IsManualSelect}"/>
-                    </StackPanel>
+                <!-- ISO e distro -->
+                <ui:Card Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_IsoSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
 
-                    <!-- ISO manual -->
-                    <Grid Margin="0,0,0,12"
-                          Visibility="{Binding Iso.IsManualIsoVisible, Converter={StaticResource BoolToVis}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="110"/>
-                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <RadioButton Content="{loc:Loc Wizard_DownloadHereOption}"
+                                         IsChecked="{Binding Iso.IsManualSelect, Converter={StaticResource InverseBool}}"
+                                         Margin="0,0,20,0"/>
+                            <RadioButton Content="{loc:Loc Wizard_SelectManuallyOption}"
+                                         IsChecked="{Binding Iso.IsManualSelect}"/>
+                        </StackPanel>
 
-                        <ui:TextBox Grid.Column="0"
-                                    IsReadOnly="True"
-                                    PlaceholderText="{loc:Loc Wizard_NoIsoSelected}"
-                                    Text="{Binding Iso.ManualIsoPath, Mode=OneWay}"/>
+                        <!-- ISO manual -->
+                        <Grid Margin="0,0,0,12"
+                              Visibility="{Binding Iso.IsManualIsoVisible, Converter={StaticResource BoolToVis}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="110"/>
+                            </Grid.ColumnDefinitions>
 
-                        <ui:Button Grid.Column="1"
-                                   Content="{loc:Loc Wizard_SearchButton}"
-                                   Margin="8,0,0,0"
-                                   Click="BrowseIso_Click"/>
-                    </Grid>
+                            <ui:TextBox Grid.Column="0"
+                                        IsReadOnly="True"
+                                        PlaceholderText="{loc:Loc Wizard_NoIsoSelected}"
+                                        Text="{Binding Iso.ManualIsoPath, Mode=OneWay}"/>
 
-                    <!-- Distro selecionada -->
-                    <StackPanel Visibility="{Binding Iso.IsDistroSelectionVisible, Converter={StaticResource BoolToVis}}"
-                                Margin="0,0,0,10">
-                        <TextBlock Text="{loc:Loc Wizard_SelectedDistributionLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                            <ui:Button Grid.Column="1"
+                                       Content="{loc:Loc Wizard_SearchButton}"
+                                       Margin="8,0,0,0"
+                                       Click="BrowseIso_Click"/>
+                        </Grid>
 
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <ComboBox Width="220"
-                                      ItemsSource="{Binding Iso.Distros}"
-                                      DisplayMemberPath="Name"
-                                      SelectedItem="{Binding Iso.SelectedDistro}"/>
+                        <!-- Distro selecionada -->
+                        <StackPanel Visibility="{Binding Iso.IsDistroSelectionVisible, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,0,0,10">
+                            <TextBlock Text="{loc:Loc Wizard_SelectedDistributionLabel}" Opacity="0.7" Margin="0,0,0,6"/>
 
-                            <ui:Button Content="{loc:Loc Wizard_DownloadIsoButton}"
-                                       Appearance="Primary"
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <ComboBox Width="220"
+                                          ItemsSource="{Binding Iso.Distros}"
+                                          DisplayMemberPath="Name"
+                                          SelectedItem="{Binding Iso.SelectedDistro}"/>
+
+                                <ui:Button Content="{loc:Loc Wizard_DownloadIsoButton}"
+                                           Appearance="Primary"
+                                           Margin="10,0,0,0"
+                                           Command="{Binding Iso.DownloadIsoCommand}"
+                                           Visibility="{Binding Iso.IsDownloadButtonVisible, Converter={StaticResource BoolToVis}}"/>
+
+                                <ui:Button Content="{loc:Loc Wizard_CancelDownloadButton}"
+                                           Margin="10,0,0,0"
+                                           Command="{Binding Iso.CancelDownloadCommand}"
+                                           Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Progresso -->
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,4,0,10"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar Width="260"
+                                         Value="{Binding Iso.DownloadPercent, Mode=OneWay}"
+                                         IsIndeterminate="{Binding Iso.IsDownloadIndeterminate, Mode=OneWay}"/>
+                            <TextBlock Text="{Binding Iso.DownloadStatusText, Mode=OneWay}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <!-- Distro detectada (seleção manual) -->
+                        <StackPanel Orientation="Horizontal"
+                                    Visibility="{Binding Iso.IsDistroDisplayVisible, Converter={StaticResource BoolToVis}}">
+                            <!-- TargetNullValue: sem distro detectada o caminho é null, e o
+                                 ImageSourceConverter padrão não converte null — o binding
+                                 falhava com NotSupportedException a cada avaliação. -->
+                            <Image Width="32" Height="32"
+                                   Source="{Binding Iso.DisplayedDistro.ImagePath, TargetNullValue={x:Null}}"/>
+                            <TextBlock Text="{Binding Iso.DisplayedDistro.Name}"
                                        Margin="10,0,0,0"
-                                       Command="{Binding Iso.DownloadIsoCommand}"
-                                       Visibility="{Binding Iso.IsDownloadButtonVisible, Converter={StaticResource BoolToVis}}"/>
-
-                            <ui:Button Content="{loc:Loc Wizard_CancelDownloadButton}"
-                                       Margin="10,0,0,0"
-                                       Command="{Binding Iso.CancelDownloadCommand}"
-                                       Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}"/>
+                                       VerticalAlignment="Center"
+                                       Opacity="0.8"/>
                         </StackPanel>
                     </StackPanel>
+                </ui:Card>
 
-                    <!-- Progresso -->
-                    <StackPanel Orientation="Horizontal"
-                                Margin="0,4,0,10"
-                                VerticalAlignment="Center"
-                                Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar Width="260"
-                                     Value="{Binding Iso.DownloadPercent, Mode=OneWay}"
-                                     IsIndeterminate="{Binding Iso.IsDownloadIndeterminate, Mode=OneWay}"/>
-                        <TextBlock Text="{Binding Iso.DownloadStatusText, Mode=OneWay}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                <!-- Tipo de instalação -->
+                <ui:Card Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_InstallTypeTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
+
+                        <RadioButton Content="{loc:Loc Wizard_ReplaceOption}"
+                                     IsChecked="{Binding Target.Mode, Converter={StaticResource EnumMatch}, ConverterParameter={x:Static models:InstallMode.Replace}}"/>
+
+                        <RadioButton Content="{loc:Loc Wizard_DualBootOption}"
+                                     Margin="0,6,0,0"
+                                     IsChecked="{Binding Target.Mode, Converter={StaticResource EnumMatch}, ConverterParameter={x:Static models:InstallMode.DualBoot}}"/>
                     </StackPanel>
+                </ui:Card>
 
-                    <!-- Distro detectada (seleção manual) -->
-                    <StackPanel Orientation="Horizontal"
-                                Visibility="{Binding Iso.IsDistroDisplayVisible, Converter={StaticResource BoolToVis}}">
-                        <Image Width="32" Height="32" Source="{Binding Iso.DisplayedDistro.ImagePath}"/>
-                        <TextBlock Text="{Binding Iso.DisplayedDistro.Name}"
-                                   Margin="10,0,0,0"
-                                   VerticalAlignment="Center"
-                                   Opacity="0.8"/>
+                <!-- Disco (substituir) -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding Target.IsReplaceMode, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_TargetDiskTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
+                        <TextBlock Text="{loc:Loc Wizard_TargetDiskHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <ComboBox ItemsSource="{Binding Target.Disks}" SelectedItem="{Binding Target.SelectedDisk}"/>
+
+                        <ui:InfoBar IsOpen="{Binding Target.HasDiskDetectionError}"
+                                    IsClosable="False"
+                                    Severity="Error"
+                                    Message="{Binding Target.DiskDetectionError}"
+                                    Margin="0,8,0,0"/>
+
+                        <ui:InfoBar IsOpen="{Binding Target.IsReplacingSystemDisk}"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Message="{loc:Loc Wizard_ReplaceSystemDiskWarningMessage}"
+                                    Margin="0,8,0,0"/>
                     </StackPanel>
-                </StackPanel>
-            </ui:Card>
+                </ui:Card>
 
-            <!-- Tipo de instalação -->
-            <ui:Card Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="{loc:Loc Wizard_InstallTypeTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
+                <!-- Partição (dual-boot) -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding Target.IsDualBootMode, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_DualBootPartitionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
+                        <TextBlock Text="{loc:Loc Wizard_DualBootPartitionHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                        <ComboBox ItemsSource="{Binding Target.Partitions}" SelectedItem="{Binding Target.SelectedPartition}"/>
 
-                    <RadioButton Content="{loc:Loc Wizard_ReplaceOption}"
-                                 IsChecked="{Binding Target.Mode, Converter={StaticResource EnumMatch}, ConverterParameter={x:Static models:InstallMode.Replace}}"/>
+                        <ui:InfoBar IsOpen="{Binding Target.HasPartitionSpaceError}"
+                                    IsClosable="False"
+                                    Severity="Error"
+                                    Message="{Binding Target.PartitionSpaceError}"
+                                    Margin="0,8,0,0"/>
 
-                    <RadioButton Content="{loc:Loc Wizard_DualBootOption}"
-                                 Margin="0,6,0,0"
-                                 IsChecked="{Binding Target.Mode, Converter={StaticResource EnumMatch}, ConverterParameter={x:Static models:InstallMode.DualBoot}}"/>
-                </StackPanel>
-            </ui:Card>
+                        <TextBlock Text="{loc:Loc Wizard_ReservedSpaceLabel}" Margin="0,12,0,0"/>
+                        <Slider x:Name="LinuxSizeSlider"
+                                Minimum="{Binding Target.SliderMinimum}"
+                                Maximum="{Binding Target.SliderMaximum}"
+                                Value="{Binding Target.LinuxPartitionSizeGb}"
+                                TickFrequency="10"
+                                IsSnapToTickEnabled="True"/>
+                        <TextBlock Opacity="0.7"
+                                   HorizontalAlignment="Right"
+                                   Text="{Binding ElementName=LinuxSizeSlider, Path=Value, StringFormat={}{0} GB}"/>
+                    </StackPanel>
+                </ui:Card>
 
-            <!-- Disco (substituir) -->
-            <ui:Card Margin="0,0,0,16"
-                     Visibility="{Binding Target.IsReplaceMode, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <TextBlock Text="{loc:Loc Wizard_TargetDiskTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
-                    <TextBlock Text="{loc:Loc Wizard_TargetDiskHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <ComboBox ItemsSource="{Binding Target.Disks}" SelectedItem="{Binding Target.SelectedDisk}"/>
+                <!-- Usuário -->
+                <ui:Card Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_UserSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
 
-                    <ui:InfoBar IsOpen="{Binding Target.HasDiskDetectionError}"
-                                IsClosable="False"
-                                Severity="Error"
-                                Message="{Binding Target.DiskDetectionError}"
-                                Margin="0,8,0,0"/>
-
-                    <ui:InfoBar IsOpen="{Binding Target.IsReplacingSystemDisk}"
-                                IsClosable="False"
-                                Severity="Warning"
-                                Message="{loc:Loc Wizard_ReplaceSystemDiskWarningMessage}"
-                                Margin="0,8,0,0"/>
-                </StackPanel>
-            </ui:Card>
-
-            <!-- Partição (dual-boot) -->
-            <ui:Card Margin="0,0,0,16"
-                     Visibility="{Binding Target.IsDualBootMode, Converter={StaticResource BoolToVis}}">
-                <StackPanel>
-                    <TextBlock Text="{loc:Loc Wizard_DualBootPartitionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
-                    <TextBlock Text="{loc:Loc Wizard_DualBootPartitionHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                    <ComboBox ItemsSource="{Binding Target.Partitions}" SelectedItem="{Binding Target.SelectedPartition}"/>
-
-                    <TextBlock Text="{loc:Loc Wizard_ReservedSpaceLabel}" Margin="0,12,0,0"/>
-                    <Slider x:Name="LinuxSizeSlider"
-                            Minimum="{Binding Target.SliderMinimum}"
-                            Maximum="{Binding Target.SliderMaximum}"
-                            Value="{Binding Target.LinuxPartitionSizeGb}"
-                            TickFrequency="10"
-                            IsSnapToTickEnabled="True"/>
-                    <TextBlock Opacity="0.7"
-                               HorizontalAlignment="Right"
-                               Text="{Binding ElementName=LinuxSizeSlider, Path=Value, StringFormat={}{0} GB}"/>
-                </StackPanel>
-            </ui:Card>
-
-            <!-- Usuário -->
-            <ui:Card Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="{loc:Loc Wizard_UserSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
-
-                    <ui:TextBox PlaceholderText="{loc:Loc Wizard_UsernamePlaceholder}"
-                                Text="{Binding Account.Username, UpdateSourceTrigger=PropertyChanged}"
-                                Margin="0,0,0,8"/>
-
-                    <ui:PasswordBox x:Name="PasswordBox"
-                                    PlaceholderText="{loc:Loc Wizard_PasswordPlaceholder}"
-                                    RevealButtonEnabled="True"
-                                    PasswordChanged="PasswordBox_PasswordChanged"
+                        <ui:TextBox PlaceholderText="{loc:Loc Wizard_UsernamePlaceholder}"
+                                    Text="{Binding Account.Username, UpdateSourceTrigger=PropertyChanged}"
                                     Margin="0,0,0,8"/>
 
-                    <ui:PasswordBox x:Name="ConfirmPasswordBox"
-                                    PlaceholderText="{loc:Loc Wizard_ConfirmPasswordPlaceholder}"
-                                    RevealButtonEnabled="True"
-                                    PasswordChanged="ConfirmPasswordBox_PasswordChanged"
-                                    Margin="0,0,0,4"/>
+                        <ui:PasswordBox x:Name="PasswordBox"
+                                        PlaceholderText="{loc:Loc Wizard_PasswordPlaceholder}"
+                                        RevealButtonEnabled="True"
+                                        PasswordChanged="PasswordBox_PasswordChanged"
+                                        Margin="0,0,0,8"/>
 
-                    <TextBlock Text="{loc:Loc Wizard_PasswordMismatch}"
-                               Foreground="#FF5C5C"
+                        <ui:PasswordBox x:Name="ConfirmPasswordBox"
+                                        PlaceholderText="{loc:Loc Wizard_ConfirmPasswordPlaceholder}"
+                                        RevealButtonEnabled="True"
+                                        PasswordChanged="ConfirmPasswordBox_PasswordChanged"
+                                        Margin="0,0,0,4"/>
+
+                        <TextBlock Text="{loc:Loc Wizard_PasswordMismatch}"
+                                   Foreground="#FF5C5C"
+                                   FontSize="12"
+                                   Margin="0,0,0,8"
+                                   Visibility="{Binding Account.PasswordsMismatch, Converter={StaticResource BoolToVis}}"/>
+
+                        <ui:TextBox PlaceholderText="{loc:Loc Wizard_PcNamePlaceholder}"
+                                    Text="{Binding Account.Hostname, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </ui:Card>
+
+                <ui:InfoBar IsOpen="True"
+                            IsClosable="False"
+                            Severity="Warning"
+                            Message="{loc:Loc Wizard_WarningBanner}"
+                            Margin="0,0,0,16"/>
+
+                <Border Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
+                    <views:ConfirmationView DataContext="{Binding PendingConfirmation}"/>
+                </Border>
+
+                <Border Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
+                    <ui:Button Content="{loc:Loc Wizard_InstallButton}"
+                               Appearance="Success"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Center"
+                               Height="44"
+                               FontWeight="Bold"
+                               Margin="0,0,0,24"
+                               Command="{Binding InstallCommand}"/>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Tela de progresso da instalação. Overlay em vez de um cartão no fluxo porque
+             também precisa BLOQUEAR a interação: o Border tem Background, então come os
+             cliques em tudo que está atrás. Mexer no alvo ou no tamanho com um shrink já
+             em andamento não teria efeito algum e só confundiria. -->
+        <Border Background="#CC000000"
+                Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVis}}">
+            <ui:Card MaxWidth="420"
+                     Margin="24"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center">
+                <StackPanel>
+                    <ui:ProgressRing IsIndeterminate="True"
+                                     HorizontalAlignment="Center"
+                                     Margin="0,0,0,16"/>
+
+                    <TextBlock Text="{Binding InstallStatus}"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"/>
+
+                    <TextBlock Text="{loc:Loc Wizard_InstallProgressHint}"
                                FontSize="12"
-                               Margin="0,0,0,8"
-                               Visibility="{Binding Account.PasswordsMismatch, Converter={StaticResource BoolToVis}}"/>
-
-                    <ui:TextBox PlaceholderText="{loc:Loc Wizard_PcNamePlaceholder}"
-                                Text="{Binding Account.Hostname, UpdateSourceTrigger=PropertyChanged}"/>
+                               Opacity="0.7"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Margin="0,10,0,0"/>
                 </StackPanel>
             </ui:Card>
-
-            <ui:InfoBar IsOpen="True"
-                        IsClosable="False"
-                        Severity="Warning"
-                        Message="{loc:Loc Wizard_WarningBanner}"
-                        Margin="0,0,0,16"/>
-
-            <Border Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
-                <views:ConfirmationView DataContext="{Binding PendingConfirmation}"/>
-            </Border>
-
-            <Border Visibility="{Binding IsNotConfirming, Converter={StaticResource BoolToVis}}">
-                <ui:Button Content="{loc:Loc Wizard_InstallButton}"
-                           Appearance="Success"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Center"
-                           Height="44"
-                           FontWeight="Bold"
-                           Margin="0,0,0,24"
-                           Command="{Binding InstallCommand}"/>
-            </Border>
-
-        </StackPanel>
-    </ScrollViewer>
+        </Border>
+    </Grid>
 </UserControl>

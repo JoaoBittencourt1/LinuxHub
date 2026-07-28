@@ -12,7 +12,11 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public static class GrubConfigBuilder
     {
-        public static string BuildConfig(string distroName, string isoWindowsPath, bool includeWindowsChainload)
+        public static string BuildConfig(
+            string distroName,
+            string isoWindowsPath,
+            bool includeWindowsChainload,
+            bool enableAutoinstall = false)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(distroName);
             ArgumentException.ThrowIfNullOrWhiteSpace(isoWindowsPath);
@@ -21,7 +25,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             sb.AppendLine("set timeout=10");
             sb.AppendLine("set default=0");
             sb.AppendLine();
-            sb.Append(BuildIsoBootEntry(distroName, isoWindowsPath));
+            sb.Append(BuildIsoBootEntry(distroName, isoWindowsPath, enableAutoinstall));
 
             if (includeWindowsChainload)
             {
@@ -38,9 +42,22 @@ namespace LinuxHub.Features.InstallWizard.Services
             return sb.ToString().Replace("\r\n", "\n");
         }
 
-        internal static string BuildIsoBootEntry(string distroName, string isoWindowsPath)
+        /// <summary>
+        /// <paramref name="enableAutoinstall"/> acrescenta o parâmetro <c>autoinstall</c> à
+        /// linha do kernel. Ele é o que torna a instalação de fato desatendida: com o
+        /// <c>user-data</c> presente na partição CIDATA mas SEM este parâmetro, o subiquity
+        /// acha o arquivo e ainda assim para numa tela pedindo confirmação — que é o
+        /// comportamento padrão de segurança dele, não um bug.
+        ///
+        /// Nesse modo o <c>splash</c> também sai: numa instalação em que ninguém vai clicar
+        /// em nada, a tela gráfica só serve para esconder a mensagem de erro se algo falhar.
+        /// </summary>
+        internal static string BuildIsoBootEntry(
+            string distroName, string isoWindowsPath, bool enableAutoinstall = false)
         {
             string isoPath = ToGrubPath(isoWindowsPath);
+            string extraParameters = enableAutoinstall ? "autoinstall " : string.Empty;
+            string display = enableAutoinstall ? string.Empty : "splash ";
 
             return $@"menuentry ""Instalar {distroName} (staging LinuxHub)"" {{
     insmod part_gpt
@@ -51,7 +68,7 @@ namespace LinuxHub.Features.InstallWizard.Services
     set isofile=""{isoPath}""
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
-    linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile noeject noprompt splash ---
+    linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile {extraParameters}noeject noprompt {display}---
     initrd (loop)/casper/initrd
 }}
 ";

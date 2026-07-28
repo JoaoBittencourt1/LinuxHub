@@ -36,7 +36,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             string grubCfg = GrubConfigBuilder.BuildConfig(
                 request.DistroName,
                 request.IsoPath,
-                includeWindowsChainload: !request.IsUefi);
+                includeWindowsChainload: !request.IsUefi,
+                enableAutoinstall: request.EnableAutoinstall);
 
             if (request.IsUefi)
                 InstallUefi(request, grubCfg);
@@ -79,7 +80,13 @@ namespace LinuxHub.Features.InstallWizard.Services
             string coreImagePath = _grubAssets.GetBiosCoreImagePath();
             EnsurePostMbrGapFitsCoreImage(request.TargetDiskIndex, coreImagePath);
 
-            string systemDrive = Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\";
+            // Sem fallback para "C:\" (mesma razão que em DiskInventoryService.FindSystemDiskIndex):
+            // o grub.cfg gravado na unidade errada não é um erro visível, é um GRUB que sobe no
+            // reboot e não acha a própria configuração.
+            string systemDrive = Path.GetPathRoot(Environment.SystemDirectory)
+                ?? throw new InvalidOperationException(
+                    "Não foi possível determinar a unidade onde o Windows está instalado para " +
+                    $"gravar o grub.cfg (diretório de sistema: '{Environment.SystemDirectory}').");
             ElevatedPowerShellRunner.Run(
                 BuildGrubCfgWriteScript(systemDrive, grubCfg), "gravação do grub.cfg na partição do Windows");
 

@@ -5,6 +5,7 @@
 bin/
 obj/
 publish/
+LinuxHub-win-x64/
 *.zip
 
 # Temporary files

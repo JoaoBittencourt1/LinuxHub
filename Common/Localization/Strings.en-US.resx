@@ -245,6 +245,24 @@
   <data name="Wizard_ReservedSpaceLabel" xml:space="preserve">
     <value>Space reserved for Linux (GB)</value>
   </data>
+  <data name="Wizard_InstallStepPreparing" xml:space="preserve">
+    <value>Preparing the installation…</value>
+  </data>
+  <data name="Wizard_InstallStepShrinking" xml:space="preserve">
+    <value>Shrinking the Windows partition…</value>
+  </data>
+  <data name="Wizard_InstallStepWritingConfig" xml:space="preserve">
+    <value>Writing the installer configuration…</value>
+  </data>
+  <data name="Wizard_InstallStepStagingBoot" xml:space="preserve">
+    <value>Staging the Linux bootloader…</value>
+  </data>
+  <data name="Wizard_InstallProgressHint" xml:space="preserve">
+    <value>Do not shut down or close LinuxHub. This can take a few minutes, and Windows will ask for administrator permission.</value>
+  </data>
+  <data name="Wizard_PartitionTooFullMessage" xml:space="preserve">
+    <value>The selected partition has only {0} GB free. Windows cannot shrink beyond the free space, and still needs headroom for updates and paging — at least {1} GB free is required. Free up space in Windows or pick another partition.</value>
+  </data>
   <data name="Wizard_UserSectionTitle" xml:space="preserve">
     <value>User</value>
   </data>
@@ -339,5 +357,17 @@ Select a valid Linux ISO.</value>
   </data>
   <data name="Wizard_CancelButton" xml:space="preserve">
     <value>Cancel</value>
+  </data>
+  <data name="Shell_PreviewWarningTitle" xml:space="preserve">
+    <value>Under development — use at your own risk</value>
+  </data>
+  <data name="Shell_PreviewWarningMessage" xml:space="preserve">
+    <value>LinuxHub is still under development. It changes your computer's partitions and boot configuration, and things can go wrong — including data loss and a system that will not start. Back up your data before using it.</value>
+  </data>
+  <data name="Wizard_TestedDistroWarningTitle" xml:space="preserve">
+    <value>Only tested with Ubuntu 24.04</value>
+  </data>
+  <data name="Wizard_TestedDistroWarningMessage" xml:space="preserve">
+    <value>Automated installation has only been tested with Ubuntu 24.04. The other distributions and versions in the catalog have not been validated and may fail partway through, after the disk has already been modified.</value>
   </data>
 </root>

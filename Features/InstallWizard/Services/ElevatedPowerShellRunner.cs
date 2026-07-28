@@ -10,15 +10,25 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// lançados com <c>Verb=runas</c> exigem <c>UseShellExecute=true</c>, que não suporta
     /// redirecionamento direto de stdout/stderr — por isso o script roda via
     /// <c>cmd.exe</c>, que redireciona a saída para um arquivo de log lido depois.
-    /// Compartilhado entre <see cref="MbrBackupService"/>, <see cref="BootStagingService"/>
-    /// e <see cref="BootConfigurationService"/> para não duplicar esse boilerplate de
-    /// elevação (mesmo padrão usado em <see cref="DiskPartitioningService"/>, que não usa
-    /// PowerShell e por isso não compartilha este helper).
+    /// Compartilhado entre <see cref="MbrBackupService"/>, <see cref="BootStagingService"/>,
+    /// <see cref="BootConfigurationService"/> e <see cref="DiskPartitioningService"/> para
+    /// não duplicar esse boilerplate de elevação.
     /// </summary>
     internal static class ElevatedPowerShellRunner
     {
+        /// <summary>
+        /// Prefixo da única linha que a UI mostra quando um script falha. Sem ele o diálogo
+        /// de erro recebia o registro cru do PowerShell — caminho do .ps1 temporário, til
+        /// apontando a coluna, <c>CategoryInfo</c>, <c>FullyQualifiedErrorId</c> — com a frase
+        /// que interessa repetida três vezes no meio (erro real em teste). A saída bruta
+        /// continua inteira no <see cref="DiagnosticLog"/>.
+        /// </summary>
+        private const string ErrorMarker = "LINUXHUB_ERROR:";
+
         public static string Run(string script, string operationDescription)
         {
+            script = WrapWithErrorMarker(script);
+
             string scriptPath = Path.Combine(Path.GetTempPath(), $"linuxhub_{Guid.NewGuid():N}.ps1");
             string logPath = Path.Combine(Path.GetTempPath(), $"linuxhub_{Guid.NewGuid():N}.log");
 
@@ -63,9 +73,8 @@ namespace LinuxHub.Features.InstallWizard.Services
 
                 if (process.ExitCode != 0)
                 {
-                    throw new InvalidOperationException(
-                        $"Falha na {operationDescription} (código {process.ExitCode}). " +
-                        $"Log completo em {DiagnosticLog.CurrentLogFile}. Saída: {output}");
+                    throw new InvalidOperationException(BuildFailureMessage(
+                        output, operationDescription, process.ExitCode));
                 }
 
                 return output;
@@ -77,6 +86,50 @@ namespace LinuxHub.Features.InstallWizard.Services
                 if (File.Exists(logPath))
                     File.Delete(logPath);
             }
+        }
+
+        /// <summary>
+        /// Envolve o script num try/catch que reduz qualquer falha — <c>throw</c> do próprio
+        /// script ou erro de cmdlet — a uma linha só. Fica aqui, e não em cada serviço, para
+        /// valer pra todo script elevado sem repetir o bloco. O <c>-replace</c> achata
+        /// mensagens de várias linhas: a extração do lado C# lê uma linha por erro.
+        /// </summary>
+        internal static string WrapWithErrorMarker(string script) => $@"try {{
+{script}
+}}
+catch {{
+    Write-Output ""{ErrorMarker} $($_.Exception.Message -replace '\r?\n', ' ')""
+    exit 1
+}}";
+
+        /// <summary>
+        /// Mensagem de falha para a UI: a linha marcada pelo script quando existe, senão a
+        /// saída bruta. O caminho bruto cobre o caso em que o processo morre sem passar pelo
+        /// catch (PowerShell não iniciou, política de execução, o próprio cmd falhou) —
+        /// feio, mas nunca silencioso.
+        /// </summary>
+        internal static string BuildFailureMessage(string output, string operationDescription, int exitCode)
+        {
+            string? reason = ExtractMarkedError(output);
+
+            return reason is not null
+                ? $"{reason}{Environment.NewLine}{Environment.NewLine}" +
+                  $"Detalhes técnicos em {DiagnosticLog.CurrentLogFile}"
+                : $"Falha em: {operationDescription} (código {exitCode}). " +
+                  $"Log completo em {DiagnosticLog.CurrentLogFile}{Environment.NewLine}{output}";
+        }
+
+        private static string? ExtractMarkedError(string output)
+        {
+            foreach (string line in output.Split('\n'))
+            {
+                string trimmed = line.Trim();
+
+                if (trimmed.StartsWith(ErrorMarker, StringComparison.Ordinal))
+                    return trimmed[ErrorMarker.Length..].Trim();
+            }
+
+            return null;
         }
     }
 }

@@ -41,7 +41,14 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// </summary>
         private static int FindSystemDiskIndex()
         {
-            string systemDrive = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:";
+            // Sem fallback para "C:": assumir a letra do Windows é assumir o disco do Windows, e
+            // é justamente isso que alimenta IsSystemDisk — a flag que dispara a confirmação de
+            // "você está prestes a apagar o disco onde o Windows está". Chutar aqui marcaria o
+            // disco errado como sistema numa máquina cujo Windows não mora em C:.
+            string systemDrive = Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\')
+                ?? throw new InvalidOperationException(
+                    "Não foi possível determinar a letra de unidade onde o Windows está instalado " +
+                    $"(diretório de sistema: '{Environment.SystemDirectory}').");
 
             using var partitionSearcher = new ManagementObjectSearcher(
                 $"ASSOCIATORS OF {{Win32_LogicalDisk.DeviceID='{systemDrive}'}} WHERE AssocClass=Win32_LogicalDiskToPartition");
