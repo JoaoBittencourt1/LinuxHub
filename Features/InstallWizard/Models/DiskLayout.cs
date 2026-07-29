@@ -69,22 +69,34 @@ namespace LinuxHub.Features.InstallWizard.Models
         bool HasUniqueDiskSignature = false)
     {
         /// <summary>
-        /// Maior trecho contíguo não alocado do disco — onde a partição Linux nova vai
-        /// nascer, tipicamente o espaço que o shrink acabou de liberar. Devolve
-        /// <c>(0, 0)</c> quando não há espaço livre.
+        /// Maior trecho contíguo utilizável do disco — onde a partição Linux nova vai nascer.
+        /// Devolve <c>(0, 0)</c> quando não há espaço.
+        ///
+        /// <paramref name="preservedPartitionNumbers"/> muda o que conta como ocupado. Sem ele
+        /// (dual-boot), toda partição existente ocupa espaço e o resultado é o vão que o shrink
+        /// acabou de liberar. Com ele (substituir), só as partições preservadas ocupam — as
+        /// demais serão omitidas do storage config e o curtin trata o espaço delas como
+        /// disponível, então ele precisa entrar nesta conta. Sem isso, o modo substituir só
+        /// enxergaria o vão residual do shrink e criaria uma raiz minúscula em vez de ocupar o
+        /// disco.
         ///
         /// O último setor do disco não é utilizável num disco GPT (a cópia de segurança da
         /// tabela de partição mora lá), por isso a reserva no fim.
         /// </summary>
-        public (long OffsetBytes, long SizeBytes) FindLargestFreeGap()
+        public (long OffsetBytes, long SizeBytes) FindLargestFreeGap(
+            IReadOnlyCollection<int>? preservedPartitionNumbers = null)
         {
             const long GptBackupReserveBytes = 1024 * 1024;
+
+            IEnumerable<PartitionLayout> occupying = preservedPartitionNumbers is null
+                ? Partitions
+                : Partitions.Where(p => preservedPartitionNumbers.Contains(p.Number));
 
             long bestOffset = 0;
             long bestSize = 0;
             long cursor = 0;
 
-            foreach (PartitionLayout partition in Partitions.OrderBy(p => p.OffsetBytes))
+            foreach (PartitionLayout partition in occupying.OrderBy(p => p.OffsetBytes))
             {
                 long gap = partition.OffsetBytes - cursor;
                 if (gap > bestSize)

@@ -34,32 +34,18 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// </summary>
         public const long MinimumRootSizeBytes = 12L * 1024 * 1024 * 1024;
 
-        public static string Build(DiskLayout disk, InstallMode mode, bool isUefi, int indentSpaces, int seedPartitionNumber)
+        public static string Build(
+            DiskLayout disk,
+            InstallMode mode,
+            bool isUefi,
+            int indentSpaces,
+            int seedPartitionNumber,
+            int stagingPartitionNumber)
         {
             ArgumentNullException.ThrowIfNull(disk);
 
-            return mode == InstallMode.Replace
-                ? BuildWholeDiskLayout(disk, indentSpaces, seedPartitionNumber)
-                : BuildDualBootConfig(disk, isUefi, indentSpaces, seedPartitionNumber);
-        }
-
-        /// <summary>
-        /// Modo substituir: o disco inteiro é do Linux, então não há nada a preservar e a
-        /// forma segura é delegar ao layout <c>direct</c> do próprio subiquity, que é o
-        /// caminho mais testado do instalador. Escrever uma lista explícita aqui seria
-        /// assumir risco sem ganho nenhum.
-        /// </summary>
-        private static string BuildWholeDiskLayout(DiskLayout disk, int indentSpaces, int seedPartitionNumber)
-        {
-            string indent = new(' ', indentSpaces);
-
-            var yaml = new StringBuilder();
-            yaml.AppendLine($"{indent}layout:");
-            yaml.AppendLine($"{indent}  name: direct");
-            yaml.AppendLine($"{indent}  match:");
-            yaml.AppendLine($"{indent}    {BuildDiskMatch(disk, seedPartitionNumber)}");
-
-            return yaml.ToString();
+            return BuildExplicitConfig(
+                disk, mode, isUefi, indentSpaces, seedPartitionNumber, stagingPartitionNumber);
         }
 
         /// <summary>
@@ -140,24 +126,36 @@ namespace LinuxHub.Features.InstallWizard.Services
                 "desconecte os demais, ou use a instalação manual.");
         }
 
-        private static string BuildDualBootConfig(DiskLayout disk, bool isUefi, int indentSpaces, int seedPartitionNumber)
+        /// <summary>
+        /// Um caminho só para os dois modos. A diferença entre substituir e dual-boot passou a
+        /// ser apenas QUAIS partições entram na lista: no dual-boot todas as existentes são
+        /// declaradas com <c>preserve: true</c>; no substituir, as do Windows são omitidas — e
+        /// o curtin trata o que não está declarado como espaço disponível.
+        ///
+        /// O modo substituir NÃO usa mais <c>layout: name: direct</c>. Aquele layout reescreve
+        /// o disco inteiro, e o <c>clear-holders</c> do curtin então precisa liberar TODAS as
+        /// partições — inclusive a que hospeda a ISO, montada em <c>/isodevice</c> pelo casper
+        /// e nunca solta. Ele falha, e a instalação aborta:
+        /// <c>FAIL: removing previous storage devices</c> → <c>CurtinInstallError</c> (erro
+        /// real, 2026-07-29). Declarando explicitamente, a staging fica preservada e o
+        /// clear-holders só precisa soltar o Windows, que ninguém segura.
+        /// </summary>
+        private static string BuildExplicitConfig(
+            DiskLayout disk,
+            InstallMode mode,
+            bool isUefi,
+            int indentSpaces,
+            int seedPartitionNumber,
+            int stagingPartitionNumber)
         {
+            bool isReplace = mode == InstallMode.Replace;
+
             if (!disk.IsGpt && isUefi)
             {
                 throw new InvalidOperationException(
                     $"O disco {disk.Index} não usa tabela de partição GPT, mas a máquina bootou em " +
-                    "modo UEFI. Instalar em dual-boot nessa combinação exigiria converter a tabela " +
-                    "de partição do disco, o que apagaria o Windows.");
-            }
-
-            (long gapOffset, long gapSize) = disk.FindLargestFreeGap();
-            if (gapSize < MinimumRootSizeBytes)
-            {
-                throw new InvalidOperationException(
-                    $"O maior espaço não alocado do disco {disk.Index} tem " +
-                    $"{gapSize / (1024 * 1024 * 1024)} GB, abaixo do mínimo de " +
-                    $"{MinimumRootSizeBytes / (1024 * 1024 * 1024)} GB para instalar o sistema. " +
-                    "O encolhimento da partição do Windows não liberou o espaço esperado.");
+                    "modo UEFI. Instalar nessa combinação exigiria converter a tabela de partição " +
+                    "do disco, o que destruiria o conteúdo dele.");
             }
 
             PartitionLayout? esp = disk.EfiSystemPartition;
@@ -166,6 +164,24 @@ namespace LinuxHub.Features.InstallWizard.Services
                 throw new InvalidOperationException(
                     $"Não foi possível localizar a EFI System Partition no disco {disk.Index}, " +
                     "necessária para instalar o bootloader em modo UEFI.");
+            }
+
+            // Quem sobrevive. No dual-boot é tudo; no substituir, só o que a instalação precisa
+            // que continue existindo: a ESP (recebe o bootloader), a staging (hospeda a ISO em
+            // uso — apagá-la mata a sessão live) e a semente (o cloud-init pode reler durante a
+            // instalação). O resto some por omissão.
+            HashSet<int> preserved = isReplace
+                ? BuildReplacePreservedSet(esp, seedPartitionNumber, stagingPartitionNumber)
+                : disk.Partitions.Select(p => p.Number).ToHashSet();
+
+            (long gapOffset, long gapSize) = disk.FindLargestFreeGap(preserved);
+            if (gapSize < MinimumRootSizeBytes)
+            {
+                throw new InvalidOperationException(
+                    $"O maior espaço utilizável do disco {disk.Index} tem " +
+                    $"{gapSize / (1024 * 1024 * 1024)} GB, abaixo do mínimo de " +
+                    $"{MinimumRootSizeBytes / (1024 * 1024 * 1024)} GB para instalar o sistema. " +
+                    "O encolhimento da partição do Windows não liberou o espaço esperado.");
             }
 
             string indent = new(' ', indentSpaces);
@@ -186,7 +202,9 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine($"{field}preserve: true");
             yaml.AppendLine($"{field}grub_device: {Boolean(!isUefi)}");
 
-            foreach (PartitionLayout partition in disk.Partitions.OrderBy(p => p.Number))
+            foreach (PartitionLayout partition in disk.Partitions
+                         .Where(p => preserved.Contains(p.Number))
+                         .OrderBy(p => p.Number))
             {
                 yaml.AppendLine($"{item}- type: partition");
                 yaml.AppendLine($"{field}id: {PartitionId(partition.Number)}");
@@ -304,6 +322,27 @@ namespace LinuxHub.Features.InstallWizard.Services
             // Entre aspas porque `0x07` sem elas é um INTEIRO em YAML: o cloud-init entregaria
             // 7 ao curtin, e não a string "0x07" que o partition_type documenta.
             return Quote(string.Create(CultureInfo.InvariantCulture, $"0x{partition.MbrType:x2}"));
+        }
+
+        /// <summary>
+        /// Só três partições sobrevivem ao modo substituir, e cada uma por um motivo distinto:
+        /// a ESP porque é onde o bootloader do sistema novo vai morar (recriar não é problema,
+        /// mas preservar a partição evita depender do curtin inventar uma); a staging porque a
+        /// sessão live está LENDO a ISO dela neste instante — liberá-la é o que fazia o
+        /// <c>clear-holders</c> falhar; e a semente porque o cloud-init pode reler o
+        /// <c>user-data</c> durante a instalação.
+        ///
+        /// Tudo o mais — Windows, MSR, Recovery — fica de fora e vira espaço disponível.
+        /// </summary>
+        private static HashSet<int> BuildReplacePreservedSet(
+            PartitionLayout? esp, int seedPartitionNumber, int stagingPartitionNumber)
+        {
+            var preserved = new HashSet<int> { seedPartitionNumber, stagingPartitionNumber };
+
+            if (esp is not null)
+                preserved.Add(esp.Number);
+
+            return preserved;
         }
 
         private static string PartitionId(int number) =>

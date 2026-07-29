@@ -43,6 +43,9 @@ namespace LinuxHub
             IBootConfigurationService bootConfigurationService = new BootConfigurationService();
             IBootStagingService bootStagingService = new BootStagingService(
                 espLocatorService, grubAssetProvider, mbrBackupService, bootConfigurationService);
+            IBootSecurityService bootSecurityService = new BootSecurityService();
+            IIsoFileInfoProvider isoFileInfoProvider = new IsoFileInfoProvider();
+            IStagingPartitionService stagingPartitionService = new StagingPartitionService(isoFileInfoProvider);
 
             var catalogViewModel = new CatalogViewModel();
 
@@ -57,7 +60,10 @@ namespace LinuxHub
                 installerConfigWriter,
                 diskPartitioningService,
                 autoinstallPreparationService,
-                bootStagingService);
+                bootStagingService,
+                bootSecurityService,
+                stagingPartitionService,
+                isoFileInfoProvider);
 
             var mainWindow = new MainWindow(catalogViewModel, installWizardViewModel);
             MainWindow = mainWindow;

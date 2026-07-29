@@ -68,12 +68,35 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
         private sealed class FakeDiskPartitioningService : IDiskPartitioningService
         {
-            public void ShrinkPartition(int diskIndex, int partitionIndex, int sizeInGb) { }
+            public long? ShrunkBytes { get; private set; }
+
+            public void ShrinkPartition(int diskIndex, int partitionIndex, long bytesToFree) =>
+                ShrunkBytes = bytesToFree;
+
+            public void EnsureUnallocatedSpace(int diskIndex, long requiredBytes) { }
         }
 
         private sealed class FakeAutoinstallPreparationService : IAutoinstallPreparationService
         {
-            public int Prepare(InstallerConfig config, int diskIndex) => 5;
+            public int Prepare(InstallerConfig config, int diskIndex, StagingPartition staging) => 5;
+        }
+
+        private sealed class FakeStagingPartitionService : IStagingPartitionService
+        {
+            public string? CopiedFrom { get; private set; }
+
+            public long RequiredBytesFor(long isoSizeInBytes) => isoSizeInBytes + 512L * 1024 * 1024;
+
+            public StagingPartition Create(int diskIndex, long isoSizeInBytes) =>
+                new(diskIndex, 9, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
+
+            public void CopyIso(StagingPartition partition, string isoSourcePath, IProgress<string>? progress) =>
+                CopiedFrom = isoSourcePath;
+        }
+
+        private sealed class FakeIsoFileInfoProvider : IIsoFileInfoProvider
+        {
+            public long GetSizeInBytes(string isoPath) => 6_655_619_072;
         }
 
         /// <summary>Segura o boot-staging até o teste liberar, para inspecionar o wizard com a
@@ -97,7 +120,21 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             }
         }
 
-        private static InstallWizardViewModel BuildViewModel(IBootStagingService bootStaging)
+        /// <summary>Máquina sem nenhuma das duas proteções — é o cenário em que a instalação
+        /// pode prosseguir, e o padrão de todos os testes que não são sobre elas.</summary>
+        private sealed class FakeBootSecurityService : IBootSecurityService
+        {
+            public bool SecureBoot { get; set; }
+            public bool BitLocker { get; set; }
+
+            public bool IsSecureBootEnabled() => SecureBoot;
+            public bool IsVolumeBitLockerProtected(char driveLetter) => BitLocker;
+        }
+
+        private static InstallWizardViewModel BuildViewModel(
+            IBootStagingService bootStaging,
+            IBootSecurityService? bootSecurity = null,
+            IIsoFileInfoProvider? isoFileInfo = null)
         {
             var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository());
             var target = new TargetSelectionViewModel(
@@ -111,7 +148,10 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 new FakeInstallerConfigWriter(),
                 new FakeDiskPartitioningService(),
                 new FakeAutoinstallPreparationService(),
-                bootStaging);
+                bootStaging,
+                bootSecurity ?? new FakeBootSecurityService(),
+                new FakeStagingPartitionService(),
+                isoFileInfo ?? new FakeIsoFileInfoProvider());
 
             // ResolvedIsoPath só é preenchido pelo download ou pela seleção manual; o wizard
             // recusa instalar sem ele, então o teste passa pelo caminho de download falso.
@@ -201,6 +241,113 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             // O aviso é um MessageBox modal: se o overlay ainda estivesse aberto, o spinner
             // ficaria girando atrás dele até o usuário clicar em OK.
             Assert.False(progressStillOpenWhenNotified);
+        }
+
+        /// <summary>
+        /// O ponto inteiro da guarda: recusar ANTES de escrever. Numa VM com BitLocker o
+        /// fluxo ia até o fim — encolhia o disco, criava a semente, registrava a entrada de
+        /// boot — e só morria depois do reboot, numa tela preta do GRUB. Se o cartão de
+        /// confirmação chegar a aparecer, a recusa veio tarde demais.
+        /// </summary>
+        [Theory]
+        [InlineData(true, false)]
+        [InlineData(false, true)]
+        public void BootProtectionEnabled_RefusesBeforeTouchingTheDisk(bool secureBoot, bool bitLocker)
+        {
+            var bootStaging = new BlockingBootStagingService();
+            var vm = BuildViewModel(
+                bootStaging,
+                new FakeBootSecurityService { SecureBoot = secureBoot, BitLocker = bitLocker });
+
+            string? errorMessage = null;
+            vm.Notify += (_, message, isError) =>
+            {
+                if (isError)
+                    errorMessage = message;
+            };
+
+            vm.InstallCommand.Execute(null);
+
+            Assert.Null(vm.PendingConfirmation);
+            Assert.False(vm.IsInstalling);
+            Assert.NotNull(errorMessage);
+        }
+
+        /// <summary>
+        /// A mensagem é a única saída que o usuário tem — ela precisa dizer o que fazer, não
+        /// só que falhou. Sem o passo a passo a recusa vira um beco sem saída.
+        /// </summary>
+        [Fact]
+        public void SecureBootRefusal_ExplainsHowToTurnItOff()
+        {
+            var vm = BuildViewModel(
+                new BlockingBootStagingService(),
+                new FakeBootSecurityService { SecureBoot = true });
+
+            string? errorMessage = null;
+            vm.Notify += (_, message, isError) =>
+            {
+                if (isError)
+                    errorMessage = message;
+            };
+
+            vm.InstallCommand.Execute(null);
+
+            Assert.Contains("Secure Boot", errorMessage);
+            Assert.Contains("UEFI", errorMessage);
+        }
+
+        /// <summary>
+        /// A staging consome espaço que o usuário não pediu. Descobrir que não cabe DEPOIS de
+        /// encolher o Windows deixaria a máquina alterada por nada — e no modo substituir, com
+        /// a ESP já preparada para um boot que nunca vai acontecer.
+        /// </summary>
+        [Fact]
+        public void NotEnoughSpaceForStaging_RefusesBeforeTouchingTheDisk()
+        {
+            var bootStaging = new BlockingBootStagingService();
+            // ISO maior que o disco de teste: não há como acomodar staging nenhuma.
+            var vm = BuildViewModel(bootStaging, isoFileInfo: new HugeIsoFileInfoProvider());
+
+            string? errorMessage = null;
+            vm.Notify += (_, message, isError) =>
+            {
+                if (isError)
+                    errorMessage = message;
+            };
+
+            vm.InstallCommand.Execute(null);
+
+            Assert.Null(vm.PendingConfirmation);
+            Assert.False(vm.IsInstalling);
+            Assert.NotNull(errorMessage);
+        }
+
+        private sealed class HugeIsoFileInfoProvider : IIsoFileInfoProvider
+        {
+            public long GetSizeInBytes(string isoPath) => 100L * 1024 * 1024 * 1024 * 1024;
+        }
+
+        /// <summary>A letra da unidade tem que chegar na mensagem: "rode manage-bde -off" sem
+        /// dizer em qual unidade não ajuda ninguém.</summary>
+        [Fact]
+        public void BitLockerRefusal_NamesTheDriveToDecrypt()
+        {
+            var vm = BuildViewModel(
+                new BlockingBootStagingService(),
+                new FakeBootSecurityService { BitLocker = true });
+
+            string? errorMessage = null;
+            vm.Notify += (_, message, isError) =>
+            {
+                if (isError)
+                    errorMessage = message;
+            };
+
+            vm.InstallCommand.Execute(null);
+
+            Assert.Contains("manage-bde", errorMessage);
+            Assert.Matches(@"[A-Za-z]:", errorMessage!);
         }
     }
 }

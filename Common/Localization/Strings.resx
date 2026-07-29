@@ -254,6 +254,30 @@
   <data name="Wizard_PasswordMismatchMessage" xml:space="preserve">
     <value>As senhas digitadas não são iguais.</value>
   </data>
+  <data name="Wizard_SecureBootBlockedMessage" xml:space="preserve">
+    <value>O Secure Boot está ligado, e com ele o firmware recusa carregar o gerenciador de boot que o LinuxHub instala — a instalação pararia numa tela de erro logo depois de reiniciar.
+
+Para desligar:
+
+1. Abra Configurações &gt; Sistema &gt; Recuperação e clique em "Reiniciar agora" em Inicialização avançada.
+2. Escolha Solucionar problemas &gt; Opções avançadas &gt; Configurações de Firmware UEFI e confirme reiniciar.
+3. No firmware, procure "Secure Boot" (costuma ficar em Security, Boot ou Authentication) e mude para Disabled.
+4. Salve e saia (normalmente F10), deixe o Windows iniciar e abra o LinuxHub de novo.
+
+Se a opção estiver esmaecida, defina primeiro uma senha de supervisor do firmware, ou mude o modo de Secure Boot para "Setup Mode"/"Custom". Depois que o Linux estiver instalado, você pode ligar o Secure Boot de volta.</value>
+  </data>
+  <data name="Wizard_BitLockerBlockedMessage" xml:space="preserve">
+    <value>A unidade {0}: está protegida pelo BitLocker. Para abrir espaço para a instalação, o LinuxHub precisa encolher essa unidade — operação sobre um volume criptografado que pode falhar ou exigir a chave de recuperação no próximo boot do Windows.
+
+Para desligar:
+
+1. Abra o Prompt de Comando ou o PowerShell como administrador.
+2. Execute: manage-bde -off {0}:
+3. Acompanhe com: manage-bde -status {0}:
+4. Espere até aparecer "Totalmente Descriptografado" (pode levar bastante tempo) e abra o LinuxHub de novo.
+
+Atenção: suspender o BitLocker não resolve — os dados continuam criptografados no disco. É preciso descriptografar de verdade. Depois que o Linux estiver instalado, você pode ligar o BitLocker de volta.</value>
+  </data>
   <data name="Wizard_InstallTypeTitle" xml:space="preserve">
     <value>Tipo de instalação</value>
   </data>
@@ -283,6 +307,16 @@
   </data>
   <data name="Wizard_InstallStepShrinking" xml:space="preserve">
     <value>Encolhendo a partição do Windows…</value>
+  </data>
+  <data name="Wizard_InstallStepCopyingIso" xml:space="preserve">
+    <value>Copiando a imagem do sistema… isso pode levar alguns minutos.</value>
+  </data>
+  <data name="Wizard_NotEnoughSpaceForPreparationMessage" xml:space="preserve">
+    <value>Não há espaço suficiente para preparar a instalação. São necessários {0} GB e o alvo escolhido tem {1} GB.
+
+Além do espaço do Linux, o LinuxHub precisa de uma área temporária para guardar a imagem do sistema durante a instalação. Essa área é devolvida depois que a instalação termina.
+
+Libere espaço no disco, escolha um alvo maior ou reduza o tamanho reservado para o Linux.</value>
   </data>
   <data name="Wizard_InstallStepWritingConfig" xml:space="preserve">
     <value>Gravando a configuração do instalador…</value>

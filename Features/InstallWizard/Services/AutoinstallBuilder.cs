@@ -24,7 +24,12 @@ namespace LinuxHub.Features.InstallWizard.Services
         private static readonly Regex HostnamePattern =
             new("^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$", RegexOptions.Compiled);
 
-        public static string BuildUserData(InstallerConfig config, DiskLayout disk, string passwordHash, int seedPartitionNumber)
+        public static string BuildUserData(
+            InstallerConfig config,
+            DiskLayout disk,
+            string passwordHash,
+            int seedPartitionNumber,
+            StagingPartition staging)
         {
             ArgumentNullException.ThrowIfNull(config);
             ArgumentNullException.ThrowIfNull(disk);
@@ -87,7 +92,20 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine("    install-server: false");
 
             yaml.AppendLine("  storage:");
-            yaml.Append(AutoinstallStorageBuilder.Build(disk, mode, isUefi, indentSpaces: 4, seedPartitionNumber));
+            yaml.Append(AutoinstallStorageBuilder.Build(
+                disk, mode, isUefi, indentSpaces: 4, seedPartitionNumber, staging.PartitionNumber));
+
+            // Devolve o espaço da staging e da semente ao usuário — mas só no primeiro boot do
+            // sistema instalado. Aqui, ainda dentro da sessão live, a ISO da staging é o que
+            // está servindo o sistema de arquivos raiz: apagá-la agora mataria a instalação.
+            string? seedUuid = disk.Partitions
+                .FirstOrDefault(p => p.Number == seedPartitionNumber)?.Guid;
+
+            if (!string.IsNullOrWhiteSpace(seedUuid))
+            {
+                yaml.AppendLine("  late-commands:");
+                yaml.Append(PostInstallCleanupBuilder.Build(staging.PartitionUuid, seedUuid, indentSpaces: 4));
+            }
 
             // Nada de chave `swap:` no topo — ela NÃO existe no autoinstall. Numa instalação
             // real o subiquity respondeu "Unrecognized top-level key 'swap'" e avisou que

@@ -27,6 +27,11 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// espaço utilizável.</summary>
         private const int AlignmentSlackMb = 1;
 
+        /// <summary>Quanto de espaço não alocado a semente exige. Público porque quem prepara
+        /// o disco precisa somar isto ao que a staging consome ANTES de encolher — o shrink é
+        /// um só, e depois dele não há segunda chance de pedir mais.</summary>
+        public static long RequiredBytes => (SeedPartitionSizeMb + AlignmentSlackMb) * 1024L * 1024L;
+
         internal const string VolumeLabel = "CIDATA";
         private const string SuccessMarker = "SEED_OK:";
 
@@ -50,44 +55,18 @@ namespace LinuxHub.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// Abre espaço antes de criar a semente. No modo dual-boot isto não faz nada — o
-        /// encolhimento pedido pelo usuário já deixou um vão enorme. No modo substituir, porém,
-        /// NADA cria espaço não alocado (o encolhimento é exclusivo do dual-boot, ver
-        /// <c>InstallWizardViewModel.RunInstall</c>) e num disco com o Windows ocupando tudo o
-        /// <c>New-Partition</c> morria com "Not enough available capacity" — erro real numa VM
-        /// de 126 GB, e invisível na máquina de quem já tinha espaço sobrando de testes antigos.
+        /// Só cria — abrir espaço não é mais responsabilidade daqui. O encolhimento vive num
+        /// ponto único (<see cref="IDiskPartitioningService.EnsureUnallocatedSpace"/>), que
+        /// soma de uma vez o que a staging e a semente precisam e executa UM shrink; ter cada
+        /// serviço encolhendo por conta própria significava dois resizes encadeados no mesmo
+        /// volume, dobrando tempo e risco (design.md D4 do change iso-staging-partition).
         ///
-        /// Encolher aqui é seguro justamente porque a semente só é criada quando o autoinstall
-        /// está ligado, e nesse caminho o disco vai ser reparticionado pelo instalador logo
-        /// depois. Ainda assim passa pelas mesmas barreiras do
-        /// <see cref="DiskPartitioningService"/>: só NTFS, e só até onde
-        /// <c>Get-PartitionSupportedSize</c> permitir.
+        /// Quem chama precisa ter garantido o espaço antes: sem isso o <c>New-Partition</c>
+        /// falha com "Not enough available capacity" — erro real numa VM de 126 GB com o
+        /// Windows ocupando o disco inteiro.
         /// </summary>
         internal static string BuildCreateScript(int diskIndex) => $@"
 $ErrorActionPreference = 'Stop'
-
-$necessario = {SeedPartitionSizeMb}MB + {AlignmentSlackMb}MB
-if ((Get-Disk -Number {diskIndex}).LargestFreeExtent -lt $necessario) {{
-    # A maior NTFS do disco é a candidata: num layout de Windows típico é o C:, a única com
-    # folga real. Recovery e ESP são pequenas demais e a MSR não tem filesystem nenhum.
-    $candidata = Get-Partition -DiskNumber {diskIndex} | ForEach-Object {{
-        $vol = $null
-        try {{ $vol = $_ | Get-Volume -ErrorAction Stop }} catch {{ $vol = $null }}
-        if ($null -ne $vol -and $vol.FileSystem -eq 'NTFS') {{ $_ }}
-    }} | Sort-Object Size -Descending | Select-Object -First 1
-
-    if ($null -eq $candidata) {{
-        throw ""O disco {diskIndex} não tem espaço não alocado para a partição de configuração da instalação automática, e nenhuma partição NTFS que pudesse ser encolhida para abrir esse espaço. Libere ao menos {SeedPartitionSizeMb} MB no disco, ou desligue a instalação automática para instalar pelo instalador da própria distro.""
-    }}
-
-    $suportado = Get-PartitionSupportedSize -DiskNumber {diskIndex} -PartitionNumber $candidata.PartitionNumber
-    $novoTamanho = $candidata.Size - $necessario
-    if ($novoTamanho -lt $suportado.SizeMin) {{
-        throw ""A partição $($candidata.PartitionNumber) do disco {diskIndex} não pode ser encolhida nos {SeedPartitionSizeMb} MB necessários para a partição de configuração da instalação automática. Arquivos imóveis (paginação, hibernação, restauração do sistema) limitam o encolhimento mesmo havendo espaço livre.""
-    }}
-
-    Resize-Partition -DiskNumber {diskIndex} -PartitionNumber $candidata.PartitionNumber -Size $novoTamanho
-}}
 
 $partition = New-Partition -DiskNumber {diskIndex} -Size {SeedPartitionSizeMb}MB -AssignDriveLetter
 $letter = $partition.DriveLetter

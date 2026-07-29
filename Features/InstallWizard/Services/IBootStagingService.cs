@@ -1,9 +1,17 @@
 namespace LinuxHub.Features.InstallWizard.Services
 {
-    /// <summary><paramref name="EnableAutoinstall"/> liga o parâmetro <c>autoinstall</c> na
-    /// linha de comando do kernel — só faz sentido quando a semente do cloud-init já foi
-    /// gravada (<see cref="ICloudInitSeedWriter"/>), porque sem o <c>user-data</c> presente o
-    /// instalador para pedindo os dados que o parâmetro prometeu que existiriam.</summary>
+    /// <summary>
+    /// <paramref name="IsoPath"/> é o caminho da ISO DENTRO do volume que a hospeda, não um
+    /// caminho do Windows: o GRUB não conhece letra de unidade e localiza o arquivo com
+    /// <c>search --file</c>, que compara caminhos relativos à raiz de cada volume. Desde que a
+    /// ISO passou a morar na partição de staging (ver <see cref="IStagingPartitionService"/>),
+    /// isso é simplesmente <c>/linuxhub.iso</c>.
+    ///
+    /// <paramref name="EnableAutoinstall"/> liga o parâmetro <c>autoinstall</c> na linha de
+    /// comando do kernel — só faz sentido quando a semente do cloud-init já foi gravada
+    /// (<see cref="ICloudInitSeedWriter"/>), porque sem o <c>user-data</c> presente o
+    /// instalador para pedindo os dados que o parâmetro prometeu que existiriam.
+    /// </summary>
     public sealed record BootStagingRequest(
         string DistroName,
         string IsoPath,

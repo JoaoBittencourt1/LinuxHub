@@ -22,9 +22,10 @@ namespace LinuxHub.Features.InstallWizard.Services
             _diskLayoutProvider = diskLayoutProvider ?? throw new ArgumentNullException(nameof(diskLayoutProvider));
         }
 
-        public int Prepare(InstallerConfig config, int diskIndex)
+        public int Prepare(InstallerConfig config, int diskIndex, StagingPartition staging)
         {
             ArgumentNullException.ThrowIfNull(config);
+            ArgumentNullException.ThrowIfNull(staging);
 
             int seedPartitionNumber = _seedWriter.CreateSeedPartition(diskIndex);
 
@@ -34,7 +35,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             // devem produzir o mesmo hash no /etc/shadow.
             string passwordHash = Sha512Crypt.Hash(config.Password, Sha512Crypt.GenerateSalt());
 
-            string userData = AutoinstallBuilder.BuildUserData(config, layout, passwordHash, seedPartitionNumber);
+            string userData = AutoinstallBuilder.BuildUserData(
+                config, layout, passwordHash, seedPartitionNumber, staging);
             string metaData = AutoinstallBuilder.BuildMetaData($"linuxhub-{Guid.NewGuid():N}");
 
             _seedWriter.WriteSeedFiles(diskIndex, seedPartitionNumber, userData, metaData);

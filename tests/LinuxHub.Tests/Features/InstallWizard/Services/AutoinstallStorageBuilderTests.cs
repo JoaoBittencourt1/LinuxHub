@@ -21,6 +21,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         private const long Gib = 1024L * 1024 * 1024;
         private const int SeedPartitionNumber = 4;
 
+        /// <summary>A partição que hospeda a ISO em uso — sempre preservada, nos dois modos.</summary>
+        private const int StagingPartitionNumber = 5;
+
         private static DiskLayout BuildDiskWithFreeSpace(long freeSpaceBytes = 100 * Gib)
         {
             long espOffset = 1024 * 1024;
@@ -82,7 +85,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void DualBoot_DeclaresEveryExistingPartitionAsPreserved()
         {
             string yaml = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
             foreach (int number in new[] { 1, 2, 3, 4 })
                 Assert.Contains($"id: partition-{number}", yaml);
@@ -106,7 +109,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void DualBoot_DeclaresTheOriginalTypeOfEveryPreservedPartition()
         {
             string yaml = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
             // Sem chaves e em maiúsculas — a forma que o sfdisk aceita.
             Assert.Contains("partition_type: C12A7328-F81F-11D2-BA4B-00A0C93EC93B", yaml);
@@ -133,7 +136,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             };
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallStorageBuilder.Build(disk3, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                () => AutoinstallStorageBuilder.Build(disk3, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
 
             Assert.Contains("tipo GPT da partição 3", error.Message);
         }
@@ -162,7 +165,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                     new PartitionLayout(2, windowsOffset, windowsSize, "", false, MbrType: 0x07)
                 });
 
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, isUefi: false, indentSpaces: 4, seedPartitionNumber: 2);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, isUefi: false, indentSpaces: 4, seedPartitionNumber: 2, stagingPartitionNumber: StagingPartitionNumber);
 
             // Com aspas: `0x07` cru seria o inteiro 7 depois do parse do YAML.
             Assert.Equal(2, CountOccurrences(yaml, "partition_type: '0x07'"));
@@ -174,7 +177,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void DualBoot_NeverReformatsTheEfiSystemPartition()
         {
             string yaml = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
             // A ESP precisa ser declarada como fat32 para o curtin montá-la em /boot/efi e
             // instalar o GRUB, mas COM preserve: true — sem isso ela é reformatada e o
@@ -191,9 +194,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void DualBoot_PutsGrubOnTheEspInUefiAndOnTheDiskInBios()
         {
             string uefi = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
             string bios = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: false, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: false, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
             // Em UEFI o grub_device é a ESP; em BIOS legado é o disco (GRUB vai pro MBR).
             Assert.Equal(1, CountOccurrences(uefi, "grub_device: true"));
@@ -211,7 +214,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void DualBoot_CreatesRootInTheFreeSpaceWithTheNextPartitionNumber()
         {
             string yaml = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
             Assert.Contains("id: partition-5", yaml);
             Assert.Contains("number: 5", yaml);
@@ -226,7 +229,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             // Um offset desalinhado custa desempenho em SSD e algumas firmwares recusam.
             var disk = BuildDiskWithFreeSpace();
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber);
 
             (long gapOffset, _) = disk.FindLargestFreeGap();
             long expected = (gapOffset + (1024 * 1024) - 1) / (1024 * 1024) * (1024 * 1024);
@@ -240,9 +243,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             var disk = BuildDiskWithFreeSpace(freeSpaceBytes: 4 * Gib);
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
 
-            Assert.Contains("espaço não alocado", error.Message);
+            Assert.Contains("espaço utilizável", error.Message);
         }
 
         [Fact]
@@ -257,7 +260,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             };
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
 
             Assert.Contains("EFI System Partition", error.Message);
         }
@@ -270,21 +273,55 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             var disk = BuildDiskWithFreeSpace() with { IsGpt = false };
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
 
             Assert.Contains("GPT", error.Message);
         }
 
+        /// <summary>
+        /// O <c>layout: name: direct</c> saiu. Ele reescreve o disco inteiro, e aí o
+        /// <c>clear-holders</c> do curtin precisa liberar TODAS as partições — inclusive a que
+        /// hospeda a ISO, montada em <c>/isodevice</c> pelo casper e nunca solta. A instalação
+        /// morria com <c>FAIL: removing previous storage devices</c> (erro real, 2026-07-29).
+        /// </summary>
         [Fact]
-        public void Replace_DelegatesToTheSubiquityDirectLayout()
+        public void Replace_DoesNotAskForAWholeDiskRepartition()
         {
             string yaml = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.Replace, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.Replace, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
-            Assert.Contains("name: direct", yaml);
+            Assert.DoesNotContain("layout:", yaml);
+            Assert.DoesNotContain("name: direct", yaml);
+            Assert.Contains("config:", yaml);
+        }
 
-            // Nenhuma partição é enumerada no modo substituir — o disco inteiro é do Linux.
-            Assert.DoesNotContain("preserve: true", yaml);
+        /// <summary>A staging hospeda a ISO que a sessão live está lendo NESTE momento —
+        /// liberá-la mata o instalador junto. A semente também sobrevive: o cloud-init pode
+        /// reler o user-data durante a instalação.</summary>
+        [Fact]
+        public void Replace_PreservesTheStagingAndSeedPartitions()
+        {
+            string yaml = AutoinstallStorageBuilder.Build(
+                BuildDiskWithFreeSpace(), InstallMode.Replace, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
+
+            Assert.Contains($"id: partition-{StagingPartitionNumber}", yaml);
+            Assert.Contains($"id: partition-{SeedPartitionNumber}", yaml);
+        }
+
+        /// <summary>
+        /// O que faz o espaço do Windows ficar disponível é a OMISSÃO: o curtin trata como
+        /// livre toda partição que não aparece na lista. Se elas voltassem a ser declaradas,
+        /// o modo substituir preservaria o Windows e não sobraria espaço para o Linux.
+        /// </summary>
+        [Fact]
+        public void Replace_OmitsTheWindowsPartitionsSoTheirSpaceIsFreed()
+        {
+            string yaml = AutoinstallStorageBuilder.Build(
+                BuildDiskWithFreeSpace(), InstallMode.Replace, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
+
+            // 2 = MSR, 3 = C: no layout de teste. Nenhuma das duas pode aparecer.
+            Assert.DoesNotContain("id: partition-2", yaml);
+            Assert.DoesNotContain("id: partition-3", yaml);
         }
 
         [Fact]
@@ -301,7 +338,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             foreach (InstallMode mode in new[] { InstallMode.DualBoot, InstallMode.Replace })
             {
-                string yaml = AutoinstallStorageBuilder.Build(disk, mode, isUefi: true, indentSpaces: 4, SeedPartitionNumber);
+                string yaml = AutoinstallStorageBuilder.Build(disk, mode, isUefi: true, indentSpaces: 4, SeedPartitionNumber, StagingPartitionNumber);
 
                 Assert.DoesNotContain("serial:", yaml);
                 Assert.DoesNotContain("6D1C", yaml);
@@ -319,10 +356,10 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             Assert.Contains(
                 "size: largest",
-                AutoinstallStorageBuilder.Build(largest, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                AutoinstallStorageBuilder.Build(largest, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
             Assert.Contains(
                 "size: smallest",
-                AutoinstallStorageBuilder.Build(smallest, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                AutoinstallStorageBuilder.Build(smallest, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
         }
 
         [Fact]
@@ -334,7 +371,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             var disk = BuildDiskWithFreeSpace() with { IsLargestDisk = false, IsSmallestDisk = false };
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber));
+                () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
 
             Assert.Contains("maior ou o menor", error.Message);
         }
@@ -345,7 +382,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             // Parece mais seguro e é o oposto: uma divergência de um caractere entre a string
             // do Windows e a do Linux transforma um match que funcionava em "matched no disk".
             string yaml = AutoinstallStorageBuilder.Build(
-                BuildDiskWithFreeSpace(), InstallMode.DualBoot, true, 4, SeedPartitionNumber);
+                BuildDiskWithFreeSpace(), InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber);
 
             Assert.DoesNotContain("model:", yaml);
             Assert.DoesNotContain("NVMe de teste", yaml);
@@ -360,7 +397,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 BuildDiskWithFreeSpace() with { IsLargestDisk = false, IsSmallestDisk = false },
                 "{6a1e2c3d-1111-2222-3333-444455556666}");
 
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber);
 
             Assert.Contains($"path: {EarlyCommandsBuilder.DiskPathPlaceholder}", yaml);
             Assert.DoesNotContain("size: largest", yaml);
@@ -374,7 +411,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 BuildDiskWithFreeSpace() with { IsLargestDisk = false, IsSmallestDisk = false },
                 "{6a1e2c3d-1111-2222-3333-444455556666}");
 
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.Replace, true, 4, SeedPartitionNumber);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.Replace, true, 4, SeedPartitionNumber, StagingPartitionNumber);
 
             Assert.Contains($"path: {EarlyCommandsBuilder.DiskPathPlaceholder}", yaml);
         }
@@ -411,7 +448,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 HasUniqueDiskSignature = true
             };
 
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, false, 4, seedPartitionNumber: 2);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, false, 4, seedPartitionNumber: 2, stagingPartitionNumber: StagingPartitionNumber);
 
             Assert.Contains($"path: {EarlyCommandsBuilder.DiskPathPlaceholder}", yaml);
         }
@@ -444,7 +481,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 HasUniqueDiskSignature = false
             };
 
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, false, 4, seedPartitionNumber: 2);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, false, 4, seedPartitionNumber: 2, stagingPartitionNumber: StagingPartitionNumber);
 
             Assert.Contains("size: largest", yaml);
         }
@@ -461,7 +498,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 HasUniqueDiskSignature = false
             };
 
-            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, false, 4, seedPartitionNumber: 2);
+            string yaml = AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, false, 4, seedPartitionNumber: 2, stagingPartitionNumber: StagingPartitionNumber);
 
             Assert.Contains("size: largest", yaml);
         }

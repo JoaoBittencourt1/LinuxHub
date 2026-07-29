@@ -251,6 +251,30 @@
   <data name="Wizard_AccountIncompleteMessage" xml:space="preserve">
     <value>Fill in username, password and hostname before installing.</value>
   </data>
+  <data name="Wizard_SecureBootBlockedMessage" xml:space="preserve">
+    <value>Secure Boot is enabled, and with it the firmware refuses to load the boot manager LinuxHub installs — the installation would stop at an error screen right after restarting.
+
+To turn it off:
+
+1. Open Settings &gt; System &gt; Recovery and click "Restart now" under Advanced startup.
+2. Choose Troubleshoot &gt; Advanced options &gt; UEFI Firmware Settings and confirm the restart.
+3. In the firmware, look for "Secure Boot" (usually under Security, Boot or Authentication) and set it to Disabled.
+4. Save and exit (usually F10), let Windows start, and open LinuxHub again.
+
+If the option is greyed out, set a firmware supervisor password first, or change the Secure Boot mode to "Setup Mode"/"Custom". Once Linux is installed you can turn Secure Boot back on.</value>
+  </data>
+  <data name="Wizard_BitLockerBlockedMessage" xml:space="preserve">
+    <value>Drive {0}: is protected by BitLocker. To make room for the installation, LinuxHub has to shrink that drive — an operation on an encrypted volume that can fail or ask for the recovery key on the next Windows boot.
+
+To turn it off:
+
+1. Open Command Prompt or PowerShell as administrator.
+2. Run: manage-bde -off {0}:
+3. Track it with: manage-bde -status {0}:
+4. Wait until it reads "Fully Decrypted" (this can take a while) and open LinuxHub again.
+
+Note: suspending BitLocker is not enough — the data stays encrypted on disk. It has to be fully decrypted. Once Linux is installed you can turn BitLocker back on.</value>
+  </data>
   <data name="Wizard_PasswordMismatchMessage" xml:space="preserve">
     <value>The passwords entered don't match.</value>
   </data>
@@ -283,6 +307,16 @@
   </data>
   <data name="Wizard_InstallStepShrinking" xml:space="preserve">
     <value>Shrinking the Windows partition…</value>
+  </data>
+  <data name="Wizard_InstallStepCopyingIso" xml:space="preserve">
+    <value>Copying the system image… this can take a few minutes.</value>
+  </data>
+  <data name="Wizard_NotEnoughSpaceForPreparationMessage" xml:space="preserve">
+    <value>There is not enough space to prepare the installation. {0} GB are needed and the selected target has {1} GB.
+
+Besides the space for Linux itself, LinuxHub needs a temporary area to hold the system image during the installation. That area is given back once the installation finishes.
+
+Free up space on the disk, pick a larger target, or reduce the size reserved for Linux.</value>
   </data>
   <data name="Wizard_InstallStepWritingConfig" xml:space="preserve">
     <value>Writing the installer configuration…</value>

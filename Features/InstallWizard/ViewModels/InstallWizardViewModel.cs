@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows.Input;
 using LinuxHub.Common.Localization;
 using LinuxHub.Common.Models;
@@ -18,6 +19,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private readonly IDiskPartitioningService _diskPartitioning;
         private readonly IAutoinstallPreparationService _autoinstallPreparation;
         private readonly IBootStagingService _bootStaging;
+        private readonly IBootSecurityService _bootSecurity;
+        private readonly IStagingPartitionService _stagingPartition;
+        private readonly IIsoFileInfoProvider _isoFileInfo;
         private ConfirmationViewModel? _pendingConfirmation;
         private string? _installStatus;
 
@@ -29,7 +33,10 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             IInstallerConfigWriter configWriter,
             IDiskPartitioningService diskPartitioning,
             IAutoinstallPreparationService autoinstallPreparation,
-            IBootStagingService bootStaging)
+            IBootStagingService bootStaging,
+            IBootSecurityService bootSecurity,
+            IStagingPartitionService stagingPartition,
+            IIsoFileInfoProvider isoFileInfo)
         {
             Iso = iso ?? throw new ArgumentNullException(nameof(iso));
             Target = target ?? throw new ArgumentNullException(nameof(target));
@@ -39,6 +46,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             _diskPartitioning = diskPartitioning ?? throw new ArgumentNullException(nameof(diskPartitioning));
             _autoinstallPreparation = autoinstallPreparation ?? throw new ArgumentNullException(nameof(autoinstallPreparation));
             _bootStaging = bootStaging ?? throw new ArgumentNullException(nameof(bootStaging));
+            _bootSecurity = bootSecurity ?? throw new ArgumentNullException(nameof(bootSecurity));
+            _stagingPartition = stagingPartition ?? throw new ArgumentNullException(nameof(stagingPartition));
+            _isoFileInfo = isoFileInfo ?? throw new ArgumentNullException(nameof(isoFileInfo));
 
             Iso.Notify += (title, message, isError) => Notify?.Invoke(title, message, isError);
 
@@ -147,6 +157,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 if (Target.IsDualBootMode && Target.PartitionSpaceError is { } spaceError)
                     throw new InvalidOperationException(spaceError);
 
+                EnsureBootSecurityAllowsInstall(loc);
+                EnsureDiskFitsThePreparation(loc);
+
                 bool isReplace = Target.IsReplaceMode;
 
                 string summary = isReplace
@@ -174,6 +187,67 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             catch (Exception ex)
             {
                 Notify?.Invoke(loc["Wizard_InstallErrorTitle"], ex.Message, true);
+            }
+        }
+
+        /// <summary>
+        /// Secure Boot e BitLocker quebram o boot de staging de formas que o app não tem como
+        /// contornar — o firmware recusa o <c>grubx64.efi</c> não assinado, e o GRUB não lê
+        /// volume criptografado. Os dois só apareciam DEPOIS do reboot, numa tela preta, com o
+        /// disco já encolhido e uma entrada de boot pendurada (erro real numa VM com BitLocker).
+        /// Recusar aqui deixa a máquina exatamente como estava.
+        ///
+        /// A ordem não é acidental: Secure Boot sai do registro sem elevação, então checá-lo
+        /// primeiro evita gastar um prompt de UAC numa instalação que já está condenada.
+        /// </summary>
+        private void EnsureBootSecurityAllowsInstall(LocalizationManager loc)
+        {
+            if (_bootSecurity.IsSecureBootEnabled())
+                throw new InvalidOperationException(loc["Wizard_SecureBootBlockedMessage"]);
+
+            // O volume que importa é o que vai ser ENCOLHIDO para abrir espaço da partição de
+            // staging — não mais o que hospeda a ISO. Desde que a ISO passou a morar na
+            // staging, o GRUB não precisa mais ler o volume do Windows; o que continua sendo
+            // feito nele é o encolhimento, sobre dado cifrado, e a mudança de cadeia de boot
+            // que costuma disparar pedido de chave de recuperação no próximo boot.
+            if (Path.GetPathRoot(Iso.ResolvedIsoPath) is not { Length: > 0 } root)
+                return;
+
+            char driveLetter = root[0];
+            if (_bootSecurity.IsVolumeBitLockerProtected(driveLetter))
+                throw new InvalidOperationException(loc.Format("Wizard_BitLockerBlockedMessage", driveLetter));
+        }
+
+        /// <summary>
+        /// O preparo consome espaço que o usuário não pediu: a partição de staging (do tamanho
+        /// da ISO mais folga) e, com autoinstall ligado, a semente. Descobrir que não cabe
+        /// DEPOIS de encolher o Windows deixaria a máquina alterada por nada — e no modo
+        /// substituir, com a ESP já preparada para um boot que nunca vai acontecer.
+        ///
+        /// A conta aqui é sobre o disco todo, não sobre o que o <c>Get-PartitionSupportedSize</c>
+        /// permite encolher: esse número exige elevação e sai no script, imediatamente antes da
+        /// escrita. Este é o filtro grosseiro, que pega o caso óbvio sem gastar um prompt de UAC.
+        /// </summary>
+        private void EnsureDiskFitsThePreparation(LocalizationManager loc)
+        {
+            long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
+            long required = _stagingPartition.RequiredBytesFor(isoSize)
+                + (Iso.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0);
+
+            long diskSize = Target.IsReplaceMode
+                ? Target.SelectedDisk?.SizeBytes ?? 0
+                : Target.SelectedPartition?.SizeBytes ?? 0;
+
+            long requestedByUser = Target.IsDualBootMode
+                ? (long)Target.LinuxPartitionSizeGb * 1024 * 1024 * 1024
+                : 0;
+
+            if (diskSize > 0 && required + requestedByUser > diskSize)
+            {
+                throw new InvalidOperationException(loc.Format(
+                    "Wizard_NotEnoughSpaceForPreparationMessage",
+                    Math.Round((required + requestedByUser) / (1024d * 1024 * 1024), 1),
+                    Math.Round(diskSize / (1024d * 1024 * 1024), 1)));
             }
         }
 
@@ -239,19 +313,41 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         {
             var loc = LocalizationManager.Instance;
 
+            int targetDiskIndex = Target.IsReplaceMode
+                ? Target.SelectedDisk!.Index
+                : Target.SelectedPartition!.DiskIndex;
+
+            // Tudo o que o preparo consome de espaço, somado ANTES de encolher: a staging (que
+            // hospeda a ISO) e, quando o autoinstall está ligado, a semente. Um shrink só —
+            // encadear resizes no mesmo volume dobraria tempo e risco (design.md D4).
+            long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
+            long overheadBytes = _stagingPartition.RequiredBytesFor(isoSize)
+                + (Iso.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0);
+
             if (Target.IsDualBootMode && Target.SelectedPartition is { } partition)
             {
                 progress.Report(loc["Wizard_InstallStepShrinking"]);
 
+                // O espaço do preparo é ADICIONAL ao que o usuário pediu no slider: sem somar,
+                // a staging comeria parte da partição Linux e ele receberia menos do que
+                // escolheu.
                 _diskPartitioning.ShrinkPartition(
                     partition.DiskIndex,
                     partition.PartitionIndex,
-                    (int)Target.LinuxPartitionSizeGb);
+                    (long)Target.LinuxPartitionSizeGb * 1024 * 1024 * 1024 + overheadBytes);
+            }
+            else
+            {
+                // No modo substituir não há encolhimento pedido pelo usuário, e o disco cheio
+                // de Windows não tem onde acomodar a staging — este é o único ponto que abre
+                // esse espaço.
+                _diskPartitioning.EnsureUnallocatedSpace(targetDiskIndex, overheadBytes);
             }
 
-            int targetDiskIndex = Target.IsReplaceMode
-                ? Target.SelectedDisk!.Index
-                : Target.SelectedPartition!.DiskIndex;
+            progress.Report(loc["Wizard_InstallStepCopyingIso"]);
+
+            StagingPartition staging = _stagingPartition.Create(targetDiskIndex, isoSize);
+            _stagingPartition.CopyIso(staging, Iso.ResolvedIsoPath!, progress);
 
             // Distro sem autoinstall validado (ou usuário desligou o toggle): só prepara o
             // boot até o instalador nativo da ISO — sem install.conf, sem semente de
@@ -275,17 +371,18 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 var config = _configBuilder.Build(request);
                 _configWriter.Save(config);
 
-                // Precisa vir depois do encolhimento e antes do boot-staging: o autoinstall
-                // descreve o disco no estado em que o instalador vai encontrá-lo, e o parâmetro
-                // `autoinstall` no GRUB só pode ser ligado depois que a semente existe de fato.
-                _autoinstallPreparation.Prepare(config, targetDiskIndex);
+                // Precisa vir depois da staging e antes do boot-staging: o autoinstall descreve
+                // o disco no estado em que o instalador vai encontrá-lo — incluindo a partição
+                // de staging, que precisa ser declarada como preservada, senão o curtin a trata
+                // como espaço livre e apaga a ISO que está usando para rodar.
+                _autoinstallPreparation.Prepare(config, targetDiskIndex, staging);
             }
 
             progress.Report(loc["Wizard_InstallStepStagingBoot"]);
 
             _bootStaging.InstallStagingBootloader(new BootStagingRequest(
                 DistroName: distro.Name,
-                IsoPath: Iso.ResolvedIsoPath!,
+                IsoPath: StagingPartitionService.IsoGrubPath,
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,
                 EnableAutoinstall: Iso.IsAutoinstallActive));
