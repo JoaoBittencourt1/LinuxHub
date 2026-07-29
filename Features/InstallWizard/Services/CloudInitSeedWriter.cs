@@ -22,6 +22,11 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// <c>Format-Volume</c> do Windows aceita para FAT32.</summary>
         private const int SeedPartitionSizeMb = 128;
 
+        /// <summary>1 MiB de folga sobre o tamanho da semente: o <c>New-Partition</c> alinha o
+        /// início em 1 MiB, então um vão de exatamente 128 MB pode render menos que isso de
+        /// espaço utilizável.</summary>
+        private const int AlignmentSlackMb = 1;
+
         internal const string VolumeLabel = "CIDATA";
         private const string SuccessMarker = "SEED_OK:";
 
@@ -44,8 +49,45 @@ namespace LinuxHub.Features.InstallWizard.Services
                 "gravação da configuração da instalação automática");
         }
 
+        /// <summary>
+        /// Abre espaço antes de criar a semente. No modo dual-boot isto não faz nada — o
+        /// encolhimento pedido pelo usuário já deixou um vão enorme. No modo substituir, porém,
+        /// NADA cria espaço não alocado (o encolhimento é exclusivo do dual-boot, ver
+        /// <c>InstallWizardViewModel.RunInstall</c>) e num disco com o Windows ocupando tudo o
+        /// <c>New-Partition</c> morria com "Not enough available capacity" — erro real numa VM
+        /// de 126 GB, e invisível na máquina de quem já tinha espaço sobrando de testes antigos.
+        ///
+        /// Encolher aqui é seguro justamente porque a semente só é criada quando o autoinstall
+        /// está ligado, e nesse caminho o disco vai ser reparticionado pelo instalador logo
+        /// depois. Ainda assim passa pelas mesmas barreiras do
+        /// <see cref="DiskPartitioningService"/>: só NTFS, e só até onde
+        /// <c>Get-PartitionSupportedSize</c> permitir.
+        /// </summary>
         internal static string BuildCreateScript(int diskIndex) => $@"
 $ErrorActionPreference = 'Stop'
+
+$necessario = {SeedPartitionSizeMb}MB + {AlignmentSlackMb}MB
+if ((Get-Disk -Number {diskIndex}).LargestFreeExtent -lt $necessario) {{
+    # A maior NTFS do disco é a candidata: num layout de Windows típico é o C:, a única com
+    # folga real. Recovery e ESP são pequenas demais e a MSR não tem filesystem nenhum.
+    $candidata = Get-Partition -DiskNumber {diskIndex} | ForEach-Object {{
+        $vol = $null
+        try {{ $vol = $_ | Get-Volume -ErrorAction Stop }} catch {{ $vol = $null }}
+        if ($null -ne $vol -and $vol.FileSystem -eq 'NTFS') {{ $_ }}
+    }} | Sort-Object Size -Descending | Select-Object -First 1
+
+    if ($null -eq $candidata) {{
+        throw ""O disco {diskIndex} não tem espaço não alocado para a partição de configuração da instalação automática, e nenhuma partição NTFS que pudesse ser encolhida para abrir esse espaço. Libere ao menos {SeedPartitionSizeMb} MB no disco, ou desligue a instalação automática para instalar pelo instalador da própria distro.""
+    }}
+
+    $suportado = Get-PartitionSupportedSize -DiskNumber {diskIndex} -PartitionNumber $candidata.PartitionNumber
+    $novoTamanho = $candidata.Size - $necessario
+    if ($novoTamanho -lt $suportado.SizeMin) {{
+        throw ""A partição $($candidata.PartitionNumber) do disco {diskIndex} não pode ser encolhida nos {SeedPartitionSizeMb} MB necessários para a partição de configuração da instalação automática. Arquivos imóveis (paginação, hibernação, restauração do sistema) limitam o encolhimento mesmo havendo espaço livre.""
+    }}
+
+    Resize-Partition -DiskNumber {diskIndex} -PartitionNumber $candidata.PartitionNumber -Size $novoTamanho
+}}
 
 $partition = New-Partition -DiskNumber {diskIndex} -Size {SeedPartitionSizeMb}MB -AssignDriveLetter
 $letter = $partition.DriveLetter

@@ -21,6 +21,39 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains("New-Partition -DiskNumber 0", script);
         }
 
+        /// <summary>
+        /// No modo substituir nada cria espaço não alocado antes daqui, e num disco tomado
+        /// pelo Windows o New-Partition falhava com "Not enough available capacity". O script
+        /// tem que abrir o espaço sozinho antes de tentar criar.
+        /// </summary>
+        [Fact]
+        public void CreateScript_MakesRoomBeforeCreatingWhenTheDiskIsFull()
+        {
+            string script = CloudInitSeedWriter.BuildCreateScript(diskIndex: 0);
+
+            Assert.Contains("LargestFreeExtent", script);
+            Assert.Contains("Resize-Partition", script);
+
+            // A folga tem que ser verificada ANTES da criação, senão não serve pra nada.
+            Assert.True(
+                script.IndexOf("LargestFreeExtent", StringComparison.Ordinal)
+                    < script.IndexOf("New-Partition", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// Mesma barreira do DiskPartitioningService: encolher uma não-NTFS corta o filesystem
+        /// sem mover o conteúdo. Aqui o alvo é escolhido pelo script, não pelo usuário, então
+        /// o filtro é a única coisa que impede mirar numa ext4 de instalação anterior.
+        /// </summary>
+        [Fact]
+        public void CreateScript_OnlyEverShrinksAnNtfsPartition()
+        {
+            string script = CloudInitSeedWriter.BuildCreateScript(diskIndex: 0);
+
+            Assert.Contains("$vol.FileSystem -eq 'NTFS'", script);
+            Assert.Contains("Get-PartitionSupportedSize", script);
+        }
+
         [Fact]
         public void CreateScript_LeavesNoDriveLetterBehind()
         {
