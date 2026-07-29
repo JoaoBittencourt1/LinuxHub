@@ -26,11 +26,22 @@ namespace LinuxHub.Features.InstallWizard.Services
         {
             ArgumentNullException.ThrowIfNull(request);
 
-            if (!File.Exists(request.IsoPath))
+            // No modo substituir, IsoPath é um caminho GRUB dentro da partição de staging
+            // (ex.: "/linuxhub.iso") — nunca existiu no sistema de arquivos do Windows, e não
+            // precisa: a integridade já foi conferida na cópia (StagingPartitionService.CopyIso
+            // compara o tamanho copiado com o original). Confirmar isso com File.Exists tratando
+            // o caminho como se fosse do Windows é o bug real que gerou esta guarda: o .NET
+            // resolve "/linuxhub.iso" relativo à unidade atual (ex. C:\linuxhub.iso), nunca
+            // encontra, e a instalação abortava sempre no modo substituir.
+            //
+            // No dual-boot, IsoPath É um caminho real do Windows (a ISO original, nunca
+            // copiada) — `Path.IsPathFullyQualified` só é true nesse caso, e é aí que vale
+            // conferir: a ISO pode ter sido movida ou apagada depois de selecionada no wizard.
+            if (Path.IsPathFullyQualified(request.IsoPath) && !File.Exists(request.IsoPath))
             {
                 throw new InvalidOperationException(
-                    $"ISO de staging não encontrada em '{request.IsoPath}' — o boot-staging usa o " +
-                    "arquivo já baixado pelo install-wizard diretamente, sem copiá-lo (design.md D4).");
+                    $"A ISO não foi encontrada em '{request.IsoPath}'. Ela pode ter sido movida " +
+                    "ou apagada depois de selecionada no wizard.");
             }
 
             string grubCfg = GrubConfigBuilder.BuildConfig(

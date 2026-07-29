@@ -70,6 +70,52 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             File.Delete(coreImage);
         }
 
+        /// <summary>
+        /// Bug real: no modo substituir IsoPath é um caminho GRUB dentro da staging
+        /// ("/linuxhub.iso"), que nunca existe no sistema de arquivos do Windows.
+        /// InstallStagingBootloader tratava esse caminho como se fosse do Windows e recusava
+        /// TODA instalação em modo substituir com "ISO de staging não encontrada". A
+        /// integridade da cópia já foi conferida em StagingPartitionService.CopyIso — não há
+        /// nada a checar aqui de novo.
+        /// </summary>
+        [Fact]
+        public void InstallStagingBootloader_AcceptsAGrubPathThatIsNotFullyQualified()
+        {
+            var service = new BootStagingService(
+                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration());
+
+            var request = new BootStagingRequest(
+                DistroName: "Ubuntu",
+                IsoPath: "/linuxhub.iso",
+                IsUefi: true,
+                TargetDiskIndex: 0);
+
+            // FakeEspLocator devolve null de propósito: se a exceção for sobre a ESP, o guard
+            // do caminho da ISO passou. Se fosse sobre a ISO, o bug real ainda estaria lá.
+            var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
+            Assert.Contains("EFI System Partition", error.Message);
+        }
+
+        /// <summary>No dual-boot IsoPath é o caminho real da ISO no Windows (nunca copiada) —
+        /// aqui a checagem continua valendo: se o arquivo sumiu depois de selecionado no
+        /// wizard, é melhor descobrir antes de mexer no disco.</summary>
+        [Fact]
+        public void InstallStagingBootloader_DualBoot_StillRequiresTheOriginalIsoToExist()
+        {
+            var service = new BootStagingService(
+                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration());
+
+            string missingPath = Path.Combine(Path.GetTempPath(), $"linuxhub-missing-{Guid.NewGuid():N}.iso");
+            var request = new BootStagingRequest(
+                DistroName: "Ubuntu",
+                IsoPath: missingPath,
+                IsUefi: true,
+                TargetDiskIndex: 0);
+
+            var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
+            Assert.Contains(missingPath, error.Message);
+        }
+
         [Fact]
         public void BuildEspStagingScript_MountsAndUnmountsTheSameAccessPath()
         {
