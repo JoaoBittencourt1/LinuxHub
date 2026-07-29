@@ -30,16 +30,16 @@ namespace LinuxHub.Features.InstallWizard.Services
         private const string UnitPath = "/etc/systemd/system/linuxhub-cleanup.service";
 
         /// <summary>
-        /// <paramref name="stagingPartitionUuid"/> e <paramref name="seedPartitionUuid"/> são os
-        /// PARTUUID lidos do Windows na criação. Vêm normalizados para minúsculo porque é assim
-        /// que o <c>blkid</c> os reporta.
+        /// <paramref name="stagingPartitionUuid"/> é o PARTUUID da staging no modo substituir,
+        /// ou <c>null</c> no dual-boot (sem staging). <paramref name="seedPartitionUuid"/> é
+        /// sempre a semente. Ambos vêm normalizados para minúsculo porque é assim que o
+        /// <c>blkid</c> os reporta.
         /// </summary>
         public static string Build(
-            string stagingPartitionUuid,
+            string? stagingPartitionUuid,
             string seedPartitionUuid,
             int indentSpaces)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(stagingPartitionUuid);
             ArgumentException.ThrowIfNullOrWhiteSpace(seedPartitionUuid);
 
             string indent = new(' ', indentSpaces);
@@ -63,7 +63,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// (uma para o YAML, outra para o shell), e cada nível de escape é uma chance de o
         /// script chegar corrompido — num script que apaga partição, isso é inaceitável.
         /// </summary>
-        internal static string BuildLateCommand(string stagingPartitionUuid, string seedPartitionUuid)
+        internal static string BuildLateCommand(string? stagingPartitionUuid, string seedPartitionUuid)
         {
             string script = BuildCleanupScript(stagingPartitionUuid, seedPartitionUuid);
             string unit = BuildUnitFile();
@@ -102,11 +102,19 @@ namespace LinuxHub.Features.InstallWizard.Services
             WantedBy=multi-user.target
             """.Replace("\r\n", "\n") + "\n";
 
-        internal static string BuildCleanupScript(string stagingPartitionUuid, string seedPartitionUuid) =>
-            $$"""
+        internal static string BuildCleanupScript(string? stagingPartitionUuid, string seedPartitionUuid)
+        {
+            string stagingRemover = string.IsNullOrWhiteSpace(stagingPartitionUuid)
+                ? string.Empty
+                : $$"""
+            remover "{{Normalize(stagingPartitionUuid)}}" "{{StagingPartitionService.VolumeLabel}}" "ntfs"
+
+            """;
+
+            return $$"""
             #!/bin/sh
-            # Gerado pelo LinuxHub. Remove a particao de staging (que hospedou a ISO durante a
-            # instalacao) e a semente do cloud-init, devolvendo o espaco ao usuario.
+            # Gerado pelo LinuxHub. Remove a area temporaria da instalacao (staging no modo
+            # substituir; semente do cloud-init nos dois modos), devolvendo o espaco ao usuario.
             #
             # Roda uma vez so: a ultima linha desabilita o proprio servico, inclusive quando
             # alguma particao foi recusada — repetir a cada boot nao mudaria o resultado.
@@ -140,12 +148,12 @@ namespace LinuxHub.Features.InstallWizard.Services
                 sfdisk --delete "$disco" "$numero" || return 0
             }
 
-            remover "{{Normalize(stagingPartitionUuid)}}" "{{StagingPartitionService.VolumeLabel}}" "ntfs"
-            remover "{{Normalize(seedPartitionUuid)}}" "{{CloudInitSeedWriter.VolumeLabel}}" "vfat"
+            {{stagingRemover}}remover "{{Normalize(seedPartitionUuid)}}" "{{CloudInitSeedWriter.VolumeLabel}}" "vfat"
 
             systemctl disable {{ServiceName}}.service >/dev/null 2>&1 || true
             rm -f {{UnitPath}} {{ScriptPath}}
             """.Replace("\r\n", "\n") + "\n";
+        }
 
         private static string Normalize(string value) => value.Trim().Trim('{', '}').ToLowerInvariant();
     }

@@ -205,11 +205,10 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             if (_bootSecurity.IsSecureBootEnabled())
                 throw new InvalidOperationException(loc["Wizard_SecureBootBlockedMessage"]);
 
-            // O volume que importa é o que vai ser ENCOLHIDO para abrir espaço da partição de
-            // staging — não mais o que hospeda a ISO. Desde que a ISO passou a morar na
-            // staging, o GRUB não precisa mais ler o volume do Windows; o que continua sendo
-            // feito nele é o encolhimento, sobre dado cifrado, e a mudança de cadeia de boot
-            // que costuma disparar pedido de chave de recuperação no próximo boot.
+            // Dual-boot: o GRUB lê a ISO no volume do Windows — BitLocker nele é bloqueio duro.
+            // Substituir: a ISO vai para a staging, mas o preparo ainda ENCOLHE este volume e
+            // muda a cadeia de boot (pedido de chave de recuperação). Nos dois casos o volume
+            // da ISO é o que importa, e hoje ela mora nele antes do preparo.
             if (Path.GetPathRoot(Iso.ResolvedIsoPath) is not { Length: > 0 } root)
                 return;
 
@@ -219,10 +218,10 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         }
 
         /// <summary>
-        /// O preparo consome espaço que o usuário não pediu: a partição de staging (do tamanho
-        /// da ISO mais folga) e, com autoinstall ligado, a semente. Descobrir que não cabe
-        /// DEPOIS de encolher o Windows deixaria a máquina alterada por nada — e no modo
-        /// substituir, com a ESP já preparada para um boot que nunca vai acontecer.
+        /// O preparo consome espaço que o usuário não pediu. No modo substituir: a partição de
+        /// staging (ISO + folga) e, com autoinstall, a semente. No dual-boot a ISO continua no
+        /// volume do Windows — só a semente entra na conta. Descobrir que não cabe DEPOIS de
+        /// encolher o Windows deixaria a máquina alterada por nada.
         ///
         /// A conta aqui é sobre o disco todo, não sobre o que o <c>Get-PartitionSupportedSize</c>
         /// permite encolher: esse número exige elevação e sai no script, imediatamente antes da
@@ -230,9 +229,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         /// </summary>
         private void EnsureDiskFitsThePreparation(LocalizationManager loc)
         {
-            long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
-            long required = _stagingPartition.RequiredBytesFor(isoSize)
-                + (Iso.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0);
+            long required = PreparationOverheadBytes();
 
             long diskSize = Target.IsReplaceMode
                 ? Target.SelectedDisk?.SizeBytes ?? 0
@@ -249,6 +246,21 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                     Math.Round((required + requestedByUser) / (1024d * 1024 * 1024), 1),
                     Math.Round(diskSize / (1024d * 1024 * 1024), 1)));
             }
+        }
+
+        /// <summary>
+        /// Staging só no substituir: o dual-boot já preserva a partição que hospeda a ISO, então
+        /// copiá-la para uma partição dedicada era custo sem ganho (e o motivo desta mudança
+        /// nasceu do <c>layout: direct</c> do substituir, não do dual-boot).
+        /// </summary>
+        private long PreparationOverheadBytes()
+        {
+            long overhead = Iso.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0;
+            if (!Target.IsReplaceMode)
+                return overhead;
+
+            long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
+            return overhead + _stagingPartition.RequiredBytesFor(isoSize);
         }
 
         /// <summary>
@@ -317,37 +329,51 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 ? Target.SelectedDisk!.Index
                 : Target.SelectedPartition!.DiskIndex;
 
-            // Tudo o que o preparo consome de espaço, somado ANTES de encolher: a staging (que
-            // hospeda a ISO) e, quando o autoinstall está ligado, a semente. Um shrink só —
-            // encadear resizes no mesmo volume dobraria tempo e risco (design.md D4).
-            long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
-            long overheadBytes = _stagingPartition.RequiredBytesFor(isoSize)
-                + (Iso.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0);
+            // Um shrink só — encadear resizes no mesmo volume dobraria tempo e risco
+            // (design.md D4). Staging só entra no overhead do substituir.
+            long overheadBytes = PreparationOverheadBytes();
+
+            // Quantas partições o preparo ainda vai criar: a raiz do Linux sempre, a staging só
+            // no substituir, a semente só com autoinstall. A tabela precisa comportar todas —
+            // em MBR o teto é 4, e estourar no meio deixava o disco encolhido e a mensagem crua.
+            int newPartitions = 1
+                + (Target.IsReplaceMode ? 1 : 0)
+                + (Iso.IsAutoinstallActive ? 1 : 0);
 
             if (Target.IsDualBootMode && Target.SelectedPartition is { } partition)
             {
                 progress.Report(loc["Wizard_InstallStepShrinking"]);
 
-                // O espaço do preparo é ADICIONAL ao que o usuário pediu no slider: sem somar,
-                // a staging comeria parte da partição Linux e ele receberia menos do que
-                // escolheu.
+                // O overhead do preparo (semente) é ADICIONAL ao que o usuário pediu no slider.
                 _diskPartitioning.ShrinkPartition(
                     partition.DiskIndex,
                     partition.PartitionIndex,
-                    (long)Target.LinuxPartitionSizeGb * 1024 * 1024 * 1024 + overheadBytes);
+                    (long)Target.LinuxPartitionSizeGb * 1024 * 1024 * 1024 + overheadBytes,
+                    newPartitions);
             }
             else
             {
-                // No modo substituir não há encolhimento pedido pelo usuário, e o disco cheio
-                // de Windows não tem onde acomodar a staging — este é o único ponto que abre
-                // esse espaço.
-                _diskPartitioning.EnsureUnallocatedSpace(targetDiskIndex, overheadBytes);
+                // No modo substituir o disco cheio de Windows não tem onde acomodar a staging —
+                // este é o único ponto que abre esse espaço.
+                _diskPartitioning.EnsureUnallocatedSpace(
+                    targetDiskIndex, overheadBytes, newPartitions);
             }
 
-            progress.Report(loc["Wizard_InstallStepCopyingIso"]);
+            // Staging só no substituir: no dual-boot o curtin já preserva a partição do Windows
+            // que hospeda a ISO, então o GRUB continua achando-a com search --file no caminho
+            // original. Copiar ~7 GB e abrir partição extra era desnecessário nesse modo.
+            StagingPartition? staging = null;
+            string isoPathForGrub = Iso.ResolvedIsoPath!;
 
-            StagingPartition staging = _stagingPartition.Create(targetDiskIndex, isoSize);
-            _stagingPartition.CopyIso(staging, Iso.ResolvedIsoPath!, progress);
+            if (Target.IsReplaceMode)
+            {
+                progress.Report(loc["Wizard_InstallStepCopyingIso"]);
+
+                long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
+                staging = _stagingPartition.Create(targetDiskIndex, isoSize);
+                _stagingPartition.CopyIso(staging, Iso.ResolvedIsoPath!, progress);
+                isoPathForGrub = StagingPartitionService.IsoGrubPath;
+            }
 
             // Distro sem autoinstall validado (ou usuário desligou o toggle): só prepara o
             // boot até o instalador nativo da ISO — sem install.conf, sem semente de
@@ -371,10 +397,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 var config = _configBuilder.Build(request);
                 _configWriter.Save(config);
 
-                // Precisa vir depois da staging e antes do boot-staging: o autoinstall descreve
-                // o disco no estado em que o instalador vai encontrá-lo — incluindo a partição
-                // de staging, que precisa ser declarada como preservada, senão o curtin a trata
-                // como espaço livre e apaga a ISO que está usando para rodar.
+                // No substituir precisa vir depois da staging: o autoinstall descreve o disco
+                // incluindo a partição de staging como preservada, senão o curtin a trata como
+                // espaço livre e apaga a ISO que está usando para rodar.
                 _autoinstallPreparation.Prepare(config, targetDiskIndex, staging);
             }
 
@@ -382,7 +407,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
             _bootStaging.InstallStagingBootloader(new BootStagingRequest(
                 DistroName: distro.Name,
-                IsoPath: StagingPartitionService.IsoGrubPath,
+                IsoPath: isoPathForGrub,
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,
                 EnableAutoinstall: Iso.IsAutoinstallActive));

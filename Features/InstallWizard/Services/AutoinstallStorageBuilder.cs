@@ -40,9 +40,16 @@ namespace LinuxHub.Features.InstallWizard.Services
             bool isUefi,
             int indentSpaces,
             int seedPartitionNumber,
-            int stagingPartitionNumber)
+            int? stagingPartitionNumber)
         {
             ArgumentNullException.ThrowIfNull(disk);
+
+            if (mode == InstallMode.Replace && stagingPartitionNumber is null)
+            {
+                throw new InvalidOperationException(
+                    "O modo substituir precisa do número da partição de instalação (staging) " +
+                    "para declará-la como preservada — sem isso o instalador apagaria a ISO.");
+            }
 
             return BuildExplicitConfig(
                 disk, mode, isUefi, indentSpaces, seedPartitionNumber, stagingPartitionNumber);
@@ -146,7 +153,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             bool isUefi,
             int indentSpaces,
             int seedPartitionNumber,
-            int stagingPartitionNumber)
+            int? stagingPartitionNumber)
         {
             bool isReplace = mode == InstallMode.Replace;
 
@@ -171,7 +178,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // uso — apagá-la mata a sessão live) e a semente (o cloud-init pode reler durante a
             // instalação). O resto some por omissão.
             HashSet<int> preserved = isReplace
-                ? BuildReplacePreservedSet(esp, seedPartitionNumber, stagingPartitionNumber)
+                ? BuildReplacePreservedSet(esp, seedPartitionNumber, stagingPartitionNumber!.Value)
                 : disk.Partitions.Select(p => p.Number).ToHashSet();
 
             (long gapOffset, long gapSize) = disk.FindLargestFreeGap(preserved);

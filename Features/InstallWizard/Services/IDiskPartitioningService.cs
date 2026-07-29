@@ -15,7 +15,11 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// Lança se o processo elevado não puder ser iniciado ou se o encolhimento não couber
         /// (espaço livre insuficiente, arquivos imóveis do Windows).
         /// </summary>
-        void ShrinkPartition(int diskIndex, int partitionIndex, long bytesToFree);
+        /// <param name="newPartitionsPlanned">Quantas partições o preparo vai criar depois deste
+        /// encolhimento. Usado para recusar antes de escrever quando a tabela não comporta —
+        /// MBR admite 4 no total. Ver <c>BuildPartitionSlotGuard</c>.</param>
+        void ShrinkPartition(
+            int diskIndex, int partitionIndex, long bytesToFree, int newPartitionsPlanned);
 
         /// <summary>
         /// Garante que o disco tenha ao menos <paramref name="requiredBytes"/> contíguos não
@@ -27,6 +31,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// No-op quando já existe espaço suficiente: no dual-boot o encolhimento do slider já
         /// abriu o vão, e encolher de novo tiraria espaço do usuário sem motivo.
         /// </summary>
-        void EnsureUnallocatedSpace(int diskIndex, long requiredBytes);
+        /// <param name="newPartitionsPlanned">Idem <see cref="ShrinkPartition"/>.</param>
+        void EnsureUnallocatedSpace(int diskIndex, long requiredBytes, int newPartitionsPlanned);
     }
 }

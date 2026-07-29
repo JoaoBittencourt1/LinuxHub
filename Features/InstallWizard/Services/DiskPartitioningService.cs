@@ -15,19 +15,44 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public sealed class DiskPartitioningService : IDiskPartitioningService
     {
-        public void ShrinkPartition(int diskIndex, int partitionIndex, long bytesToFree)
+        public void ShrinkPartition(
+            int diskIndex, int partitionIndex, long bytesToFree, int newPartitionsPlanned)
         {
             ElevatedPowerShellRunner.Run(
-                BuildScript(diskIndex, partitionIndex, bytesToFree),
+                BuildScript(diskIndex, partitionIndex, bytesToFree, newPartitionsPlanned),
                 $"redimensionamento da partição {partitionIndex} do disco {diskIndex}");
         }
 
-        public void EnsureUnallocatedSpace(int diskIndex, long requiredBytes)
+        public void EnsureUnallocatedSpace(
+            int diskIndex, long requiredBytes, int newPartitionsPlanned)
         {
             ElevatedPowerShellRunner.Run(
-                BuildEnsureSpaceScript(diskIndex, requiredBytes),
+                BuildEnsureSpaceScript(diskIndex, requiredBytes, newPartitionsPlanned),
                 $"abertura de espaço não alocado no disco {diskIndex}");
         }
+
+        /// <summary>
+        /// Recusa antes de escrever quando a tabela de partição não comporta as partições que o
+        /// preparo vai criar. MBR admite no máximo 4 primárias, e o preparo cria até duas (a de
+        /// instalação e a semente) — estourar isso fazia o <c>New-Partition</c> falhar no meio
+        /// da preparação, com o disco já encolhido e a mensagem crua do Windows.
+        ///
+        /// Conta TODAS as partições, sem tentar separar primárias de lógicas. Distinguir as
+        /// duas exigiria interpretar valores de <c>Type</c> cuja semântica eu não tenho como
+        /// verificar aqui, e chutar isso é o erro que essa guarda existe para evitar. O custo é
+        /// recusar a mais num disco com partições lógicas — e recusar é o lado seguro de errar,
+        /// ainda mais com a mensagem dizendo o que ele viu.
+        ///
+        /// Em GPT não faz nada: o limite lá é 128, e o preparo nunca chega perto.
+        /// </summary>
+        internal static string BuildPartitionSlotGuard(int diskIndex, int newPartitionsPlanned) => $@"
+$estilo = (Get-Disk -Number {diskIndex}).PartitionStyle
+if ($estilo -eq 'MBR') {{
+    $existentes = @(Get-Partition -DiskNumber {diskIndex}).Count
+    if (($existentes + {newPartitionsPlanned}) -gt 4) {{
+        throw ""O disco {diskIndex} usa tabela de partição MBR, que admite no máximo 4 partições, e já tem $existentes. A preparação da instalação precisa criar mais {newPartitionsPlanned}. Converta o disco para GPT ou remova uma partição que não use antes de continuar.""
+    }}
+}}";
 
         /// <summary>
         /// Confere <c>Get-PartitionSupportedSize</c> ANTES de encolher. Sem essa checagem o
@@ -39,8 +64,10 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// shrink. Este é o número autoritativo, mas exige elevação — por isso só aqui.
         /// <paramref name="bytesToFree"/> é quanto LIBERAR, não o tamanho final.
         /// </summary>
-        internal static string BuildScript(int diskIndex, int partitionIndex, long bytesToFree) => $@"
+        internal static string BuildScript(
+            int diskIndex, int partitionIndex, long bytesToFree, int newPartitionsPlanned) => $@"
 $ErrorActionPreference = 'Stop'
+{BuildPartitionSlotGuard(diskIndex, newPartitionsPlanned)}
 $partition = Get-Partition -DiskNumber {diskIndex} -PartitionNumber {partitionIndex}
 
 # Terceira (e última) barreira contra encolher um filesystem que o Windows não sabe
@@ -75,9 +102,10 @@ Write-Output ""SHRINK_OK: partição {partitionIndex} do disco {diskIndex} agora
         /// Sai sem fazer nada quando já há espaço: no dual-boot o encolhimento do slider já
         /// abriu o vão, e encolher de novo roubaria espaço do usuário silenciosamente.
         /// </summary>
-        internal static string BuildEnsureSpaceScript(int diskIndex, long requiredBytes) => $@"
+        internal static string BuildEnsureSpaceScript(
+            int diskIndex, long requiredBytes, int newPartitionsPlanned) => $@"
 $ErrorActionPreference = 'Stop'
-
+{BuildPartitionSlotGuard(diskIndex, newPartitionsPlanned)}
 if ((Get-Disk -Number {diskIndex}).LargestFreeExtent -ge {requiredBytes}) {{
     Write-Output ""SPACE_OK: disco {diskIndex} já tem o espaço não alocado necessário""
     return

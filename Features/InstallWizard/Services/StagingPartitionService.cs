@@ -13,9 +13,12 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public sealed class StagingPartitionService : IStagingPartitionService
     {
-        /// <summary>Folga sobre o tamanho da ISO: metadados do NTFS mais o alinhamento de
-        /// 1 MiB do <c>New-Partition</c>. Uma partição do tamanho exato da ISO não a comporta.</summary>
+        /// <summary>Folga sobre o tamanho da ISO, para metadados do NTFS. Uma partição do
+        /// tamanho exato da ISO não a comporta.</summary>
         private const long SlackBytes = 512L * 1024 * 1024;
+
+        /// <summary>Alinhamento que o Windows aplica a partição nova desde o Vista SP1.</summary>
+        private const long AlignmentBytes = 1024 * 1024;
 
         internal const string VolumeLabel = "LHSTAGING";
         internal const string IsoFileName = "linuxhub.iso";
@@ -34,7 +37,23 @@ namespace LinuxHub.Features.InstallWizard.Services
             _isoFileInfo = isoFileInfo ?? throw new ArgumentNullException(nameof(isoFileInfo));
         }
 
-        public long RequiredBytesFor(long isoSizeInBytes) => isoSizeInBytes + SlackBytes;
+        /// <summary>
+        /// Arredondado para cima até o próximo MiB. Sem isso a staging termina no meio de um
+        /// limite de alinhamento e o Windows desperdiça o resto ao criar a partição SEGUINTE —
+        /// que é a semente, cuja folga é exatamente 1 MiB. O vão sobrava com zero margem: no
+        /// caso real de uma ISO de 6.655.619.072 bytes, a staging pedia 7.192.489.984, que não
+        /// é múltiplo de MiB, e a semente ficava com 12 KB de sobra. Qualquer alinhamento a
+        /// mais (se o Windows arredondar também o TAMANHO, e não só o início) fazia a semente
+        /// não caber, com o mesmo "Not enough available capacity" que originou tudo isto.
+        ///
+        /// Alinhando aqui, o vão que sobra para a semente é exato e não depende de como o
+        /// Windows trata o resto.
+        /// </summary>
+        public long RequiredBytesFor(long isoSizeInBytes) =>
+            AlignUp(isoSizeInBytes + SlackBytes);
+
+        private static long AlignUp(long value) =>
+            (value + AlignmentBytes - 1) / AlignmentBytes * AlignmentBytes;
 
         public StagingPartition Create(int diskIndex, long isoSizeInBytes)
         {
@@ -71,10 +90,15 @@ if (-not $letter) {{ throw ""O Windows não atribuiu letra de unidade à partiç
 
 Format-Volume -DriveLetter $letter -FileSystem NTFS -NewFileSystemLabel '{VolumeLabel}' -Force -Confirm:$false | Out-Null
 
+# Tira a letra: a particao nao e para o Explorador, e a copia da ISO remonta com
+# Add-PartitionAccessPath. Deixar a letra aqui fazia esse passo falhar com
+# Cannot assign multiple drive letters to a partition.
+Remove-PartitionAccessPath -DiskNumber {diskIndex} -PartitionNumber $partition.PartitionNumber -AccessPath ""$letter`:\""
+
 $guid = (Get-Partition -DiskNumber {diskIndex} -PartitionNumber $partition.PartitionNumber).Guid
 if (-not $guid) {{ throw ""O Windows não informou o GUID da partição de instalação criada no disco {diskIndex}. Sem ele a partição não pode ser identificada com segurança depois."" }}
 
-Write-Output ""{SuccessMarker} $($partition.PartitionNumber) $guid $letter""";
+Write-Output ""{SuccessMarker} $($partition.PartitionNumber) $guid""";
 
         /// <summary>
         /// Confere o tamanho depois de copiar. Uma cópia truncada (disco cheio, energia,

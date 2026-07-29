@@ -22,10 +22,9 @@ namespace LinuxHub.Features.InstallWizard.Services
             _diskLayoutProvider = diskLayoutProvider ?? throw new ArgumentNullException(nameof(diskLayoutProvider));
         }
 
-        public int Prepare(InstallerConfig config, int diskIndex, StagingPartition staging)
+        public int Prepare(InstallerConfig config, int diskIndex, StagingPartition? staging)
         {
             ArgumentNullException.ThrowIfNull(config);
-            ArgumentNullException.ThrowIfNull(staging);
 
             int seedPartitionNumber = _seedWriter.CreateSeedPartition(diskIndex);
 

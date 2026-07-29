@@ -94,12 +94,24 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         [Fact]
-        public void Build_RefusesEmptyIdentifiers()
+        public void Build_RefusesEmptySeedIdentifier()
         {
             Assert.Throws<ArgumentException>(
-                () => PostInstallCleanupBuilder.Build("", SeedUuid, 4));
-            Assert.Throws<ArgumentException>(
                 () => PostInstallCleanupBuilder.Build(StagingUuid, "  ", 4));
+        }
+
+        /// <summary>
+        /// Dual-boot não cria staging — a limpeza só precisa da semente. Um UUID de staging
+        /// vazio/nulo não pode abortar a geração do late-command.
+        /// </summary>
+        [Fact]
+        public void Script_WithoutStaging_OnlyRemovesTheSeed()
+        {
+            string script = PostInstallCleanupBuilder.BuildCleanupScript(null, SeedUuid);
+
+            Assert.DoesNotContain(StagingPartitionService.VolumeLabel, script);
+            Assert.Contains(CloudInitSeedWriter.VolumeLabel, script);
+            Assert.Contains(SeedUuid.ToLowerInvariant(), script);
         }
     }
 }

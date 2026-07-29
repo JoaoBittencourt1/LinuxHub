@@ -3,9 +3,10 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// <summary>
     /// <paramref name="IsoPath"/> é o caminho da ISO DENTRO do volume que a hospeda, não um
     /// caminho do Windows: o GRUB não conhece letra de unidade e localiza o arquivo com
-    /// <c>search --file</c>, que compara caminhos relativos à raiz de cada volume. Desde que a
-    /// ISO passou a morar na partição de staging (ver <see cref="IStagingPartitionService"/>),
-    /// isso é simplesmente <c>/linuxhub.iso</c>.
+    /// <c>search --file</c>, que compara caminhos relativos à raiz de cada volume. No modo
+    /// substituir a ISO mora na partição de staging (<c>/linuxhub.iso</c>); no dual-boot
+    /// continua no volume do Windows (ex.: <c>/Users/.../ubuntu.iso</c>), porque esse volume
+    /// já é preservado pelo curtin.
     ///
     /// <paramref name="EnableAutoinstall"/> liga o parâmetro <c>autoinstall</c> na linha de
     /// comando do kernel — só faz sentido quando a semente do cloud-init já foi gravada

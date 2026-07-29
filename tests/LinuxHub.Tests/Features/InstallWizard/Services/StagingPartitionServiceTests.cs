@@ -24,6 +24,24 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.True(required > isoSize);
         }
 
+        /// <summary>
+        /// A semente é criada logo depois da staging, no mesmo vão, e a folga dela é exatamente
+        /// 1 MiB. Se a staging terminar no meio de um limite de alinhamento, o Windows come
+        /// esse MiB ao criar a próxima partição e a semente não cabe — o mesmo
+        /// "Not enough available capacity" que originou esta mudança inteira.
+        /// </summary>
+        [Theory]
+        [InlineData(6_655_619_072)]  // Ubuntu 24.04.4, o caso real
+        [InlineData(1)]
+        [InlineData(1024 * 1024 - 1)]
+        [InlineData(7_000_000_001)]
+        public void RequiredBytes_IsAlwaysMebibyteAligned(long isoSize)
+        {
+            var service = new StagingPartitionService(new FakeIsoFileInfoProvider(0));
+
+            Assert.Equal(0, service.RequiredBytesFor(isoSize) % (1024 * 1024));
+        }
+
         [Fact]
         public void CreateScript_FormatsAsNtfs()
         {
@@ -34,6 +52,19 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains("-FileSystem NTFS", script);
             Assert.DoesNotContain("FAT32", script);
             Assert.DoesNotContain("exFAT", script);
+        }
+
+        [Fact]
+        public void CreateScript_RemovesDriveLetterAfterFormat()
+        {
+            string script = StagingPartitionService.BuildCreateScript(diskIndex: 0, sizeInBytes: 7_000_000_000);
+
+            // Sem isso a cópia falha com "Cannot assign multiple drive letters": Create
+            // deixava a letra e Copy tentava Add-PartitionAccessPath de novo.
+            Assert.Contains("Remove-PartitionAccessPath", script);
+            Assert.True(
+                script.IndexOf("Format-Volume", StringComparison.Ordinal)
+                    < script.IndexOf("Remove-PartitionAccessPath", StringComparison.Ordinal));
         }
 
         [Fact]
@@ -119,8 +150,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             StagingPartitionService.BuildCreateScript(0, 7_000_000_000),
             StagingPartitionService.BuildCopyScript(Partition, @"C:\ISOs\ubuntu.iso", 6_655_619_072),
-            DiskPartitioningService.BuildEnsureSpaceScript(0, 7_000_000_000),
-            DiskPartitioningService.BuildScript(0, 3, 107_374_182_400),
+            DiskPartitioningService.BuildEnsureSpaceScript(0, 7_000_000_000, 2),
+            DiskPartitioningService.BuildScript(0, 3, 107_374_182_400, 2),
             CloudInitSeedWriter.BuildCreateScript(0),
         };
 

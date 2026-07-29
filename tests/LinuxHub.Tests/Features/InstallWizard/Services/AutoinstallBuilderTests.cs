@@ -11,11 +11,14 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         private const string SampleHash = "$6$abcdefghijklmnop$zD.aVfOby4QY3jq5toBjfWeSgwmLqKARLs7Vup6khwKiyvYBRXnhkr4ZhWkw1SIzbVX2xUCNlGOfcCQ0QN21m0";
         private const int SeedPartitionNumber = 3;
 
-        /// <summary>A partição que hospeda a ISO em uso. Precisa aparecer no plano como
-        /// preservada — sem isso o curtin a trata como espaço livre e apaga a ISO de onde a
-        /// sessão live está rodando.</summary>
+        /// <summary>A partição que hospeda a ISO no modo substituir. No dual-boot a ISO fica
+        /// no volume do Windows e este parâmetro fica nulo.</summary>
         private static readonly StagingPartition Staging = new(0, 5, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
 
+        private static string BuildDualBootUserData(
+            InstallerConfig? config = null, DiskLayout? disk = null) =>
+            AutoinstallBuilder.BuildUserData(
+                config ?? BuildConfig(), disk ?? BuildDisk(), SampleHash, SeedPartitionNumber, staging: null);
         private static DiskLayout BuildDisk() => new(
             Index: 0,
             SerialNumber: "SERIAL123",
@@ -47,7 +50,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [Fact]
         public void UserData_StartsWithTheCloudConfigHeader()
         {
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             // O cloud-init só reconhece o arquivo se a PRIMEIRA linha for exatamente esta.
             Assert.StartsWith("#cloud-config\n", yaml);
@@ -58,7 +61,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [Fact]
         public void UserData_UsesUnixLineEndingsOnly()
         {
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             // Mesma armadilha do grub.cfg: um '\r' sobrando entra no valor do YAML.
             Assert.DoesNotContain("\r", yaml);
@@ -67,7 +70,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [Fact]
         public void UserData_CarriesTheAccountAndSystemChoicesFromTheWizard()
         {
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             Assert.Contains("username: 'joao'", yaml);
             Assert.Contains("hostname: 'linuxhub-pc'", yaml);
@@ -80,7 +83,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [Fact]
         public void UserData_NeverContainsThePlainTextPassword()
         {
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             Assert.DoesNotContain("segredo", yaml);
         }
@@ -91,7 +94,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             // Regressão: `swap:` no topo não existe no autoinstall. Numa instalação real o
             // subiquity respondeu "Unrecognized top-level key 'swap'" e avisou que versões
             // futuras vão transformar isso em erro. Ele já cria o /swap.img sozinho.
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             Assert.DoesNotContain("swap:", yaml);
         }
@@ -99,7 +102,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [Fact]
         public void UserData_OnlyDeclaresKeysTheAutoinstallSchemaRecognizes()
         {
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             string[] topLevelKeys = yaml
                 .Split('\n')
@@ -121,7 +124,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             // Numa máquina sem rede o auto-update trava o instalador numa tela de espera,
             // que é o contrário de desatendido.
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             Assert.Contains("refresh-installer:", yaml);
             Assert.Contains("update: false", yaml);
@@ -131,7 +134,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void UserData_DoesNotDeclareInteractiveSections()
         {
             // Qualquer seção interativa declarada faz o instalador parar e esperar alguém.
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             Assert.DoesNotContain("interactive-sections", yaml);
         }
@@ -147,7 +150,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             config.Username = username;
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallBuilder.BuildUserData(config, BuildDisk(), SampleHash, SeedPartitionNumber, Staging));
+                () => AutoinstallBuilder.BuildUserData(config, BuildDisk(), SampleHash, SeedPartitionNumber, staging: null));
 
             Assert.Contains("nome de usuário", error.Message);
         }
@@ -163,7 +166,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             config.Hostname = hostname;
 
             var error = Assert.Throws<InvalidOperationException>(
-                () => AutoinstallBuilder.BuildUserData(config, BuildDisk(), SampleHash, SeedPartitionNumber, Staging));
+                () => AutoinstallBuilder.BuildUserData(config, BuildDisk(), SampleHash, SeedPartitionNumber, staging: null));
 
             Assert.Contains("nome de máquina", error.Message);
         }
@@ -173,7 +176,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             // BuildDisk() não atribui Guid à partição semente, então a identidade cai no
             // critério de tamanho — sem nada para resolver em tempo de execução.
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), BuildDisk(), SampleHash, SeedPartitionNumber, Staging);
+            string yaml = BuildDualBootUserData();
 
             Assert.DoesNotContain("early-commands:", yaml);
         }
@@ -190,7 +193,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                     .ToList()
             };
 
-            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), disk, SampleHash, SeedPartitionNumber, Staging);
+            string yaml = AutoinstallBuilder.BuildUserData(BuildConfig(), disk, SampleHash, SeedPartitionNumber, staging: null);
 
             Assert.Contains("early-commands:", yaml);
             Assert.Contains("blkid -t PARTUUID=\"6a1e2c3d-1111-2222-3333-444455556666\"", yaml);
@@ -208,6 +211,29 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             // Sem meta-data ao lado, o cloud-init não reconhece a fonte NoCloud e ignora o
             // user-data inteiro.
             Assert.Equal("instance-id: linuxhub-abc\n", AutoinstallBuilder.BuildMetaData("linuxhub-abc"));
+        }
+
+        [Fact]
+        public void UserData_ReplaceMode_RequiresStaging()
+        {
+            InstallerConfig config = BuildConfig();
+            config.InstallMode = "replace";
+
+            var error = Assert.Throws<InvalidOperationException>(
+                () => AutoinstallBuilder.BuildUserData(
+                    config, BuildDisk(), SampleHash, SeedPartitionNumber, staging: null));
+
+            Assert.Contains("substituir", error.Message);
+        }
+
+        [Fact]
+        public void UserData_DualBoot_DoesNotRequireStaging()
+        {
+            // Dual-boot preserva o volume do Windows onde a ISO mora — staging seria custo
+            // sem ganho (o clear-holders do substituir é que originou a partição dedicada).
+            string yaml = BuildDualBootUserData();
+
+            Assert.DoesNotContain(Staging.PartitionUuid.ToLowerInvariant(), yaml);
         }
     }
 }

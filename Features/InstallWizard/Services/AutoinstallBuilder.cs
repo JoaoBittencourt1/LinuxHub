@@ -29,7 +29,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             DiskLayout disk,
             string passwordHash,
             int seedPartitionNumber,
-            StagingPartition staging)
+            StagingPartition? staging)
         {
             ArgumentNullException.ThrowIfNull(config);
             ArgumentNullException.ThrowIfNull(disk);
@@ -53,6 +53,15 @@ namespace LinuxHub.Features.InstallWizard.Services
             InstallMode mode = string.Equals(config.InstallMode, "replace", StringComparison.OrdinalIgnoreCase)
                 ? InstallMode.Replace
                 : InstallMode.DualBoot;
+
+            // Staging só existe no substituir: sem ela o clear-holders do curtin tenta soltar
+            // a partição que hospeda a ISO. No dual-boot a ISO mora no Windows preservado.
+            if (mode == InstallMode.Replace && staging is null)
+            {
+                throw new InvalidOperationException(
+                    "O modo substituir precisa da partição de instalação com a ISO antes de " +
+                    "gerar o autoinstall — sem ela o instalador apagaria a mídia de onde está rodando.");
+            }
 
             var yaml = new StringBuilder();
             yaml.AppendLine("#cloud-config");
@@ -93,18 +102,18 @@ namespace LinuxHub.Features.InstallWizard.Services
 
             yaml.AppendLine("  storage:");
             yaml.Append(AutoinstallStorageBuilder.Build(
-                disk, mode, isUefi, indentSpaces: 4, seedPartitionNumber, staging.PartitionNumber));
+                disk, mode, isUefi, indentSpaces: 4, seedPartitionNumber, staging?.PartitionNumber));
 
-            // Devolve o espaço da staging e da semente ao usuário — mas só no primeiro boot do
-            // sistema instalado. Aqui, ainda dentro da sessão live, a ISO da staging é o que
-            // está servindo o sistema de arquivos raiz: apagá-la agora mataria a instalação.
+            // Devolve o espaço temporário ao usuário — mas só no primeiro boot do sistema
+            // instalado. No substituir isso inclui a staging (a sessão live ainda lê a ISO
+            // dela); no dual-boot só a semente.
             string? seedUuid = disk.Partitions
                 .FirstOrDefault(p => p.Number == seedPartitionNumber)?.Guid;
 
             if (!string.IsNullOrWhiteSpace(seedUuid))
             {
                 yaml.AppendLine("  late-commands:");
-                yaml.Append(PostInstallCleanupBuilder.Build(staging.PartitionUuid, seedUuid, indentSpaces: 4));
+                yaml.Append(PostInstallCleanupBuilder.Build(staging?.PartitionUuid, seedUuid, indentSpaces: 4));
             }
 
             // Nada de chave `swap:` no topo — ela NÃO existe no autoinstall. Numa instalação

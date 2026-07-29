@@ -41,7 +41,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
         private sealed class FakePartitionInventoryService : IPartitionInventoryService
         {
-            public IReadOnlyList<PartitionInfo> GetEligiblePartitions() => Array.Empty<PartitionInfo>();
+            public IReadOnlyList<PartitionInfo> Partitions { get; set; } = Array.Empty<PartitionInfo>();
+
+            public IReadOnlyList<PartitionInfo> GetEligiblePartitions() => Partitions;
         }
 
         private sealed class FakeFirmwareService : IFirmwareService
@@ -69,29 +71,53 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         private sealed class FakeDiskPartitioningService : IDiskPartitioningService
         {
             public long? ShrunkBytes { get; private set; }
+            public int? NewPartitionsPlanned { get; private set; }
 
-            public void ShrinkPartition(int diskIndex, int partitionIndex, long bytesToFree) =>
+            public void ShrinkPartition(
+                int diskIndex, int partitionIndex, long bytesToFree, int newPartitionsPlanned)
+            {
                 ShrunkBytes = bytesToFree;
+                NewPartitionsPlanned = newPartitionsPlanned;
+            }
 
-            public void EnsureUnallocatedSpace(int diskIndex, long requiredBytes) { }
+            public void EnsureUnallocatedSpace(
+                int diskIndex, long requiredBytes, int newPartitionsPlanned) =>
+                NewPartitionsPlanned = newPartitionsPlanned;
         }
 
         private sealed class FakeAutoinstallPreparationService : IAutoinstallPreparationService
         {
-            public int Prepare(InstallerConfig config, int diskIndex, StagingPartition staging) => 5;
+            public StagingPartition? ReceivedStaging { get; private set; }
+
+            public int Prepare(InstallerConfig config, int diskIndex, StagingPartition? staging)
+            {
+                ReceivedStaging = staging;
+                return 5;
+            }
         }
 
         private sealed class FakeStagingPartitionService : IStagingPartitionService
         {
+            public int CreateCalls { get; private set; }
             public string? CopiedFrom { get; private set; }
 
             public long RequiredBytesFor(long isoSizeInBytes) => isoSizeInBytes + 512L * 1024 * 1024;
 
-            public StagingPartition Create(int diskIndex, long isoSizeInBytes) =>
-                new(diskIndex, 9, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
+            public StagingPartition Create(int diskIndex, long isoSizeInBytes)
+            {
+                CreateCalls++;
+                return new(diskIndex, 9, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
+            }
 
             public void CopyIso(StagingPartition partition, string isoSourcePath, IProgress<string>? progress) =>
                 CopiedFrom = isoSourcePath;
+        }
+
+        private sealed class CapturingBootStagingService : IBootStagingService
+        {
+            public BootStagingRequest? LastRequest { get; private set; }
+
+            public void InstallStagingBootloader(BootStagingRequest request) => LastRequest = request;
         }
 
         private sealed class FakeIsoFileInfoProvider : IIsoFileInfoProvider
@@ -134,11 +160,16 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         private static InstallWizardViewModel BuildViewModel(
             IBootStagingService bootStaging,
             IBootSecurityService? bootSecurity = null,
-            IIsoFileInfoProvider? isoFileInfo = null)
+            IIsoFileInfoProvider? isoFileInfo = null,
+            FakeStagingPartitionService? staging = null,
+            FakeDiskPartitioningService? partitioning = null,
+            FakePartitionInventoryService? partitions = null)
         {
             var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository());
             var target = new TargetSelectionViewModel(
-                new FakeDiskInventoryService(), new FakePartitionInventoryService(), new FakeFirmwareService());
+                new FakeDiskInventoryService(),
+                partitions ?? new FakePartitionInventoryService(),
+                new FakeFirmwareService());
 
             var vm = new InstallWizardViewModel(
                 iso,
@@ -146,11 +177,11 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 new AccountViewModel { Username = "joao", Password = "123", ConfirmPassword = "123", Hostname = "pc" },
                 new InstallerConfigBuilder(new FakeSystemInfoProvider(), new FakeEspLocatorService()),
                 new FakeInstallerConfigWriter(),
-                new FakeDiskPartitioningService(),
+                partitioning ?? new FakeDiskPartitioningService(),
                 new FakeAutoinstallPreparationService(),
                 bootStaging,
                 bootSecurity ?? new FakeBootSecurityService(),
-                new FakeStagingPartitionService(),
+                staging ?? new FakeStagingPartitionService(),
                 isoFileInfo ?? new FakeIsoFileInfoProvider());
 
             // ResolvedIsoPath só é preenchido pelo download ou pela seleção manual; o wizard
@@ -348,6 +379,62 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
             Assert.Contains("manage-bde", errorMessage);
             Assert.Matches(@"[A-Za-z]:", errorMessage!);
+        }
+
+        /// <summary>
+        /// Dual-boot já preserva a partição que hospeda a ISO — staging era custo sem ganho
+        /// nesse modo. O GRUB continua achando a ISO no caminho original do Windows.
+        /// </summary>
+        [Fact]
+        public async Task DualBoot_DoesNotCreateStagingPartition()
+        {
+            var bootStaging = new CapturingBootStagingService();
+            var staging = new FakeStagingPartitionService();
+            var partitions = new FakePartitionInventoryService
+            {
+                Partitions = new[]
+                {
+                    new PartitionInfo
+                    {
+                        DiskIndex = 0,
+                        PartitionIndex = 3,
+                        SizeBytes = 400L * 1024 * 1024 * 1024,
+                        FreeSpaceBytes = 200L * 1024 * 1024 * 1024,
+                        FileSystem = "NTFS"
+                    }
+                }
+            };
+
+            var vm = BuildViewModel(bootStaging, staging: staging, partitions: partitions);
+            vm.Target.Mode = InstallMode.DualBoot;
+            vm.Target.SelectedPartition = vm.Target.Partitions[0];
+            vm.Target.LinuxPartitionSizeGb = 50;
+
+            vm.InstallCommand.Execute(null);
+            vm.PendingConfirmation!.ConfirmCommand.Execute(null);
+            await WaitUntilIdleAsync(vm);
+
+            Assert.Equal(0, staging.CreateCalls);
+            Assert.Null(staging.CopiedFrom);
+            Assert.Equal(@"C:\isos\ubuntu.iso", bootStaging.LastRequest!.IsoPath);
+        }
+
+        [Fact]
+        public async Task Replace_CopiesIsoToStagingAndPointsGrubAtIt()
+        {
+            var bootStaging = new CapturingBootStagingService();
+            var staging = new FakeStagingPartitionService();
+            var vm = BuildViewModel(bootStaging, staging: staging);
+
+            vm.InstallCommand.Execute(null);
+            // Modo substituir exige confirmação tipada.
+            vm.PendingConfirmation!.TypedConfirmation = vm.PendingConfirmation.ConfirmationWord;
+            vm.PendingConfirmation.ConfirmCommand.Execute(null);
+            await WaitUntilIdleAsync(vm);
+
+            Assert.Equal(1, staging.CreateCalls);
+            Assert.Equal(@"C:\isos\ubuntu.iso", staging.CopiedFrom);
+            Assert.Equal(StagingPartitionService.IsoGrubPath, bootStaging.LastRequest!.IsoPath);
         }
     }
 }
