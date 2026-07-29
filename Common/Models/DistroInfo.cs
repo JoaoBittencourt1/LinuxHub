@@ -11,6 +11,12 @@ namespace LinuxHub.Common.Models
         /// <summary>Quão recomendada a distro é para iniciantes, de 1 (nada) a 5 (muito).</summary>
         public int BeginnerRating { get; set; }
 
+        /// <summary>Só true pra a build específica já validada de ponta a ponta (autoinstall/
+        /// cloud-init/GRUB). Para as demais, o wizard só prepara o boot até o instalador
+        /// nativo da própria ISO — o resto da instalação fica por conta do usuário, porque o
+        /// schema do autoinstall não tem garantia de compatibilidade entre distros/versões.</summary>
+        public bool SupportsAutoinstall { get; set; }
+
         // Texto de Description/Maintainer nunca é hardcoded aqui — são chaves de recurso
         // (ver constitution.md, "Nenhuma string hardcoded"), resolvidas via
         // LocalizationManager para poderem ser traduzidas e trocar de idioma em runtime.

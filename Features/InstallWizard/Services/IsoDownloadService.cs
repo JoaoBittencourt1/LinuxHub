@@ -18,13 +18,9 @@ namespace LinuxHub.Features.InstallWizard.Services
         {
             ArgumentNullException.ThrowIfNull(distro);
 
-            string baseDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "LinuxHub", "ISOs"
-            );
-            Directory.CreateDirectory(baseDir);
+            Directory.CreateDirectory(IsoStorage.BaseDirectory);
 
-            string downloadPath = Path.Combine(baseDir, $"{distro.Id}.iso");
+            string downloadPath = Path.Combine(IsoStorage.BaseDirectory, $"{distro.Id}.iso");
 
             try
             {

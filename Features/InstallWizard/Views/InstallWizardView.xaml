@@ -62,8 +62,35 @@
                                        Click="BrowseIso_Click"/>
                         </Grid>
 
-                        <!-- Distro selecionada -->
-                        <StackPanel Visibility="{Binding Iso.IsDistroSelectionVisible, Converter={StaticResource BoolToVis}}"
+                        <!-- ISOs já baixadas: só aparece sozinha (sem o combo de baixar outra
+                             junto) pra não deixar dois campos disputando qual ISO vale. -->
+                        <StackPanel Visibility="{Binding Iso.IsDownloadedIsosVisible, Converter={StaticResource BoolToVis}}"
+                                    Margin="0,0,0,10">
+                            <TextBlock Text="{loc:Loc Wizard_DownloadedIsosLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <ComboBox Width="320"
+                                          ItemsSource="{Binding Iso.DownloadedIsos}"
+                                          SelectedItem="{Binding Iso.SelectedDownloadedIso}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Distro.Name}"/>
+                                                <TextBlock Text="{Binding DownloadedAtUtc, StringFormat=' — dd/MM/yyyy HH:mm'}" Opacity="0.6" Margin="4,0,0,0"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+
+                                <ui:Button Content="{loc:Loc Wizard_DownloadAnotherIsoButton}"
+                                           Margin="10,0,0,0"
+                                           Command="{Binding Iso.DownloadAnotherIsoCommand}"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Escolher distro pra baixar: só aparece quando ainda não há ISO
+                             nenhuma baixada, ou quando o usuário pediu pra baixar outra. -->
+                        <StackPanel Visibility="{Binding Iso.IsDistroPickerVisible, Converter={StaticResource BoolToVis}}"
                                     Margin="0,0,0,10">
                             <TextBlock Text="{loc:Loc Wizard_SelectedDistributionLabel}" Opacity="0.7" Margin="0,0,0,6"/>
 
@@ -83,6 +110,11 @@
                                            Margin="10,0,0,0"
                                            Command="{Binding Iso.CancelDownloadCommand}"
                                            Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}"/>
+
+                                <ui:Button Content="{loc:Loc Wizard_BackToDownloadedIsoButton}"
+                                           Margin="10,0,0,0"
+                                           Command="{Binding Iso.UseDownloadedIsoCommand}"
+                                           Visibility="{Binding Iso.IsBackToDownloadedVisible, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
                         </StackPanel>
 
@@ -97,19 +129,57 @@
                             <TextBlock Text="{Binding Iso.DownloadStatusText, Mode=OneWay}" Margin="10,0,0,0" VerticalAlignment="Center"/>
                         </StackPanel>
 
-                        <!-- Distro detectada (seleção manual) -->
-                        <StackPanel Orientation="Horizontal"
-                                    Visibility="{Binding Iso.IsDistroDisplayVisible, Converter={StaticResource BoolToVis}}">
+                        <!-- Instalação automática: só existe pra distro já validada de ponta
+                             a ponta (ver DistroInfo.SupportsAutoinstall) — pras demais o wizard
+                             só prepara o boot até o instalador nativo, sem essa opção. -->
+                        <StackPanel Margin="0,0,0,10"
+                                    Visibility="{Binding Iso.IsAutoinstallToggleVisible, Converter={StaticResource BoolToVis}}">
+                            <ui:ToggleSwitch IsChecked="{Binding Iso.UseAutoinstall}">
+                                <ui:ToggleSwitch.Content>
+                                    <TextBlock Text="{loc:Loc Wizard_AutoinstallToggleLabel}"
+                                               TextWrapping="Wrap"
+                                               MaxWidth="560"/>
+                                </ui:ToggleSwitch.Content>
+                            </ui:ToggleSwitch>
+                        </StackPanel>
+
+                        <!-- Versão incerta: só quando a ISO foi selecionada manualmente e o
+                             nome do arquivo não bate com a versão testada do catálogo (ex.: um
+                             Ubuntu 26 contra o 24.04 validado) — não trava nada, só avisa. -->
+                        <ui:InfoBar Margin="0,0,0,10"
+                                    Severity="Warning"
+                                    IsOpen="{Binding Iso.IsAutoinstallVersionWarningVisible}"
+                                    IsClosable="False"
+                                    Title="{loc:Loc Wizard_AutoinstallVersionWarningTitle}"
+                                    Message="{loc:Loc Wizard_AutoinstallVersionWarningMessage}"/>
+
+                        <!-- Confirmação: qual ISO vai ser de fato usada na instalação, não
+                             importa se veio de seleção manual, lista de já baixadas ou de um
+                             download que acabou de terminar — um único lugar pra conferir.
+                             Grid em vez de StackPanel horizontal: um StackPanel horizontal mede
+                             o filho com largura infinita, então o TextBlock nunca quebrava linha
+                             e vazava pra fora da tela nas mensagens mais longas. -->
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
                             <!-- TargetNullValue: sem distro detectada o caminho é null, e o
                                  ImageSourceConverter padrão não converte null — o binding
                                  falhava com NotSupportedException a cada avaliação. -->
-                            <Image Width="32" Height="32"
-                                   Source="{Binding Iso.DisplayedDistro.ImagePath, TargetNullValue={x:Null}}"/>
-                            <TextBlock Text="{Binding Iso.DisplayedDistro.Name}"
-                                       Margin="10,0,0,0"
-                                       VerticalAlignment="Center"
-                                       Opacity="0.8"/>
-                        </StackPanel>
+                            <Image Grid.Column="0"
+                                   Width="24" Height="24"
+                                   Margin="0,0,8,0"
+                                   VerticalAlignment="Top"
+                                   Source="{Binding Iso.DisplayedDistro.ImagePath, TargetNullValue={x:Null}}"
+                                   Visibility="{Binding Iso.IsIsoReadyForInstall, Converter={StaticResource BoolToVis}}"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Iso.SelectedIsoStatusText}"
+                                       TextWrapping="Wrap"
+                                       FontWeight="SemiBold"
+                                       Opacity="0.9"/>
+                        </Grid>
                     </StackPanel>
                 </ui:Card>
 
@@ -176,8 +246,10 @@
                     </StackPanel>
                 </ui:Card>
 
-                <!-- Usuário -->
-                <ui:Card Margin="0,0,0,16">
+                <!-- Usuário: só existe pro fluxo de autoinstall — sem ele é o instalador
+                     nativo da ISO que vai perguntar isso. -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding IsAccountStepVisible, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Wizard_UserSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
 

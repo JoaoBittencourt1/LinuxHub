@@ -42,6 +42,14 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
             Iso.Notify += (title, message, isError) => Notify?.Invoke(title, message, isError);
 
+            // A conta (usuário/senha/hostname) só existe pro fluxo de autoinstall — quando ele
+            // não roda, é o instalador nativo da própria ISO que vai perguntar isso.
+            Iso.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(IsoAcquisitionViewModel.IsAutoinstallActive))
+                    OnPropertyChanged(nameof(IsAccountStepVisible));
+            };
+
             InstallCommand = new RelayCommand(BeginInstall);
         }
 
@@ -50,6 +58,8 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         public AccountViewModel Account { get; }
 
         public ICommand InstallCommand { get; }
+
+        public bool IsAccountStepVisible => Iso.IsAutoinstallActive;
 
         /// <summary>Não nulo entre o clique em "Instalar" e a confirmação/cancelamento
         /// do usuário — a instalação de fato só ocorre depois de confirmada.</summary>
@@ -117,16 +127,19 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 if (string.IsNullOrWhiteSpace(Iso.ResolvedIsoPath))
                     throw new InvalidOperationException(loc["Wizard_NoIsoSelected"]);
 
-                if (string.IsNullOrWhiteSpace(Account.Username)
-                    || string.IsNullOrWhiteSpace(Account.Password)
-                    || string.IsNullOrWhiteSpace(Account.ConfirmPassword)
-                    || string.IsNullOrWhiteSpace(Account.Hostname))
+                if (Iso.IsAutoinstallActive)
                 {
-                    throw new InvalidOperationException(loc["Wizard_AccountIncompleteMessage"]);
-                }
+                    if (string.IsNullOrWhiteSpace(Account.Username)
+                        || string.IsNullOrWhiteSpace(Account.Password)
+                        || string.IsNullOrWhiteSpace(Account.ConfirmPassword)
+                        || string.IsNullOrWhiteSpace(Account.Hostname))
+                    {
+                        throw new InvalidOperationException(loc["Wizard_AccountIncompleteMessage"]);
+                    }
 
-                if (Account.Password != Account.ConfirmPassword)
-                    throw new InvalidOperationException(loc["Wizard_PasswordMismatchMessage"]);
+                    if (Account.Password != Account.ConfirmPassword)
+                        throw new InvalidOperationException(loc["Wizard_PasswordMismatchMessage"]);
+                }
 
                 // Barra aqui, e não no shrink: uma partição sem espaço livre suficiente é um
                 // alvo inviável de saída, e deixar passar significava gravar install.conf e
@@ -176,6 +189,10 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             var loc = LocalizationManager.Instance;
             var progress = new Progress<string>(step => InstallStatus = step);
 
+            // Capturado aqui, antes do trabalho pesado: é o que decide qual mensagem final
+            // aparece, e o toggle não deve mudar no meio de uma instalação já em andamento.
+            bool autoinstallActive = Iso.IsAutoinstallActive;
+
             // Some o cartão de confirmação e abre a tela de progresso no mesmo passo: os dois
             // são excludentes, e deixar o botão "Confirmar" clicável durante a instalação
             // permitiria disparar um segundo shrink por cima do primeiro.
@@ -200,9 +217,16 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 InstallStatus = null;
             }
 
+            // Sem autoinstall, quem termina a instalação de fato é o usuário dentro do
+            // instalador nativo da ISO — dizer "não precisa fazer nada" nesse caso seria
+            // enganoso, então a mensagem de sucesso muda conforme o modo usado.
+            string successMessageKey = autoinstallActive
+                ? "Wizard_InstallSuccessMessage"
+                : "Wizard_InstallSuccessMessageManual";
+
             Notify?.Invoke(
                 error is null ? loc["Wizard_InstallSuccessTitle"] : loc["Wizard_InstallErrorTitle"],
-                error ?? loc["Wizard_InstallSuccessMessage"],
+                error ?? loc[successMessageKey],
                 error is not null);
         }
 
@@ -225,31 +249,37 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                     (int)Target.LinuxPartitionSizeGb);
             }
 
-            progress.Report(loc["Wizard_InstallStepWritingConfig"]);
-
-            var request = new BuildInstallerConfigRequest(
-                Distro: distro,
-                IsoPath: Iso.ResolvedIsoPath!,
-                IsUefi: Target.IsUefi,
-                Mode: Target.Mode,
-                TargetDiskIndex: Target.IsReplaceMode ? Target.SelectedDisk?.Index : Target.SelectedPartition?.DiskIndex,
-                TargetPartitionIndex: Target.IsDualBootMode ? Target.SelectedPartition?.PartitionIndex : null,
-                LinuxPartitionSizeGb: (int)Target.LinuxPartitionSizeGb,
-                Username: Account.Username,
-                Password: Account.Password,
-                Hostname: Account.Hostname);
-
-            var config = _configBuilder.Build(request);
-            _configWriter.Save(config);
-
             int targetDiskIndex = Target.IsReplaceMode
                 ? Target.SelectedDisk!.Index
                 : Target.SelectedPartition!.DiskIndex;
 
-            // Precisa vir depois do encolhimento e antes do boot-staging: o autoinstall
-            // descreve o disco no estado em que o instalador vai encontrá-lo, e o parâmetro
-            // `autoinstall` no GRUB só pode ser ligado depois que a semente existe de fato.
-            _autoinstallPreparation.Prepare(config, targetDiskIndex);
+            // Distro sem autoinstall validado (ou usuário desligou o toggle): só prepara o
+            // boot até o instalador nativo da ISO — sem install.conf, sem semente de
+            // cloud-init, o resto da instalação fica por conta do usuário dentro dele.
+            if (Iso.IsAutoinstallActive)
+            {
+                progress.Report(loc["Wizard_InstallStepWritingConfig"]);
+
+                var request = new BuildInstallerConfigRequest(
+                    Distro: distro,
+                    IsoPath: Iso.ResolvedIsoPath!,
+                    IsUefi: Target.IsUefi,
+                    Mode: Target.Mode,
+                    TargetDiskIndex: Target.IsReplaceMode ? Target.SelectedDisk?.Index : Target.SelectedPartition?.DiskIndex,
+                    TargetPartitionIndex: Target.IsDualBootMode ? Target.SelectedPartition?.PartitionIndex : null,
+                    LinuxPartitionSizeGb: (int)Target.LinuxPartitionSizeGb,
+                    Username: Account.Username,
+                    Password: Account.Password,
+                    Hostname: Account.Hostname);
+
+                var config = _configBuilder.Build(request);
+                _configWriter.Save(config);
+
+                // Precisa vir depois do encolhimento e antes do boot-staging: o autoinstall
+                // descreve o disco no estado em que o instalador vai encontrá-lo, e o parâmetro
+                // `autoinstall` no GRUB só pode ser ligado depois que a semente existe de fato.
+                _autoinstallPreparation.Prepare(config, targetDiskIndex);
+            }
 
             progress.Report(loc["Wizard_InstallStepStagingBoot"]);
 
@@ -258,7 +288,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 IsoPath: Iso.ResolvedIsoPath!,
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,
-                EnableAutoinstall: true));
+                EnableAutoinstall: Iso.IsAutoinstallActive));
         }
     }
 }

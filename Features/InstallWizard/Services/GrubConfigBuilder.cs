@@ -43,21 +43,37 @@ namespace LinuxHub.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// <paramref name="enableAutoinstall"/> acrescenta o parâmetro <c>autoinstall</c> à
-        /// linha do kernel. Ele é o que torna a instalação de fato desatendida: com o
-        /// <c>user-data</c> presente na partição CIDATA mas SEM este parâmetro, o subiquity
-        /// acha o arquivo e ainda assim para numa tela pedindo confirmação — que é o
-        /// comportamento padrão de segurança dele, não um bug.
+        /// A linha do kernel segue o <c>/boot/grub/loopback.cfg</c> que a própria ISO do
+        /// Ubuntu 24.04 traz — é a receita do fornecedor para exatamente este caso (bootar a
+        /// ISO a partir de um arquivo, e não de mídia removível):
+        /// <code>linux /casper/vmlinuz iso-scan/filename=${iso_path} --- quiet splash</code>
+        /// Divergir dela sem motivo só acrescenta variáveis a um cenário que já é difícil de
+        /// depurar depois do reboot. O que acrescentamos ao que vem de lá:
+        /// <list type="bullet">
+        /// <item><c>boot=casper</c> — redundante no Ubuntu (o initrd traz
+        /// <c>conf.d/default-boot-to-casper.conf</c>, que assume <c>casper</c> quando o
+        /// parâmetro não vem), mas necessário em derivadas que constroem o initrd sem esse
+        /// default.</item>
+        /// <item>o <c>search</c>/<c>loopback</c> — no fluxo do fornecedor quem monta o loop é
+        /// o grub.cfg que inclui o loopback.cfg; aqui não há esse invólucro.</item>
+        /// </list>
         ///
-        /// Nesse modo o <c>splash</c> também sai: numa instalação em que ninguém vai clicar
-        /// em nada, a tela gráfica só serve para esconder a mensagem de erro se algo falhar.
+        /// <paramref name="enableAutoinstall"/> acrescenta o parâmetro <c>autoinstall</c>. Ele
+        /// é o que torna a instalação de fato desatendida: com o <c>user-data</c> presente na
+        /// partição CIDATA mas SEM este parâmetro, o subiquity acha o arquivo e ainda assim
+        /// para numa tela pedindo confirmação — que é o comportamento padrão de segurança
+        /// dele, não um bug. Ele vai ANTES do <c>---</c>: o que vem depois do separador é
+        /// destinado ao sistema instalado, não ao instalador.
+        ///
+        /// Nesse modo o <c>splash</c> também sai: numa instalação em que ninguém vai clicar em
+        /// nada, a tela gráfica só serve para esconder a mensagem de erro se algo falhar.
         /// </summary>
         internal static string BuildIsoBootEntry(
             string distroName, string isoWindowsPath, bool enableAutoinstall = false)
         {
             string isoPath = ToGrubPath(isoWindowsPath);
-            string extraParameters = enableAutoinstall ? "autoinstall " : string.Empty;
-            string display = enableAutoinstall ? string.Empty : "splash ";
+            string installerParameters = enableAutoinstall ? " autoinstall" : string.Empty;
+            string targetParameters = enableAutoinstall ? "quiet" : "quiet splash";
 
             return $@"menuentry ""Instalar {distroName} (staging LinuxHub)"" {{
     insmod part_gpt
@@ -65,10 +81,11 @@ namespace LinuxHub.Features.InstallWizard.Services
     insmod ntfs
     insmod loopback
     insmod iso9660
+    set gfxpayload=keep
     set isofile=""{isoPath}""
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
-    linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile {extraParameters}noeject noprompt {display}---
+    linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile{installerParameters} --- {targetParameters}
     initrd (loop)/casper/initrd
 }}
 ";

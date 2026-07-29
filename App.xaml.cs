@@ -23,6 +23,7 @@ namespace LinuxHub
 
             IIsoDownloadService isoDownloadService = new IsoDownloadService();
             IDistroDetectionService distroDetectionService = new DistroDetectionService();
+            IDownloadedIsoRepository downloadedIsoRepository = new DownloadedIsoRepository();
             IDiskInventoryService diskInventoryService = new DiskInventoryService();
             IPartitionInventoryService partitionInventoryService = new PartitionInventoryService();
             IFirmwareService firmwareService = new FirmwareService();
@@ -45,7 +46,7 @@ namespace LinuxHub
 
             var catalogViewModel = new CatalogViewModel();
 
-            var isoAcquisitionViewModel = new IsoAcquisitionViewModel(isoDownloadService, distroDetectionService);
+            var isoAcquisitionViewModel = new IsoAcquisitionViewModel(isoDownloadService, distroDetectionService, downloadedIsoRepository);
             var targetSelectionViewModel = new TargetSelectionViewModel(diskInventoryService, partitionInventoryService, firmwareService);
             var accountViewModel = new AccountViewModel();
             var installWizardViewModel = new InstallWizardViewModel(

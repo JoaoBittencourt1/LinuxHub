@@ -25,6 +25,7 @@ namespace LinuxHub.Common.Data
                 Version = "24.04.4",
                 CreatedYear = "2004",
                 BeginnerRating = 5,
+                SupportsAutoinstall = true,
                 ImagePath = "pack://application:,,,/Assets/Images/Ubuntu.png",
                 DownloadLink = "https://ubuntu.com/download/desktop",
                 DirectDownloadLink = "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso",

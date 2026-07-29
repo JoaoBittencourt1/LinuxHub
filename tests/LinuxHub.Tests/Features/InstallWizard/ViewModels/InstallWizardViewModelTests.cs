@@ -22,7 +22,13 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
         private sealed class FakeDistroDetectionService : IDistroDetectionService
         {
-            public DistroInfo Detect(string isoPath) => new() { Name = "Ubuntu" };
+            public DistroDetectionResult Detect(string isoPath) =>
+                new(new DistroInfo { Name = "Ubuntu" }, IsExpectedVersion: true);
+        }
+
+        private sealed class FakeDownloadedIsoRepository : IDownloadedIsoRepository
+        {
+            public IReadOnlyList<DownloadedIso> GetAll() => Array.Empty<DownloadedIso>();
         }
 
         private sealed class FakeDiskInventoryService : IDiskInventoryService
@@ -93,7 +99,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
         private static InstallWizardViewModel BuildViewModel(IBootStagingService bootStaging)
         {
-            var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService());
+            var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository());
             var target = new TargetSelectionViewModel(
                 new FakeDiskInventoryService(), new FakePartitionInventoryService(), new FakeFirmwareService());
 

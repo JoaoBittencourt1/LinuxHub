@@ -206,6 +206,39 @@
   <data name="Wizard_SelectedDistributionLabel" xml:space="preserve">
     <value>Selected distribution</value>
   </data>
+  <data name="Wizard_DownloadedIsosLabel" xml:space="preserve">
+    <value>Already downloaded ISOs</value>
+  </data>
+  <data name="Wizard_DownloadAnotherIsoButton" xml:space="preserve">
+    <value>Download another ISO</value>
+  </data>
+  <data name="Wizard_BackToDownloadedIsoButton" xml:space="preserve">
+    <value>Back to downloaded ISO</value>
+  </data>
+  <data name="Wizard_NoIsoSelectedForInstall" xml:space="preserve">
+    <value>No ISO selected yet</value>
+  </data>
+  <data name="Wizard_SelectedIsoForInstall" xml:space="preserve">
+    <value>ISO selected for installation: {0}</value>
+  </data>
+  <data name="Wizard_UnknownDistroTitle" xml:space="preserve">
+    <value>Unrecognized distribution</value>
+  </data>
+  <data name="Wizard_UnknownDistroMessage" xml:space="preserve">
+    <value>LinuxHub doesn't recognize this distribution. Select an ISO from a distribution supported by the catalog.</value>
+  </data>
+  <data name="Wizard_AutoinstallToggleLabel" xml:space="preserve">
+    <value>Automatic installation</value>
+  </data>
+  <data name="Wizard_SelectedIsoManualInstallOnly" xml:space="preserve">
+    <value>ISO selected: {0} — the ISO's native installer will open, and installation continues manually from there</value>
+  </data>
+  <data name="Wizard_AutoinstallVersionWarningTitle" xml:space="preserve">
+    <value>Version not confirmed</value>
+  </data>
+  <data name="Wizard_AutoinstallVersionWarningMessage" xml:space="preserve">
+    <value>This ISO's file name doesn't match the version validated for automatic installation. It may not work on this version — consider turning off automatic installation if it fails.</value>
+  </data>
   <data name="Wizard_DownloadIsoButton" xml:space="preserve">
     <value>Download ISO</value>
   </data>
@@ -299,6 +332,9 @@ Automatic installation may not work.</value>
   </data>
   <data name="Wizard_InstallSuccessMessage" xml:space="preserve">
     <value>Preparation complete! Restart your computer whenever you're ready — the installation continues automatically, no need to choose anything. On the next restarts, it goes back to booting Windows normally. The full log is at /var/log/linuxhub-install.log inside the Linux environment.</value>
+  </data>
+  <data name="Wizard_InstallSuccessMessageManual" xml:space="preserve">
+    <value>Preparation complete! Restart your computer whenever you're ready — the distro's native installer will open, but you'll need to finish the installation yourself from there. On the next restarts, it goes back to booting Windows normally.</value>
   </data>
   <data name="Wizard_InstallErrorTitle" xml:space="preserve">
     <value>Error preparing the installation</value>
