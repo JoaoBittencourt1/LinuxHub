@@ -60,7 +60,7 @@
   </resheader>
 
   <data name="Shell_Title" xml:space="preserve">
-    <value>LinuxHub</value>
+    <value>LinuxBit</value>
   </data>
   <data name="Shell_NavCatalog" xml:space="preserve">
     <value>Distros</value>
@@ -225,7 +225,7 @@
     <value>Distribuição não reconhecida</value>
   </data>
   <data name="Wizard_UnknownDistroMessage" xml:space="preserve">
-    <value>O LinuxHub não conhece essa distribuição. Selecione uma ISO de uma distribuição suportada pelo catálogo.</value>
+    <value>O LinuxBit não conhece essa distribuição. Selecione uma ISO de uma distribuição suportada pelo catálogo.</value>
   </data>
   <data name="Wizard_AutoinstallToggleLabel" xml:space="preserve">
     <value>Instalação automática</value>
@@ -255,26 +255,26 @@
     <value>As senhas digitadas não são iguais.</value>
   </data>
   <data name="Wizard_SecureBootBlockedMessage" xml:space="preserve">
-    <value>O Secure Boot está ligado, e com ele o firmware recusa carregar o gerenciador de boot que o LinuxHub instala — a instalação pararia numa tela de erro logo depois de reiniciar.
+    <value>O Secure Boot está ligado, e com ele o firmware recusa carregar o gerenciador de boot que o LinuxBit instala — a instalação pararia numa tela de erro logo depois de reiniciar.
 
 Para desligar:
 
 1. Abra Configurações &gt; Sistema &gt; Recuperação e clique em "Reiniciar agora" em Inicialização avançada.
 2. Escolha Solucionar problemas &gt; Opções avançadas &gt; Configurações de Firmware UEFI e confirme reiniciar.
 3. No firmware, procure "Secure Boot" (costuma ficar em Security, Boot ou Authentication) e mude para Disabled.
-4. Salve e saia (normalmente F10), deixe o Windows iniciar e abra o LinuxHub de novo.
+4. Salve e saia (normalmente F10), deixe o Windows iniciar e abra o LinuxBit de novo.
 
 Se a opção estiver esmaecida, defina primeiro uma senha de supervisor do firmware, ou mude o modo de Secure Boot para "Setup Mode"/"Custom". Depois que o Linux estiver instalado, você pode ligar o Secure Boot de volta.</value>
   </data>
   <data name="Wizard_BitLockerBlockedMessage" xml:space="preserve">
-    <value>A unidade {0}: está protegida pelo BitLocker. Para abrir espaço para a instalação, o LinuxHub precisa encolher essa unidade — operação sobre um volume criptografado que pode falhar ou exigir a chave de recuperação no próximo boot do Windows.
+    <value>A unidade {0}: está protegida pelo BitLocker. Para abrir espaço para a instalação, o LinuxBit precisa encolher essa unidade — operação sobre um volume criptografado que pode falhar ou exigir a chave de recuperação no próximo boot do Windows.
 
 Para desligar:
 
 1. Abra o Prompt de Comando ou o PowerShell como administrador.
 2. Execute: manage-bde -off {0}:
 3. Acompanhe com: manage-bde -status {0}:
-4. Espere até aparecer "Totalmente Descriptografado" (pode levar bastante tempo) e abra o LinuxHub de novo.
+4. Espere até aparecer "Totalmente Descriptografado" (pode levar bastante tempo) e abra o LinuxBit de novo.
 
 Atenção: suspender o BitLocker não resolve — os dados continuam criptografados no disco. É preciso descriptografar de verdade. Depois que o Linux estiver instalado, você pode ligar o BitLocker de volta.</value>
   </data>
@@ -314,7 +314,7 @@ Atenção: suspender o BitLocker não resolve — os dados continuam criptografa
   <data name="Wizard_NotEnoughSpaceForPreparationMessage" xml:space="preserve">
     <value>Não há espaço suficiente para preparar a instalação. São necessários {0} GB e o alvo escolhido tem {1} GB.
 
-Além do espaço do Linux, o LinuxHub precisa de uma área temporária para guardar a imagem do sistema durante a instalação. Essa área é devolvida depois que a instalação termina.
+Além do espaço do Linux, o LinuxBit precisa de uma área temporária para guardar a imagem do sistema durante a instalação. Essa área é devolvida depois que a instalação termina.
 
 Libere espaço no disco, escolha um alvo maior ou reduza o tamanho reservado para o Linux.</value>
   </data>
@@ -325,7 +325,7 @@ Libere espaço no disco, escolha um alvo maior ou reduza o tamanho reservado par
     <value>Preparando a inicialização do Linux…</value>
   </data>
   <data name="Wizard_InstallProgressHint" xml:space="preserve">
-    <value>Não desligue nem feche o LinuxHub. Isso pode levar alguns minutos e o Windows vai pedir permissão de administrador.</value>
+    <value>Não desligue nem feche o LinuxBit. Isso pode levar alguns minutos e o Windows vai pedir permissão de administrador.</value>
   </data>
   <data name="Wizard_PartitionTooFullMessage" xml:space="preserve">
     <value>A partição selecionada tem apenas {0} GB livres. O Windows não consegue encolher além do espaço livre, e ainda precisa de folga para atualizações e paginação — são necessários pelo menos {1} GB livres. Libere espaço no Windows ou escolha outra partição.</value>
@@ -362,7 +362,7 @@ Libere espaço no disco, escolha um alvo maior ou reduza o tamanho reservado par
 Instalação automática pode não funcionar.</value>
   </data>
   <data name="Wizard_InstallSuccessTitle" xml:space="preserve">
-    <value>LinuxHub</value>
+    <value>LinuxBit</value>
   </data>
   <data name="Wizard_InstallSuccessMessage" xml:space="preserve">
     <value>Preparação concluída! Reinicie o computador quando estiver pronto — a instalação continua automaticamente, sem precisar escolher nada. Nas próximas reinicializações, volta a bootar o Windows normalmente. O log completo fica em /var/log/linuxhub-install.log dentro do ambiente Linux.</value>
@@ -432,7 +432,7 @@ Selecione uma ISO Linux válida.</value>
     <value>Em desenvolvimento — use por sua conta e risco</value>
   </data>
   <data name="Shell_PreviewWarningMessage" xml:space="preserve">
-    <value>O LinuxHub ainda está em desenvolvimento. Ele altera partições e a configuração de inicialização do seu computador, e falhas podem acontecer — incluindo perda de dados e um sistema que não inicia. Faça backup antes de usar.</value>
+    <value>O LinuxBit ainda está em desenvolvimento. Ele altera partições e a configuração de inicialização do seu computador, e falhas podem acontecer — incluindo perda de dados e um sistema que não inicia. Faça backup antes de usar.</value>
   </data>
   <data name="Wizard_TestedDistroWarningTitle" xml:space="preserve">
     <value>Testado somente com o Ubuntu 24.04</value>

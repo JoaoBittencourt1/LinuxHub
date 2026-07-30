@@ -60,7 +60,7 @@
   </resheader>
 
   <data name="Shell_Title" xml:space="preserve">
-    <value>LinuxHub</value>
+    <value>LinuxBit</value>
   </data>
   <data name="Shell_NavCatalog" xml:space="preserve">
     <value>Distros</value>
@@ -225,7 +225,7 @@
     <value>Unrecognized distribution</value>
   </data>
   <data name="Wizard_UnknownDistroMessage" xml:space="preserve">
-    <value>LinuxHub doesn't recognize this distribution. Select an ISO from a distribution supported by the catalog.</value>
+    <value>LinuxBit doesn't recognize this distribution. Select an ISO from a distribution supported by the catalog.</value>
   </data>
   <data name="Wizard_AutoinstallToggleLabel" xml:space="preserve">
     <value>Automatic installation</value>
@@ -252,26 +252,26 @@
     <value>Fill in username, password and hostname before installing.</value>
   </data>
   <data name="Wizard_SecureBootBlockedMessage" xml:space="preserve">
-    <value>Secure Boot is enabled, and with it the firmware refuses to load the boot manager LinuxHub installs — the installation would stop at an error screen right after restarting.
+    <value>Secure Boot is enabled, and with it the firmware refuses to load the boot manager LinuxBit installs — the installation would stop at an error screen right after restarting.
 
 To turn it off:
 
 1. Open Settings &gt; System &gt; Recovery and click "Restart now" under Advanced startup.
 2. Choose Troubleshoot &gt; Advanced options &gt; UEFI Firmware Settings and confirm the restart.
 3. In the firmware, look for "Secure Boot" (usually under Security, Boot or Authentication) and set it to Disabled.
-4. Save and exit (usually F10), let Windows start, and open LinuxHub again.
+4. Save and exit (usually F10), let Windows start, and open LinuxBit again.
 
 If the option is greyed out, set a firmware supervisor password first, or change the Secure Boot mode to "Setup Mode"/"Custom". Once Linux is installed you can turn Secure Boot back on.</value>
   </data>
   <data name="Wizard_BitLockerBlockedMessage" xml:space="preserve">
-    <value>Drive {0}: is protected by BitLocker. To make room for the installation, LinuxHub has to shrink that drive — an operation on an encrypted volume that can fail or ask for the recovery key on the next Windows boot.
+    <value>Drive {0}: is protected by BitLocker. To make room for the installation, LinuxBit has to shrink that drive — an operation on an encrypted volume that can fail or ask for the recovery key on the next Windows boot.
 
 To turn it off:
 
 1. Open Command Prompt or PowerShell as administrator.
 2. Run: manage-bde -off {0}:
 3. Track it with: manage-bde -status {0}:
-4. Wait until it reads "Fully Decrypted" (this can take a while) and open LinuxHub again.
+4. Wait until it reads "Fully Decrypted" (this can take a while) and open LinuxBit again.
 
 Note: suspending BitLocker is not enough — the data stays encrypted on disk. It has to be fully decrypted. Once Linux is installed you can turn BitLocker back on.</value>
   </data>
@@ -314,7 +314,7 @@ Note: suspending BitLocker is not enough — the data stays encrypted on disk. I
   <data name="Wizard_NotEnoughSpaceForPreparationMessage" xml:space="preserve">
     <value>There is not enough space to prepare the installation. {0} GB are needed and the selected target has {1} GB.
 
-Besides the space for Linux itself, LinuxHub needs a temporary area to hold the system image during the installation. That area is given back once the installation finishes.
+Besides the space for Linux itself, LinuxBit needs a temporary area to hold the system image during the installation. That area is given back once the installation finishes.
 
 Free up space on the disk, pick a larger target, or reduce the size reserved for Linux.</value>
   </data>
@@ -325,7 +325,7 @@ Free up space on the disk, pick a larger target, or reduce the size reserved for
     <value>Staging the Linux bootloader…</value>
   </data>
   <data name="Wizard_InstallProgressHint" xml:space="preserve">
-    <value>Do not shut down or close LinuxHub. This can take a few minutes, and Windows will ask for administrator permission.</value>
+    <value>Do not shut down or close LinuxBit. This can take a few minutes, and Windows will ask for administrator permission.</value>
   </data>
   <data name="Wizard_PartitionTooFullMessage" xml:space="preserve">
     <value>The selected partition has only {0} GB free. Windows cannot shrink beyond the free space, and still needs headroom for updates and paging — at least {1} GB free is required. Free up space in Windows or pick another partition.</value>
@@ -362,7 +362,7 @@ Free up space on the disk, pick a larger target, or reduce the size reserved for
 Automatic installation may not work.</value>
   </data>
   <data name="Wizard_InstallSuccessTitle" xml:space="preserve">
-    <value>LinuxHub</value>
+    <value>LinuxBit</value>
   </data>
   <data name="Wizard_InstallSuccessMessage" xml:space="preserve">
     <value>Preparation complete! Restart your computer whenever you're ready — the installation continues automatically, no need to choose anything. On the next restarts, it goes back to booting Windows normally. The full log is at /var/log/linuxhub-install.log inside the Linux environment.</value>
@@ -432,7 +432,7 @@ Select a valid Linux ISO.</value>
     <value>Under development — use at your own risk</value>
   </data>
   <data name="Shell_PreviewWarningMessage" xml:space="preserve">
-    <value>LinuxHub is still under development. It changes your computer's partitions and boot configuration, and things can go wrong — including data loss and a system that will not start. Back up your data before using it.</value>
+    <value>LinuxBit is still under development. It changes your computer's partitions and boot configuration, and things can go wrong — including data loss and a system that will not start. Back up your data before using it.</value>
   </data>
   <data name="Wizard_TestedDistroWarningTitle" xml:space="preserve">
     <value>Only tested with Ubuntu 24.04</value>

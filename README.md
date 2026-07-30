@@ -1,9 +1,9 @@
-# LinuxHub  ![ícone](LinuxHub/Assets/Icons/favicon(2).ico) 
+# LinuxBit  ![ícone](LinuxBit/Assets/Icons/favicon(2).ico) 
 
 
-LinuxHub is a Linux distro portal that allows users to explore different distributions, learn about their main features, strengths, and weaknesses, view images and videos, and even download and install distros directly through the software.
+LinuxBit is a Linux distro portal that allows users to explore different distributions, learn about their main features, strengths, and weaknesses, view images and videos, and even download and install distros directly through the software.
 The project also includes a "universal" installer, which enables the installation of multiple distributions without the need for a USB drive. Depending on the distro, it is possible to perform a pre-configuration or predefined automated installation.
-LinuxHub is ideal for new users who want to find their ideal distro, understand its pros and cons, and perform downloads and installations in a simplified way.
+LinuxBit is ideal for new users who want to find their ideal distro, understand its pros and cons, and perform downloads and installations in a simplified way.
 
 --- 
 
@@ -18,12 +18,12 @@ LinuxHub is ideal for new users who want to find their ideal distro, understand 
 
 1. Clone the repository (HTTPS, SSH, or GitHub CLI):
 
-``git clone https://github.com/JoaoBittencourt1/LinuxHub.git``
+``git clone https://github.com/JoaoBittencourt1/LinuxBit.git``
 
 2. Locate the executable:
 
-The LinuxHub.exe file is located at:
-``\LinuxHub\bin\Debug\net10.0-windows``
+The LinuxBit.exe file is located at:
+``\LinuxBit\bin\Debug\net10.0-windows``
 When run, the project should start normally.
 
 ## For those who want to view the code:
