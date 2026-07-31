@@ -58,11 +58,17 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         private void InstallUefi(BootStagingRequest request, string grubCfg)
         {
-            int? espIndex = _espLocator.FindEfiSystemPartitionIndex(request.TargetDiskIndex);
-            if (espIndex is null)
+            // A ESP de SISTEMA, não a do disco alvo: o que está sendo instalado aqui é uma
+            // entrada de boot da firmware que ainda vai rodar sob o Windows atual, e a firmware
+            // só lê a ESP de onde ela bootou. Procurar no disco alvo assumia que instalar é
+            // sempre no disco do Windows — num segundo disco (sem ESP nenhuma) a busca voltava
+            // vazia e a instalação morria aqui.
+            EfiSystemPartitionLocation? esp = _espLocator.FindSystemEfiSystemPartition();
+            if (esp is null)
             {
                 throw new InvalidOperationException(
-                    $"Não foi possível localizar a EFI System Partition no disco {request.TargetDiskIndex}.");
+                    "Não foi possível localizar a EFI System Partition de onde esta máquina bootou, " +
+                    "necessária para registrar a entrada de boot da instalação.");
             }
 
             char driveLetter = PickFreeDriveLetter();
@@ -74,7 +80,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // consultando a letra de unidade montada; se ela já tiver sido desmontada, falha
             // com "dispositivo não é válido como especificado" (bug encontrado em teste real).
             string script = BuildEspStagingAndBcdScript(
-                request.TargetDiskIndex, espIndex.Value, driveLetter, grubEfiSource, grubCfg,
+                esp.DiskIndex, esp.PartitionIndex, driveLetter, grubEfiSource, grubCfg,
                 description: $"{request.DistroName} ({BootConfigurationService.StagingEntryMarker})",
                 efiPathOnVolume: efiPathOnVolume);
 

@@ -248,8 +248,14 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains("espaço utilizável", error.Message);
         }
 
+        /// <summary>
+        /// Instalar num segundo disco (de dados, sem ESP nenhuma) é o caso normal em que o disco
+        /// alvo não tem ESP — e era recusado, com a instalação morrendo depois de já ter
+        /// encolhido a partição e criado a semente. O sistema novo ganha a própria ESP no disco
+        /// dele; a ESP de onde o Windows boota não entra neste storage config e não é tocada.
+        /// </summary>
         [Fact]
-        public void DualBoot_RefusesUefiWithoutAnEfiSystemPartition()
+        public void DualBoot_CreatesAnEspOnTheTargetDiskWhenItHasNone()
         {
             var disk = BuildDiskWithFreeSpace() with
             {
@@ -259,10 +265,48 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 }
             };
 
+            string yaml = AutoinstallStorageBuilder.Build(
+                disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber);
+
+            Assert.Contains("partition_type: C12A7328-F81F-11D2-BA4B-00A0C93EC93B", yaml);
+            Assert.Contains($"size: {AutoinstallStorageBuilder.NewEspSizeBytes}", yaml);
+            Assert.Contains("grub_device: true", yaml);
+            Assert.Contains("path: /boot/efi", yaml);
+
+            // A ESP criada precisa ser formatada de verdade: ela ainda não tem filesystem, e um
+            // preserve: true aqui entregaria ao curtin uma partição vazia como se fosse boot.
+            int espFormat = yaml.IndexOf("id: format-esp", StringComparison.Ordinal);
+            Assert.True(espFormat >= 0);
+            string espBlock = yaml[espFormat..];
+            Assert.DoesNotContain("preserve: true", espBlock[..espBlock.IndexOf("- type: mount", StringComparison.Ordinal)]);
+
+            // A ESP nasce antes da raiz e a raiz começa depois dela — nenhuma sobreposição.
+            int espPartition = yaml.IndexOf("number: 4", StringComparison.Ordinal);
+            int rootPartition = yaml.IndexOf("number: 5", StringComparison.Ordinal);
+            Assert.True(espPartition >= 0 && rootPartition > espPartition);
+        }
+
+        [Fact]
+        public void DualBoot_RefusesWhenTheFreeSpaceCannotFitBothANewEspAndTheSystem()
+        {
+            // Sem ESP no alvo, o mínimo sobe: a raiz continua precisando do tamanho dela E a ESP
+            // nova precisa caber no mesmo vão.
+            const long windowsOffset = 1024 * 1024;
+            const long gapBytes = 12 * Gib + (256L * 1024 * 1024);
+
+            var disk = BuildDiskWithFreeSpace() with
+            {
+                SizeBytes = windowsOffset + (200 * Gib) + gapBytes + (1024 * 1024),
+                Partitions = new[]
+                {
+                    new PartitionLayout(3, windowsOffset, 200 * Gib, "{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}", false)
+                }
+            };
+
             var error = Assert.Throws<InvalidOperationException>(
                 () => AutoinstallStorageBuilder.Build(disk, InstallMode.DualBoot, true, 4, SeedPartitionNumber, StagingPartitionNumber));
 
-            Assert.Contains("EFI System Partition", error.Message);
+            Assert.Contains("espaço utilizável", error.Message);
         }
 
         [Fact]

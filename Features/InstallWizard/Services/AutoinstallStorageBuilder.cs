@@ -28,6 +28,15 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         private const string LinuxFilesystemMbrType = "0x83";
 
+        /// <summary>Tipo GPT da EFI System Partition, no formato que o <c>partition_type</c> do
+        /// curtin espera (GUID maiúsculo, sem chaves).</summary>
+        private const string EfiSystemPartitionGptType = "C12A7328-F81F-11D2-BA4B-00A0C93EC93B";
+
+        /// <summary>Tamanho da ESP criada quando o disco alvo não tem nenhuma. 512 MiB é o que
+        /// o próprio instalador do Ubuntu reserva — sobra para os kernels de várias distros
+        /// sem custar espaço relevante do que o usuário destinou ao Linux.</summary>
+        public const long NewEspSizeBytes = 512L * 1024 * 1024;
+
         /// <summary>
         /// Tamanho mínimo aceitável para a partição raiz. Abaixo disso o instalador do
         /// Ubuntu falha no meio, depois do ponto de não-retorno.
@@ -165,13 +174,13 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "do disco, o que destruiria o conteúdo dele.");
             }
 
+            // Instalar num disco que não é o do Windows é o caso normal em que o alvo não tem
+            // ESP nenhuma — antes isso abortava a instalação. A ESP do disco de boot NÃO serve
+            // de substituta aqui: usá-la faria o storage config descrever dois discos e mandaria
+            // o curtin escrever dentro da partição de onde o Windows boota. O sistema novo ganha
+            // a própria ESP, no disco dele.
             PartitionLayout? esp = disk.EfiSystemPartition;
-            if (isUefi && esp is null)
-            {
-                throw new InvalidOperationException(
-                    $"Não foi possível localizar a EFI System Partition no disco {disk.Index}, " +
-                    "necessária para instalar o bootloader em modo UEFI.");
-            }
+            bool mustCreateEsp = isUefi && esp is null;
 
             // Quem sobrevive. No dual-boot é tudo; no substituir, só o que a instalação precisa
             // que continue existindo: a ESP (recebe o bootloader), a staging (hospeda a ISO em
@@ -182,12 +191,13 @@ namespace LinuxHub.Features.InstallWizard.Services
                 : disk.Partitions.Select(p => p.Number).ToHashSet();
 
             (long gapOffset, long gapSize) = disk.FindLargestFreeGap(preserved);
-            if (gapSize < MinimumRootSizeBytes)
+            long requiredBytes = MinimumRootSizeBytes + (mustCreateEsp ? NewEspSizeBytes : 0);
+            if (gapSize < requiredBytes)
             {
                 throw new InvalidOperationException(
                     $"O maior espaço utilizável do disco {disk.Index} tem " +
                     $"{gapSize / (1024 * 1024 * 1024)} GB, abaixo do mínimo de " +
-                    $"{MinimumRootSizeBytes / (1024 * 1024 * 1024)} GB para instalar o sistema. " +
+                    $"{requiredBytes / (1024 * 1024 * 1024)} GB para instalar o sistema. " +
                     "O encolhimento da partição do Windows não liberou o espaço esperado.");
             }
 
@@ -237,9 +247,32 @@ namespace LinuxHub.Features.InstallWizard.Services
                 }
             }
 
-            int newNumber = disk.NextFreePartitionNumber;
-            long rootOffset = AlignUp(gapOffset);
-            long rootSize = AlignDown(gapSize - (rootOffset - gapOffset));
+            int nextNumber = disk.NextFreePartitionNumber;
+            long gapEnd = gapOffset + gapSize;
+            long cursor = AlignUp(gapOffset);
+
+            int? createdEspNumber = null;
+            if (mustCreateEsp)
+            {
+                createdEspNumber = nextNumber++;
+
+                yaml.AppendLine($"{item}- type: partition");
+                yaml.AppendLine($"{field}id: {PartitionId(createdEspNumber.Value)}");
+                yaml.AppendLine($"{field}device: {DiskId}");
+                yaml.AppendLine($"{field}number: {createdEspNumber.Value}");
+                yaml.AppendLine($"{field}offset: {cursor}");
+                yaml.AppendLine($"{field}size: {NewEspSizeBytes}");
+                yaml.AppendLine($"{field}partition_type: {EfiSystemPartitionGptType}");
+                yaml.AppendLine($"{field}flag: boot");
+                yaml.AppendLine($"{field}grub_device: true");
+                yaml.AppendLine($"{field}wipe: superblock");
+
+                cursor += NewEspSizeBytes;
+            }
+
+            int newNumber = nextNumber;
+            long rootOffset = cursor;
+            long rootSize = AlignDown(gapEnd - rootOffset);
 
             yaml.AppendLine($"{item}- type: partition");
             yaml.AppendLine($"{field}id: {PartitionId(newNumber)}");
@@ -256,15 +289,19 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine($"{field}volume: {PartitionId(newNumber)}");
             yaml.AppendLine($"{field}fstype: ext4");
 
-            // A ESP é formatada como fat32 COM preserve: true — sem isso o curtin a
-            // reformata e leva junto o bootloader do Windows que mora nela.
-            if (isUefi && esp is not null)
+            // Uma ESP que já existia é formatada COM preserve: true — sem isso o curtin a
+            // reformata e leva junto o bootloader do Windows que mora nela. A que acabou de ser
+            // criada é o oposto: precisa ser formatada de fato, porque ainda não tem filesystem.
+            int? espNumber = esp?.Number ?? createdEspNumber;
+            if (isUefi && espNumber is not null)
             {
                 yaml.AppendLine($"{item}- type: format");
                 yaml.AppendLine($"{field}id: format-esp");
-                yaml.AppendLine($"{field}volume: {PartitionId(esp.Number)}");
+                yaml.AppendLine($"{field}volume: {PartitionId(espNumber.Value)}");
                 yaml.AppendLine($"{field}fstype: fat32");
-                yaml.AppendLine($"{field}preserve: true");
+
+                if (esp is not null)
+                    yaml.AppendLine($"{field}preserve: true");
             }
 
             yaml.AppendLine($"{item}- type: mount");
@@ -272,7 +309,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             yaml.AppendLine($"{field}device: format-root");
             yaml.AppendLine($"{field}path: /");
 
-            if (isUefi && esp is not null)
+            if (isUefi && espNumber is not null)
             {
                 yaml.AppendLine($"{item}- type: mount");
                 yaml.AppendLine($"{field}id: mount-esp");

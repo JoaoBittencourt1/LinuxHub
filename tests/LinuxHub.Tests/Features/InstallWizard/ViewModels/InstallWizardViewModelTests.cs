@@ -66,6 +66,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         private sealed class FakeEspLocatorService : IEspLocatorService
         {
             public int? FindEfiSystemPartitionIndex(int diskIndex) => 1;
+            public EfiSystemPartitionLocation? FindSystemEfiSystemPartition() =>
+                new EfiSystemPartitionLocation(0, 1);
         }
 
         private sealed class FakeDiskPartitioningService : IDiskPartitioningService

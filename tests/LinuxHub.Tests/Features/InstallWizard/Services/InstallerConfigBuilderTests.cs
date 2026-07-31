@@ -17,6 +17,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             public int? EspIndex { get; set; }
             public int? FindEfiSystemPartitionIndex(int diskIndex) => EspIndex;
+            public EfiSystemPartitionLocation? FindSystemEfiSystemPartition() =>
+                EspIndex is null ? null : new EfiSystemPartitionLocation(0, EspIndex.Value);
         }
 
         private static DistroInfo CreateDistro() => new DistroInfo

@@ -9,6 +9,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         private sealed class FakeEspLocator : IEspLocatorService
         {
             public int? FindEfiSystemPartitionIndex(int diskIndex) => null;
+            public EfiSystemPartitionLocation? FindSystemEfiSystemPartition() => null;
         }
 
         private sealed class FakeGrubAssets : IGrubAssetProvider
