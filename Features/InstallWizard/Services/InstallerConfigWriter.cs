@@ -6,7 +6,10 @@ namespace LinuxHub.Features.InstallWizard.Services
 {
     public sealed class InstallerConfigWriter : IInstallerConfigWriter
     {
-        private const string OutputDirectory = @"C:\LinuxHub";
+        private static readonly string OutputDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "LinuxHub");
+
         private const string OutputFileName = "install.conf";
 
         public void Save(InstallerConfig cfg)
