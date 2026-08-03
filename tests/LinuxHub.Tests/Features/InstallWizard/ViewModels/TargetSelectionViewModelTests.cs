@@ -23,6 +23,12 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             public IReadOnlyList<PartitionInfo> GetEligiblePartitions() => Array.Empty<PartitionInfo>();
         }
 
+        private sealed class ThrowingPartitionInventoryService : IPartitionInventoryService
+        {
+            public IReadOnlyList<PartitionInfo> GetEligiblePartitions() =>
+                throw new InvalidOperationException("WMI indisponível");
+        }
+
         private sealed class FakeFirmwareService : IFirmwareService
         {
             public bool IsUefi() => true;
@@ -33,6 +39,39 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             new DiskInfo { Index = 0, Model = "Sistema", SizeBytes = 256L * 1024 * 1024 * 1024, IsSystemDisk = true },
             new DiskInfo { Index = 1, Model = "Secundário", SizeBytes = 512L * 1024 * 1024 * 1024, IsSystemDisk = false }
         };
+
+        /// <summary>
+        /// Dual-boot é o padrão porque é o único modo que preserva o Windows: quem abre o
+        /// wizard e não mexe no tipo de instalação não pode cair no que apaga o disco inteiro.
+        /// </summary>
+        [Fact]
+        public void DefaultMode_IsDualBoot()
+        {
+            var vm = new TargetSelectionViewModel(
+                new FakeDiskInventoryService { Disks = TwoDisks() },
+                new FakePartitionInventoryService(),
+                new FakeFirmwareService());
+
+            Assert.True(vm.IsDualBootMode);
+            Assert.False(vm.IsReplaceMode);
+        }
+
+        /// <summary>
+        /// Com o dual-boot como padrão, a leitura das partições passou a acontecer na abertura
+        /// do wizard — uma exceção do WMI ali derrubaria o app inteiro no arranque.
+        /// </summary>
+        [Fact]
+        public void PartitionDetectionFailure_SetsErrorInsteadOfCrashing()
+        {
+            var vm = new TargetSelectionViewModel(
+                new FakeDiskInventoryService { Disks = TwoDisks() },
+                new ThrowingPartitionInventoryService(),
+                new FakeFirmwareService());
+
+            Assert.True(vm.HasPartitionDetectionError);
+            Assert.Empty(vm.Partitions);
+            Assert.Null(vm.SelectedPartition);
+        }
 
         [Fact]
         public void ReplaceMode_SystemDisk_IsAllowedButFlaggedForStrongerWarning()

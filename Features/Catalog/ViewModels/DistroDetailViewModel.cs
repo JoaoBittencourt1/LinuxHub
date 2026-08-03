@@ -42,6 +42,7 @@ namespace LinuxHub.Features.Catalog.ViewModels
             OpenImageCommand = new RelayCommand(path => OpenImageRequested?.Invoke((string)path!));
             OpenDownloadLinkCommand = new RelayCommand(OpenDownloadLink);
             BackCommand = new RelayCommand(() => BackRequested?.Invoke());
+            InstallNowCommand = new RelayCommand(() => InstallRequested?.Invoke(distro));
         }
 
         public string Name { get; }
@@ -71,12 +72,17 @@ namespace LinuxHub.Features.Catalog.ViewModels
         public ICommand OpenImageCommand { get; }
         public ICommand OpenDownloadLinkCommand { get; }
         public ICommand BackCommand { get; }
+        public ICommand InstallNowCommand { get; }
 
         /// <summary>Pedido de abrir uma imagem do carrossel em tela cheia — a View decide como.</summary>
         public event Action<string>? OpenImageRequested;
 
         /// <summary>Pedido de voltar à janela principal — a View decide como.</summary>
         public event Action? BackRequested;
+
+        /// <summary>Pedido de instalar esta distro — o shell decide como (troca para o painel
+        /// de instalação e aponta o wizard pra ela).</summary>
+        public event Action<DistroInfo>? InstallRequested;
 
         /// <summary>Falha ao abrir o link de download no navegador — a View decide como reportar.</summary>
         public event Action? DownloadLinkOpenFailed;

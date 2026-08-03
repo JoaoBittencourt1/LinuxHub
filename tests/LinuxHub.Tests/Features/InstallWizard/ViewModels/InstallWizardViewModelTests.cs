@@ -190,6 +190,10 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             // recusa instalar sem ele, então o teste passa pelo caminho de download falso.
             iso.DownloadIsoCommand.Execute(null);
 
+            // Dual-boot é o padrão do wizard; estes testes cobrem o fluxo de substituição, que
+            // não depende de haver partição elegível na máquina de teste.
+            vm.Target.Mode = InstallMode.Replace;
+
             return vm;
         }
 

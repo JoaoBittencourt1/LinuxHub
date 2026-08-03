@@ -40,12 +40,17 @@ namespace LinuxHub.Features.Catalog.ViewModels
         public ICommand OpenDistroCommand { get; }
         public ICommand CloseFullscreenCommand { get; }
 
+        /// <summary>Repassa o "instalar agora" do detalhe para fora da feature — quem navega
+        /// entre catálogo e instalação é o shell, não o catálogo.</summary>
+        public event Action<DistroInfo>? InstallRequested;
+
         private void OpenDistro(DistroInfo distro)
         {
             SelectedDistroDetail?.Dispose();
 
             var detail = new DistroDetailViewModel(distro);
             detail.OpenImageRequested += path => FullscreenImagePath = path;
+            detail.InstallRequested += requested => InstallRequested?.Invoke(requested);
             detail.BackRequested += () =>
             {
                 detail.Dispose();

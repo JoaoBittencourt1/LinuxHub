@@ -151,6 +151,15 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                         throw new InvalidOperationException(loc["Wizard_PasswordMismatchMessage"]);
                 }
 
+                // Sem alvo não há instalação: o dual-boot abre sem partição selecionada quando
+                // a máquina não tem nenhuma elegível (ou a detecção falhou), e sem esta guarda
+                // o clique em "Instalar" morria num NullReferenceException lá no RunInstall.
+                if (Target.IsDualBootMode && Target.SelectedPartition is null)
+                    throw new InvalidOperationException(loc["Wizard_NoTargetPartitionSelected"]);
+
+                if (Target.IsReplaceMode && Target.SelectedDisk is null)
+                    throw new InvalidOperationException(loc["Wizard_NoTargetDiskSelected"]);
+
                 // Barra aqui, e não no shrink: uma partição sem espaço livre suficiente é um
                 // alvo inviável de saída, e deixar passar significava gravar install.conf e
                 // preparar o boot antes do Windows recusar o encolhimento.

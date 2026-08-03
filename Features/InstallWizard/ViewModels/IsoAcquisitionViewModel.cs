@@ -261,6 +261,27 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
         public event Action<string, string, bool>? Notify;
 
+        /// <summary>
+        /// Entrada vinda do catálogo ("instalar agora"): deixa esta tela já apontada para
+        /// <paramref name="distro"/>. Se a ISO dela já foi baixada, é essa que fica
+        /// selecionada — baixar de novo seriam vários GB por nada; caso contrário abre o
+        /// seletor de download já nela, pronto pro usuário só clicar em baixar.
+        /// </summary>
+        public void PrepareForDistro(DistroInfo distro)
+        {
+            ArgumentNullException.ThrowIfNull(distro);
+
+            IsManualSelect = false;
+
+            // Antes de SelectedDownloadedIso, nunca depois: trocar a distro limpa a ISO
+            // baixada selecionada (ver o setter de SelectedDistro).
+            SelectedDistro = distro;
+
+            var downloaded = DownloadedIsos.FirstOrDefault(iso => iso.Distro?.Id == distro.Id);
+            SelectedDownloadedIso = downloaded;
+            IsChoosingNewDownload = downloaded is null;
+        }
+
         /// <summary>Chamado pela View após o usuário escolher um arquivo no diálogo de seleção.</summary>
         public void SelectManualIso(string path)
         {

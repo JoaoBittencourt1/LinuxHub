@@ -217,6 +217,12 @@ namespace LinuxHub.Common.Data
         /// Identifica a distro a partir do nome de um arquivo ISO, casando o Id de cada
         /// entrada do catálogo como substring do nome (case-insensitive). Retorna null
         /// quando nenhuma distro é reconhecida — quem chama decide o fallback.
+        ///
+        /// Entre vários Ids que casam, vence o mais específico (o mais longo): o nome
+        /// <c>xubuntu-25.10-desktop-amd64.iso</c> contém "ubuntu", e antes quem ganhava era a
+        /// primeira entrada da lista — o Ubuntu. Uma ISO de Xubuntu/Kubuntu era detectada como
+        /// Ubuntu, o que arrastava junto o <see cref="DistroInfo.SupportsAutoinstall"/> dele e
+        /// fazia o wizard oferecer instalação automática pra uma distro nunca validada.
         /// </summary>
         public static DistroInfo? FindByIsoFileName(string fileName)
         {
@@ -224,7 +230,10 @@ namespace LinuxHub.Common.Data
                 return null;
 
             var lowered = fileName.ToLowerInvariant();
-            return All.FirstOrDefault(distro => lowered.Contains(distro.Id));
+            return All
+                .Where(distro => lowered.Contains(distro.Id))
+                .OrderByDescending(distro => distro.Id.Length)
+                .FirstOrDefault();
         }
     }
 }

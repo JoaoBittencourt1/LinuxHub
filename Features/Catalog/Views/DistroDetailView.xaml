@@ -91,6 +91,16 @@
                            Command="{Binding NextCommand}"/>
             </Grid>
 
+            <!-- Instalar agora: leva ao painel de instalação já apontado pra esta distro -->
+            <ui:Button Content="{loc:Loc CatalogDetail_InstallNowButton}"
+                       Command="{Binding InstallNowCommand}"
+                       Appearance="Primary"
+                       Icon="{ui:SymbolIcon Desktop24}"
+                       HorizontalAlignment="Stretch"
+                       HorizontalContentAlignment="Center"
+                       Height="40"
+                       Margin="0,0,0,14"/>
+
             <!-- Download -->
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="{loc:Loc CatalogDetail_DownloadLabel}" FontSize="15" VerticalAlignment="Center" Margin="0,0,6,0"/>

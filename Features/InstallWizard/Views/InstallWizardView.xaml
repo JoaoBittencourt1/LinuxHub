@@ -227,6 +227,12 @@
                         <TextBlock Text="{loc:Loc Wizard_DualBootPartitionHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,8"/>
                         <ComboBox ItemsSource="{Binding Target.Partitions}" SelectedItem="{Binding Target.SelectedPartition}"/>
 
+                        <ui:InfoBar IsOpen="{Binding Target.HasPartitionDetectionError}"
+                                    IsClosable="False"
+                                    Severity="Error"
+                                    Message="{Binding Target.PartitionDetectionError}"
+                                    Margin="0,8,0,0"/>
+
                         <ui:InfoBar IsOpen="{Binding Target.HasPartitionSpaceError}"
                                     IsClosable="False"
                                     Severity="Error"

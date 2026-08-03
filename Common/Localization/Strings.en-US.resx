@@ -90,6 +90,9 @@
   <data name="CatalogDetail_BeginnerLabel" xml:space="preserve">
     <value>For beginners:</value>
   </data>
+  <data name="CatalogDetail_InstallNowButton" xml:space="preserve">
+    <value>Install now</value>
+  </data>
   <data name="CatalogDetail_DownloadLabel" xml:space="preserve">
     <value>Download:</value>
   </data>
@@ -248,6 +251,12 @@
   <data name="Wizard_NoDistroSelected" xml:space="preserve">
     <value>No distribution selected</value>
   </data>
+  <data name="Wizard_NoTargetPartitionSelected" xml:space="preserve">
+    <value>Select the Windows partition to shrink and make room for Linux.</value>
+  </data>
+  <data name="Wizard_NoTargetDiskSelected" xml:space="preserve">
+    <value>Select the disk to be used for the installation.</value>
+  </data>
   <data name="Wizard_AccountIncompleteMessage" xml:space="preserve">
     <value>Fill in username, password and hostname before installing.</value>
   </data>
@@ -403,6 +412,9 @@ Select a valid Linux ISO.</value>
   </data>
   <data name="Wizard_DiskDetectionErrorMessage" xml:space="preserve">
     <value>Could not list disks: {0}</value>
+  </data>
+  <data name="Wizard_PartitionDetectionErrorMessage" xml:space="preserve">
+    <value>Could not list partitions: {0}</value>
   </data>
   <data name="Wizard_ConfirmationTitle" xml:space="preserve">
     <value>Confirm the disk operation</value>

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Windows;
 using LinuxHub.Common.Localization;
+using LinuxHub.Common.Models;
 using LinuxHub.Features.Catalog.ViewModels;
 using LinuxHub.Features.Catalog.Views;
 using LinuxHub.Features.InstallWizard.ViewModels;
@@ -21,6 +22,7 @@ namespace LinuxHub.Shell
     {
         private readonly CatalogView _catalogView;
         private readonly InstallWizardView _installWizardView;
+        private readonly InstallWizardViewModel _installWizardViewModel;
 
         public MainWindow(CatalogViewModel catalogViewModel, InstallWizardViewModel installWizardViewModel)
         {
@@ -29,6 +31,9 @@ namespace LinuxHub.Shell
 
             InitializeComponent();
 
+            _installWizardViewModel = installWizardViewModel;
+            catalogViewModel.InstallRequested += OnInstallRequested;
+
             Version? version = Assembly.GetExecutingAssembly().GetName().Version;
             VersionText.Text = version is null ? string.Empty : $"v{version.Major}.{version.Minor}.{version.Build}";
 
@@ -36,6 +41,15 @@ namespace LinuxHub.Shell
             _installWizardView = new InstallWizardView { DataContext = installWizardViewModel };
 
             ShowCatalog();
+        }
+
+        /// <summary>Atalho "instalar agora" da página da distro: além de trocar de painel,
+        /// deixa o wizard já apontado pra ela — chegar na tela de instalação e ter que
+        /// escolher a distro de novo era refazer a escolha que o usuário acabou de fazer.</summary>
+        private void OnInstallRequested(DistroInfo distro)
+        {
+            _installWizardViewModel.Iso.PrepareForDistro(distro);
+            ShowInstallWizard();
         }
 
         private void CatalogNavButton_Click(object sender, RoutedEventArgs e) => ShowCatalog();

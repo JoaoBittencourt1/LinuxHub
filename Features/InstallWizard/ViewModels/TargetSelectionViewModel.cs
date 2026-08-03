@@ -29,12 +29,16 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private readonly IDiskInventoryService _diskInventory;
         private readonly IPartitionInventoryService _partitionInventory;
 
-        private InstallMode _mode = InstallMode.Replace;
+        /// <summary>Dual-boot é o padrão porque é o modo que PRESERVA o Windows: se o usuário
+        /// não mexer em nada, o wizard não parte para apagar o disco inteiro.</summary>
+        private InstallMode _mode = InstallMode.DualBoot;
+
         private DiskInfo? _selectedDisk;
         private PartitionInfo? _selectedPartition;
         private double _linuxPartitionSizeGb = 100;
         private double _sliderMaximum = DefaultSliderMaximum;
         private string? _diskDetectionError;
+        private string? _partitionDetectionError;
         private string? _partitionSpaceError;
 
         public TargetSelectionViewModel(
@@ -50,7 +54,11 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
             IsUefi = firmwareService.IsUefi();
 
+            // As duas listas na abertura: a de partições porque o dual-boot já é o modo
+            // ativo, e a de discos porque é ela que denuncia uma falha de detecção logo de
+            // cara, sem esperar o usuário trocar de modo pra descobrir.
             ReloadDisks();
+            ReloadPartitions();
         }
 
         public bool IsUefi { get; }
@@ -94,6 +102,22 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         }
 
         public bool HasDiskDetectionError => DiskDetectionError is not null;
+
+        /// <summary>Mensagem quando <see cref="IPartitionInventoryService.GetEligiblePartitions"/>
+        /// falha. Ganhou peso quando o dual-boot virou o modo padrão: a leitura WMI passou a
+        /// acontecer na abertura do wizard, e uma exceção ali derrubaria o app inteiro em vez
+        /// de aparecer como erro na tela (constitution §6 — nunca silenciar, nunca explodir).</summary>
+        public string? PartitionDetectionError
+        {
+            get => _partitionDetectionError;
+            private set
+            {
+                if (SetProperty(ref _partitionDetectionError, value))
+                    OnPropertyChanged(nameof(HasPartitionDetectionError));
+            }
+        }
+
+        public bool HasPartitionDetectionError => PartitionDetectionError is not null;
 
         /// <summary>Modo substituir no disco físico que hospeda o Windows em execução —
         /// permitido (o wipe real só acontece depois do reboot, via boot-staging + Linux
@@ -215,7 +239,17 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
         private void ReloadPartitions()
         {
-            Partitions = _partitionInventory.GetEligiblePartitions();
+            try
+            {
+                Partitions = _partitionInventory.GetEligiblePartitions();
+                PartitionDetectionError = null;
+            }
+            catch (Exception ex)
+            {
+                Partitions = Array.Empty<PartitionInfo>();
+                PartitionDetectionError = LocalizationManager.Instance.Format("Wizard_PartitionDetectionErrorMessage", ex.Message);
+            }
+
             OnPropertyChanged(nameof(Partitions));
             SelectedPartition = Partitions.Count > 0 ? Partitions[0] : null;
         }
