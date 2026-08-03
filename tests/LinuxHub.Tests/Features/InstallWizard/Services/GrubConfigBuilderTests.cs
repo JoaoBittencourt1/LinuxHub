@@ -63,6 +63,29 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.EndsWith("--- quiet splash", GetKernelLine(entry));
         }
 
+        /// <summary>
+        /// Sem <c>noprompt</c>, o <c>/sbin/casper-stop</c> do casper para no fim da instalação
+        /// com "Please remove the installation medium, then press ENTER" e trava num
+        /// <c>read x &lt; /dev/console</c> — o PC nunca reinicia sozinho. Como a ISO é um
+        /// arquivo no disco interno, não existe mídia para remover em nenhum dos dois modos, e
+        /// o parâmetro precisa estar dos dois lados do <c>enableAutoinstall</c>.
+        /// </summary>
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void BuildIsoBootEntry_AlwaysDisablesTheRemoveMediumPrompt(bool enableAutoinstall)
+        {
+            string entry = GrubConfigBuilder.BuildIsoBootEntry(
+                "Ubuntu", @"C:\ISOs\ubuntu.iso", enableAutoinstall);
+
+            string[] halves = GetKernelLine(entry).Split(" --- ");
+
+            // Do lado do instalador: o casper-stop lê /proc/cmdline da sessão live, e o que vem
+            // depois do separador pertence ao sistema instalado.
+            Assert.Contains("noprompt", halves[0]);
+            Assert.DoesNotContain("noprompt", halves[1]);
+        }
+
         private static string GetKernelLine(string entry) =>
             entry.Split('\n').Single(line => line.TrimStart().StartsWith("linux ")).Trim();
 

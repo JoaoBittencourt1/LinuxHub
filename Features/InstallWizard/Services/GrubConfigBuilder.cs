@@ -12,6 +12,30 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public static class GrubConfigBuilder
     {
+        /// <summary>
+        /// Desliga o "Please remove the installation medium, then press ENTER" no fim da
+        /// instalação. Não é frescura de mensagem: o <c>/sbin/casper-stop</c> (lido do pacote
+        /// casper 1.498, o da ISO do Ubuntu 24.04.4) imprime a mensagem e então BLOQUEIA num
+        /// <c>read x &lt; /dev/console</c> esperando ENTER — é por isso que o PC não reiniciava
+        /// sozinho ao terminar. O trecho que este parâmetro desarma:
+        /// <code>
+        /// prompt=1
+        /// if grep -qs noprompt /proc/cmdline || [ -e /run/casper-no-prompt ]; then prompt=; fi
+        /// </code>
+        /// Com <c>prompt</c> vazio o script devolve antes do <c>read</c>, e a tentativa de
+        /// <c>eject</c> que vem no meio (a origem do erro de cdrom numa máquina sem cdrom
+        /// nenhum) já sai silenciada pelo redirecionamento do próprio casper.
+        ///
+        /// Vale nos dois modos: com ou sem autoinstall não existe mídia para remover, porque a
+        /// ISO é um arquivo no disco interno. Vai antes do <c>---</c> por ser lido do
+        /// <c>/proc/cmdline</c> da sessão live, não do sistema instalado.
+        ///
+        /// Só este, e não <c>find_iso=</c> (que faria o casper-stop sair logo no topo): aquele
+        /// parâmetro troca o mecanismo de localização da ISO que já funciona aqui.
+        /// </summary>
+        private const string NoPromptParameter = " noprompt";
+
+
         public static string BuildConfig(
             string distroName,
             string isoWindowsPath,
@@ -72,7 +96,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             string distroName, string isoWindowsPath, bool enableAutoinstall = false)
         {
             string isoPath = ToGrubPath(isoWindowsPath);
-            string installerParameters = enableAutoinstall ? " autoinstall" : string.Empty;
+            string installerParameters =
+                (enableAutoinstall ? " autoinstall" : string.Empty) + NoPromptParameter;
             string targetParameters = enableAutoinstall ? "quiet" : "quiet splash";
 
             return $@"menuentry ""Instalar {distroName} (staging LinuxHub)"" {{
