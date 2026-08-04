@@ -111,9 +111,37 @@ namespace LinuxHub.Features.InstallWizard.Services
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
     linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile{installerParameters} --- {targetParameters}
-    initrd (loop)/casper/initrd
+{BuildInitrdStanza()}
 }}
 ";
+        }
+
+        /// <summary>
+        /// O nome do initrd dentro de <c>/casper</c> varia por distro/versão — <c>initrd</c>
+        /// sem extensão no Ubuntu 24.04.4 (a receita original deste arquivo), mas
+        /// <c>initrd.lz</c> no Linux Mint 22.3 (confirmado abrindo o <c>grub.cfg</c> real da
+        /// ISO). Hardcodar um nome só bootava kernel sem o hook do casper embutido — GRUB
+        /// carregava silenciosamente um initrd vazio/inexistente e o kernel caía em
+        /// "VFS: Unable to mount root fs on unknown-block(0,0)" (bug real, reportado testando
+        /// Mint). Em vez de adivinhar do lado do Windows — o que exigiria abrir a ISO fora
+        /// desta classe, que é texto puro sem I/O — deixamos o próprio GRUB testar em tempo de
+        /// boot, igual ao <c>search --file</c> já usado acima para achar a ISO: nunca um nome
+        /// fixo, sempre uma checagem real contra o que está de fato dentro do loopback.
+        /// </summary>
+        private static string BuildInitrdStanza()
+        {
+            string[] candidates = ["initrd.lz", "initrd.img", "initrd.gz", "initrd"];
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                string keyword = i == 0 ? "if" : "elif";
+                sb.AppendLine($"    {keyword} [ -f (loop)/casper/{candidates[i]} ]; then");
+                sb.AppendLine($"        initrd (loop)/casper/{candidates[i]}");
+            }
+            sb.AppendLine("    fi");
+
+            return sb.ToString().TrimEnd('\n', '\r');
         }
 
         internal static string BuildWindowsChainloadEntry() => @"menuentry ""Windows"" {

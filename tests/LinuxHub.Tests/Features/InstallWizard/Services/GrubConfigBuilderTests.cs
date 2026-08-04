@@ -89,6 +89,26 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         private static string GetKernelLine(string entry) =>
             entry.Split('\n').Single(line => line.TrimStart().StartsWith("linux ")).Trim();
 
+        /// <summary>
+        /// O nome do initrd dentro de <c>/casper</c> não é o mesmo em toda distro — é
+        /// <c>initrd</c> sem extensão no Ubuntu 24.04.4, mas <c>initrd.lz</c> no Linux Mint
+        /// 22.3 (confirmado abrindo o grub.cfg real da ISO). Um valor fixo já causou boot
+        /// quebrado ("VFS: Unable to mount root fs on unknown-block(0,0)") por carregar um
+        /// initrd inexistente no Mint — por isso o gerado precisa testar os candidatos em
+        /// tempo de boot em vez de assumir um nome só.
+        /// </summary>
+        [Fact]
+        public void BuildIsoBootEntry_ProbesInitrdCandidatesInsteadOfAssumingOneName()
+        {
+            string entry = GrubConfigBuilder.BuildIsoBootEntry("Linux Mint", @"C:\ISOs\mint.iso");
+
+            Assert.Contains("if [ -f (loop)/casper/initrd.lz ]; then", entry);
+            Assert.Contains("initrd (loop)/casper/initrd.lz", entry);
+            Assert.Contains("elif [ -f (loop)/casper/initrd.img ]; then", entry);
+            Assert.Contains("elif [ -f (loop)/casper/initrd.gz ]; then", entry);
+            Assert.Contains("elif [ -f (loop)/casper/initrd ]; then", entry);
+        }
+
         [Fact]
         public void BuildWindowsChainloadEntry_SearchesForBootmgrInsteadOfAssumingPartitionIndex()
         {
