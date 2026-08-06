@@ -1,4 +1,5 @@
 using System.Text;
+using LinuxHub.Features.InstallWizard.Models;
 
 namespace LinuxHub.Features.InstallWizard.Services
 {
@@ -40,7 +41,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             string distroName,
             string isoWindowsPath,
             bool includeWindowsChainload,
-            bool enableAutoinstall = false)
+            UnattendedBootParameters? unattended = null)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(distroName);
             ArgumentException.ThrowIfNullOrWhiteSpace(isoWindowsPath);
@@ -49,7 +50,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             sb.AppendLine("set timeout=10");
             sb.AppendLine("set default=0");
             sb.AppendLine();
-            sb.Append(BuildIsoBootEntry(distroName, isoWindowsPath, enableAutoinstall));
+            sb.Append(BuildIsoBootEntry(distroName, isoWindowsPath, unattended));
 
             if (includeWindowsChainload)
             {
@@ -82,23 +83,25 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// o grub.cfg que inclui o loopback.cfg; aqui não há esse invólucro.</item>
         /// </list>
         ///
-        /// <paramref name="enableAutoinstall"/> acrescenta o parâmetro <c>autoinstall</c>. Ele
-        /// é o que torna a instalação de fato desatendida: com o <c>user-data</c> presente na
-        /// partição CIDATA mas SEM este parâmetro, o subiquity acha o arquivo e ainda assim
-        /// para numa tela pedindo confirmação — que é o comportamento padrão de segurança
-        /// dele, não um bug. Ele vai ANTES do <c>---</c>: o que vem depois do separador é
-        /// destinado ao sistema instalado, não ao instalador.
+        /// <paramref name="unattended"/> traz, já resolvido pelo preparer do mecanismo em uso,
+        /// o que a instalação desatendida precisa acrescentar — esta classe não sabe (nem deve
+        /// saber) que subiquity usa <c>autoinstall</c> e Ubiquity usa <c>automatic-ubiquity</c>
+        /// (design.md, D4). Os parâmetros vão ANTES do <c>---</c>: o que vem depois do
+        /// separador é destinado ao sistema instalado, não ao instalador.
         ///
-        /// Nesse modo o <c>splash</c> também sai: numa instalação em que ninguém vai clicar em
+        /// Numa instalação desatendida o <c>splash</c> também sai: com ninguém para clicar em
         /// nada, a tela gráfica só serve para esconder a mensagem de erro se algo falhar.
         /// </summary>
         internal static string BuildIsoBootEntry(
-            string distroName, string isoWindowsPath, bool enableAutoinstall = false)
+            string distroName, string isoWindowsPath, UnattendedBootParameters? unattended = null)
         {
+            var boot = unattended ?? UnattendedBootParameters.Interactive;
+
             string isoPath = ToGrubPath(isoWindowsPath);
-            string installerParameters =
-                (enableAutoinstall ? " autoinstall" : string.Empty) + NoPromptParameter;
-            string targetParameters = enableAutoinstall ? "quiet" : "quiet splash";
+            string installerParameters = (string.IsNullOrEmpty(boot.KernelParameters)
+                ? string.Empty
+                : " " + boot.KernelParameters) + NoPromptParameter;
+            string targetParameters = boot.IsUnattended ? "quiet" : "quiet splash";
 
             return $@"menuentry ""Instalar {distroName} (staging LinuxHub)"" {{
     insmod part_gpt
@@ -111,7 +114,7 @@ namespace LinuxHub.Features.InstallWizard.Services
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
     linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile{installerParameters} --- {targetParameters}
-{BuildInitrdStanza()}
+{BuildInitrdStanza(boot.ExtraInitrdGrubPath)}
 }}
 ";
         }
@@ -127,17 +130,27 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// desta classe, que é texto puro sem I/O — deixamos o próprio GRUB testar em tempo de
         /// boot, igual ao <c>search --file</c> já usado acima para achar a ISO: nunca um nome
         /// fixo, sempre uma checagem real contra o que está de fato dentro do loopback.
+        ///
+        /// <paramref name="extraInitrdGrubPath"/> é carregado como um segundo arquivo no mesmo
+        /// comando <c>initrd</c>. O kernel concatena todos os cpio informados num initramfs só
+        /// — é assim que o preseed do Ubiquity vira o <c>/preseed.cfg</c> que o casper procura
+        /// na raiz, sem precisar escrever dentro da ISO (que é read-only) nem depender de rede
+        /// (design.md, D1). Vai DEPOIS do initrd da ISO: entre arquivos com o mesmo caminho,
+        /// vence o último, então o nosso é quem tem que sobrepor.
         /// </summary>
-        private static string BuildInitrdStanza()
+        private static string BuildInitrdStanza(string? extraInitrdGrubPath)
         {
             string[] candidates = ["initrd.lz", "initrd.img", "initrd.gz", "initrd"];
+            string extra = string.IsNullOrWhiteSpace(extraInitrdGrubPath)
+                ? string.Empty
+                : " " + extraInitrdGrubPath;
 
             var sb = new StringBuilder();
             for (int i = 0; i < candidates.Length; i++)
             {
                 string keyword = i == 0 ? "if" : "elif";
                 sb.AppendLine($"    {keyword} [ -f (loop)/casper/{candidates[i]} ]; then");
-                sb.AppendLine($"        initrd (loop)/casper/{candidates[i]}");
+                sb.AppendLine($"        initrd (loop)/casper/{candidates[i]}{extra}");
             }
             sb.AppendLine("    fi");
 

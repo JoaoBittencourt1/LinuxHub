@@ -167,15 +167,23 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         /// independente de ter vindo de download novo, ISO já baixada ou seleção manual.</summary>
         public bool IsIsoReadyForInstall => !string.IsNullOrWhiteSpace(ResolvedIsoPath);
 
-        /// <summary>Só a build validada de ponta a ponta (ver <see cref="DistroInfo.SupportsAutoinstall"/>)
-        /// pode oferecer o toggle — pra qualquer outra distro o wizard só prepara o boot até o
-        /// instalador nativo, sem opção de ligar o que nunca foi testado.</summary>
-        public bool IsAutoinstallToggleVisible => DisplayedDistro?.SupportsAutoinstall ?? false;
+        /// <summary>Só a build com um mecanismo validado de ponta a ponta (ver <see
+        /// cref="DistroInfo.UnattendedInstall"/>) pode oferecer o toggle — pra qualquer outra
+        /// distro o wizard só prepara o boot até o instalador nativo, sem opção de ligar o que
+        /// nunca foi testado.</summary>
+        public bool IsAutoinstallToggleVisible => DisplayedDistro?.SupportsUnattendedInstall ?? false;
 
-        /// <summary>Se a instalação automática (autoinstall/cloud-init) deve rodar. Sempre
-        /// false quando a distro não suporta, mesmo que o usuário tenha ligado o toggle antes
-        /// de trocar de distro.</summary>
+        /// <summary>Se a instalação desatendida deve rodar. Sempre false quando a distro não
+        /// tem mecanismo validado, mesmo que o usuário tenha ligado o toggle antes de trocar
+        /// de distro. Qual mecanismo será usado é decidido em <see cref="ActiveMechanism"/>.</summary>
         public bool IsAutoinstallActive => IsAutoinstallToggleVisible && _useAutoinstall;
+
+        /// <summary>O mecanismo a usar de fato nesta instalação, ou <see
+        /// cref="UnattendedInstallMechanism.None"/> quando o usuário optou por não automatizar
+        /// (ou a distro não suporta) — o que faz o boot parar no instalador interativo.</summary>
+        public UnattendedInstallMechanism ActiveMechanism => IsAutoinstallActive
+            ? DisplayedDistro!.UnattendedInstall
+            : UnattendedInstallMechanism.None;
 
         public bool UseAutoinstall
         {

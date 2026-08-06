@@ -11,11 +11,15 @@ namespace LinuxHub.Common.Models
         /// <summary>Quão recomendada a distro é para iniciantes, de 1 (nada) a 5 (muito).</summary>
         public int BeginnerRating { get; set; }
 
-        /// <summary>Só true pra a build específica já validada de ponta a ponta (autoinstall/
-        /// cloud-init/GRUB). Para as demais, o wizard só prepara o boot até o instalador
-        /// nativo da própria ISO — o resto da instalação fica por conta do usuário, porque o
-        /// schema do autoinstall não tem garantia de compatibilidade entre distros/versões.</summary>
-        public bool SupportsAutoinstall { get; set; }
+        /// <summary>Mecanismo de instalação desatendida desta build — <see
+        /// cref="UnattendedInstallMechanism.None"/> (o padrão) para toda build que não foi
+        /// validada de ponta a ponta. Para essas, o wizard só prepara o boot até o instalador
+        /// nativo da própria ISO: nenhum schema de instalação desatendida tem garantia de
+        /// compatibilidade entre distros/versões, e nem todas usam o mesmo mecanismo.</summary>
+        public UnattendedInstallMechanism UnattendedInstall { get; set; }
+
+        /// <summary>Atalho de leitura para "esta build tem algum mecanismo validado".</summary>
+        public bool SupportsUnattendedInstall => UnattendedInstall != UnattendedInstallMechanism.None;
 
         // Texto de Description/Maintainer nunca é hardcoded aqui — são chaves de recurso
         // (ver constitution.md, "Nenhuma string hardcoded"), resolvidas via

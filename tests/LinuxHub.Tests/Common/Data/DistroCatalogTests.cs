@@ -1,12 +1,14 @@
+using System.Collections.Generic;
 using LinuxHub.Common.Data;
+using LinuxHub.Common.Models;
 using Xunit;
 
 namespace LinuxHub.Tests.Common.Data
 {
     /// <summary>
     /// A detecção por nome de arquivo decide mais do que o rótulo na tela: é o
-    /// <see cref="LinuxHub.Common.Models.DistroInfo.SupportsAutoinstall"/> da distro casada que
-    /// libera (ou não) a instalação automática no wizard.
+    /// <see cref="DistroInfo.UnattendedInstall"/> da distro casada que libera (ou não) a
+    /// instalação automática no wizard, e com qual mecanismo.
     /// </summary>
     public class DistroCatalogTests
     {
@@ -32,17 +34,30 @@ namespace LinuxHub.Tests.Common.Data
         public void FindByIsoFileName_UnknownName_ReturnsNull() =>
             Assert.Null(DistroCatalog.FindByIsoFileName("slackware-15.0-install-dvd.iso"));
 
-        /// <summary>Só o Ubuntu foi validado de ponta a ponta — é o que sustenta o toggle de
-        /// instalação automática aparecer nele e em mais nenhuma distro do catálogo.</summary>
+        /// <summary>Só quem foi validado de ponta a ponta declara mecanismo — é o que sustenta
+        /// o toggle de instalação automática aparecer nessas distros e em mais nenhuma. O teste
+        /// fixa o mecanismo de cada uma, e não só "tem ou não tem": declarar o mecanismo errado
+        /// gera um preseed para quem espera autoinstall (ou vice-versa), o que só apareceria
+        /// num boot real.</summary>
         [Fact]
-        public void Autoinstall_IsClaimedByUbuntuOnly()
+        public void UnattendedInstall_IsClaimedOnlyByValidatedBuilds()
         {
-            string[] withAutoinstall = DistroCatalog.All
-                .Where(distro => distro.SupportsAutoinstall)
-                .Select(distro => distro.Id)
-                .ToArray();
+            var declared = DistroCatalog.All
+                .Where(distro => distro.SupportsUnattendedInstall)
+                .ToDictionary(distro => distro.Id, distro => distro.UnattendedInstall);
 
-            Assert.Equal(new[] { "ubuntu" }, withAutoinstall);
+            Assert.Equal(
+                new Dictionary<string, UnattendedInstallMechanism>
+                {
+                    ["ubuntu"] = UnattendedInstallMechanism.Subiquity,
+                },
+                declared);
         }
+
+        /// <summary>O padrão de uma entrada nova é "sem mecanismo": esquecer de declarar não
+        /// pode virar uma promessa de automação nunca testada.</summary>
+        [Fact]
+        public void UnattendedInstall_DefaultsToNone() =>
+            Assert.Equal(UnattendedInstallMechanism.None, new DistroInfo().UnattendedInstall);
     }
 }

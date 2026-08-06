@@ -87,14 +87,22 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 NewPartitionsPlanned = newPartitionsPlanned;
         }
 
-        private sealed class FakeAutoinstallPreparationService : IAutoinstallPreparationService
+        private sealed class FakeUnattendedInstallPreparer : IUnattendedInstallPreparer
         {
             public StagingPartition? ReceivedStaging { get; private set; }
 
-            public int Prepare(InstallerConfig config, int diskIndex, StagingPartition? staging)
+            public UnattendedInstallMechanism Mechanism => UnattendedInstallMechanism.Subiquity;
+
+            public UnattendedPreparationResult Prepare(
+                InstallerConfig config, int diskIndex, StagingPartition? staging)
             {
                 ReceivedStaging = staging;
-                return 5;
+                return new UnattendedPreparationResult(
+                    SeedPartitionNumber: 5,
+                    BootParameters: new UnattendedBootParameters(
+                        IsUnattended: true,
+                        KernelParameters: "autoinstall",
+                        ExtraInitrdGrubPath: null));
             }
         }
 
@@ -180,7 +188,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 new InstallerConfigBuilder(new FakeSystemInfoProvider(), new FakeEspLocatorService()),
                 new FakeInstallerConfigWriter(),
                 partitioning ?? new FakeDiskPartitioningService(),
-                new FakeAutoinstallPreparationService(),
+                new UnattendedInstallPreparerRegistry([new FakeUnattendedInstallPreparer()]),
                 bootStaging,
                 bootSecurity ?? new FakeBootSecurityService(),
                 staging ?? new FakeStagingPartitionService(),

@@ -85,14 +85,15 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             Assert.False(vm.IsManualSelect);
         }
 
-        /// <summary>O toggle de instalação automática só pode aparecer no Ubuntu: é a única
-        /// distro cujo autoinstall foi validado de ponta a ponta.</summary>
+        /// <summary>O toggle de instalação automática só pode aparecer nas distros que
+        /// declaram um mecanismo validado de ponta a ponta — as demais nem oferecem a opção.</summary>
         [Theory]
         [InlineData("ubuntu", true)]
-        [InlineData("xubuntu", false)]
         [InlineData("mint", false)]
+        [InlineData("xubuntu", false)]
         [InlineData("arch", false)]
-        public void AutoinstallToggle_IsVisibleForUbuntuOnly(string distroId, bool expected)
+        public void AutoinstallToggle_IsVisibleOnlyForDistrosWithAMechanism(
+            string distroId, bool expected)
         {
             var vm = BuildViewModel();
 
@@ -100,6 +101,22 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
             Assert.Equal(expected, vm.IsAutoinstallToggleVisible);
             Assert.Equal(expected, vm.IsAutoinstallActive);
+        }
+
+        /// <summary>Ligar o toggle não basta: o mecanismo ativo tem que ser o da distro, senão
+        /// o wizard gera a configuração de um instalador para outro.</summary>
+        [Theory]
+        [InlineData("ubuntu", UnattendedInstallMechanism.Subiquity)]
+        [InlineData("mint", UnattendedInstallMechanism.None)]
+        [InlineData("arch", UnattendedInstallMechanism.None)]
+        public void ActiveMechanism_FollowsTheSelectedDistro(
+            string distroId, UnattendedInstallMechanism expected)
+        {
+            var vm = BuildViewModel();
+
+            vm.PrepareForDistro(Distro(distroId));
+
+            Assert.Equal(expected, vm.ActiveMechanism);
         }
     }
 }

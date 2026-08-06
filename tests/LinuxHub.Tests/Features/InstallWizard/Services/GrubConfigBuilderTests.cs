@@ -1,4 +1,5 @@
 using System.Linq;
+using LinuxHub.Features.InstallWizard.Models;
 using LinuxHub.Features.InstallWizard.Services;
 using Xunit;
 
@@ -37,7 +38,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void BuildIsoBootEntry_PutsAutoinstallBeforeTheTargetSystemSeparator()
         {
             string entry = GrubConfigBuilder.BuildIsoBootEntry(
-                "Ubuntu", @"C:\ISOs\ubuntu.iso", enableAutoinstall: true);
+                "Ubuntu", @"C:\ISOs\ubuntu.iso", Subiquity);
 
             string kernelLine = GetKernelLine(entry);
             string[] halves = kernelLine.Split(" --- ");
@@ -56,7 +57,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void BuildIsoBootEntry_WithoutAutoinstall_MatchesTheIsoOwnLoopbackRecipe()
         {
             string entry = GrubConfigBuilder.BuildIsoBootEntry(
-                "Ubuntu", @"C:\ISOs\ubuntu.iso", enableAutoinstall: false);
+                "Ubuntu", @"C:\ISOs\ubuntu.iso", UnattendedBootParameters.Interactive);
 
             Assert.DoesNotContain("autoinstall", entry);
             Assert.Contains("set gfxpayload=keep", entry);
@@ -68,15 +69,16 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         /// com "Please remove the installation medium, then press ENTER" e trava num
         /// <c>read x &lt; /dev/console</c> — o PC nunca reinicia sozinho. Como a ISO é um
         /// arquivo no disco interno, não existe mídia para remover em nenhum dos dois modos, e
-        /// o parâmetro precisa estar dos dois lados do <c>enableAutoinstall</c>.
+        /// o parâmetro precisa estar nos dois modos, desatendido ou não.
         /// </summary>
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public void BuildIsoBootEntry_AlwaysDisablesTheRemoveMediumPrompt(bool enableAutoinstall)
+        public void BuildIsoBootEntry_AlwaysDisablesTheRemoveMediumPrompt(bool unattended)
         {
             string entry = GrubConfigBuilder.BuildIsoBootEntry(
-                "Ubuntu", @"C:\ISOs\ubuntu.iso", enableAutoinstall);
+                "Ubuntu", @"C:\ISOs\ubuntu.iso",
+                unattended ? Subiquity : UnattendedBootParameters.Interactive);
 
             string[] halves = GetKernelLine(entry).Split(" --- ");
 
@@ -85,6 +87,56 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains("noprompt", halves[0]);
             Assert.DoesNotContain("noprompt", halves[1]);
         }
+
+        /// <summary>
+        /// Os dois mecanismos não podem vazar um no outro: o Ubiquity ignora <c>autoinstall</c>
+        /// e o subiquity ignora <c>automatic-ubiquity</c>, então o parâmetro errado não falha —
+        /// ele boota num instalador interativo esperando alguém, depois do reboot, quando o app
+        /// já não pode avisar nada.
+        /// </summary>
+        [Fact]
+        public void BuildIsoBootEntry_UbiquityMechanism_UsesItsOwnParametersAndExtraInitrd()
+        {
+            var ubiquity = new UnattendedBootParameters(
+                IsUnattended: true,
+                KernelParameters: "automatic-ubiquity",
+                ExtraInitrdGrubPath: "/linuxhub-preseed.cpio");
+
+            string entry = GrubConfigBuilder.BuildIsoBootEntry(
+                "Linux Mint", @"C:\ISOs\mint.iso", ubiquity);
+
+            Assert.Contains("automatic-ubiquity", GetKernelLine(entry));
+            Assert.DoesNotContain("autoinstall", entry);
+
+            // O cpio vai DEPOIS do initrd da ISO: entre arquivos de mesmo caminho no
+            // initramfs concatenado, vence o último — o nosso precisa sobrepor.
+            Assert.Contains(
+                "initrd (loop)/casper/initrd.lz /linuxhub-preseed.cpio", entry);
+        }
+
+        /// <summary>Sem initrd extra a linha não pode ganhar um espaço solto no fim — o GRUB
+        /// trataria como um segundo caminho vazio.</summary>
+        [Fact]
+        public void BuildIsoBootEntry_WithoutExtraInitrd_LeavesTheInitrdLineUntouched()
+        {
+            string entry = GrubConfigBuilder.BuildIsoBootEntry(
+                "Ubuntu", @"C:\ISOs\ubuntu.iso", Subiquity);
+
+            string[] initrdLines = entry
+                .Split('\n')
+                .Select(line => line.Trim('\r').TrimStart())
+                .Where(line => line.StartsWith("initrd "))
+                .ToArray();
+
+            Assert.NotEmpty(initrdLines);
+            Assert.All(initrdLines, line => Assert.DoesNotContain(".lz ", line));
+        }
+
+        /// <summary>O que o preparer do subiquity devolve — os testes desta classe usam isto
+        /// em vez de montar parâmetros à mão, pra que a diferença entre um mecanismo e outro
+        /// fique nos testes que são sobre isso.</summary>
+        private static UnattendedBootParameters Subiquity =>
+            new(IsUnattended: true, KernelParameters: "autoinstall", ExtraInitrdGrubPath: null);
 
         private static string GetKernelLine(string entry) =>
             entry.Split('\n').Single(line => line.TrimStart().StartsWith("linux ")).Trim();

@@ -95,6 +95,43 @@ devem respeitar estes princípios. Se um princípio precisar ser quebrado, isso
 - Nunca silenciar exceções em operações de disco/boot — o usuário precisa
   saber quando algo falhou.
 
+### 6.1 Automação desatendida: falhar parando, nunca prosseguindo
+
+Regras nascidas de um incidente real (2026-08-05): uma instalação automática
+do Mint apagou a ESP e levou junto as entradas EFI de todas as outras distros
+da máquina. Ver `openspec/changes/mint-ubiquity-autoinstall`.
+
+- **Nunca ligar automação de particionamento sem o alvo garantido.** O perigo
+  real não são as confirmações destrutivas em si — é preencher parcialmente as
+  respostas que selecionam o disco. No partman, `partman-auto/method` com
+  `partman-auto/disk` vazio faz o instalador **eleger sozinho** o disco quando a
+  máquina só tem um (`display.d/10initial_auto`), e `method` sempre significa
+  disco inteiro. Foi essa combinação que apagou a ESP no incidente. Um valor de
+  alvo só é gravado se resolveu de verdade; nada de default implícito.
+- **As confirmações destrutivas são a última rede — ligá-las é assumir que tudo
+  antes está garantido.** `partman/confirm`,
+  `partman-partitioning/confirm_write_new_label` e equivalentes só ficam
+  ligadas depois que a seleção do alvo é comprovadamente à prova de falha; até
+  lá, elas são o que faz o instalador parar em vez de destruir.
+- **Automação incompleta é preferível a automação insegura.** Se uma etapa não
+  pode ser automatizada com garantia, ela fica manual e o instalador pergunta.
+  Nunca se preenche uma resposta "provável" para uma pergunta que decide o
+  destino de um disco. Tentar um valor que, se não casar, faz o instalador
+  perguntar (falha segura) é aceitável; tentar um que, se não casar, o faz
+  escolher sozinho, não é.
+- **Teste destrutivo é em VM com snapshot, nunca na máquina do usuário.** É lá
+  que o caminho completo deve ser exercitado — e o que impede esse caminho de
+  alcançar uma máquina real é a declaração no catálogo (§7.1), não o instalador
+  parar no meio.
+- **Nada que rode fora do Windows pode ser assumido presente.** Comando usado
+  em script gerado para o initramfs, o live ou o chroot precisa ser verificado
+  no artefato real (initrd/pacote/ISO) antes de ser usado. `lsblk` e
+  `debconf-set` não existem no initramfs do casper — foi o que quebrou a
+  identificação do disco no incidente.
+- **Arquivo gravado no initramfs some no `switch_root`.** Qualquer coisa que o
+  instalador vá ler depois dessa troca precisa viver no filesystem live ou numa
+  partição, não só no initramfs.
+
 ## 7. Processo
 
 - Antes de implementar qualquer mudança neste projeto, leia este documento.
@@ -103,3 +140,18 @@ devem respeitar estes princípios. Se um princípio precisar ser quebrado, isso
   `openspec/changes/` antes da implementação.
 - Esta constitution pode evoluir, mas mudanças nela são deliberadas — nunca
   um efeito colateral de uma mudança de feature.
+
+### 7.1 Validação antes de declarar
+
+- **Uma capacidade só é declarada no catálogo depois de validada num boot
+  real.** `DistroInfo.UnattendedInstall` (e qualquer flag equivalente que
+  habilite comportamento destrutivo) fica em `None` até existir a prova. Foi
+  declarar antes que transformou código não testado em código rodando na
+  máquina do usuário, no incidente de 2026-08-05.
+- **Quando um plano define uma task como gate, o que vem depois dela fica
+  desarmado em runtime.** Implementar adiante é aceitável; deixar alcançável
+  não é. Autorização para fazer todas as tasks é autorização de esforço, não
+  de risco — e quem executa o gate precisa saber que ele ainda não passou.
+- **Risco anotado não é risco resolvido.** Um limite registrado em
+  `TEST_MATRIX.md` ou num comentário não autoriza seguir como se ele não
+  existisse; ou é fechado, ou o que depende dele fica desarmado.

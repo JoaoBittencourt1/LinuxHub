@@ -25,7 +25,7 @@ namespace LinuxHub.Common.Data
                 Version = "24.04.4",
                 CreatedYear = "2004",
                 BeginnerRating = 5,
-                SupportsAutoinstall = true,
+                UnattendedInstall = UnattendedInstallMechanism.Subiquity,
                 ImagePath = "pack://application:,,,/Assets/Images/Ubuntu.png",
                 DownloadLink = "https://ubuntu.com/download/desktop",
                 DirectDownloadLink = "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso",
@@ -40,12 +40,18 @@ namespace LinuxHub.Common.Data
                 Id = "mint",
                 Name = "Linux Mint",
                 Family = "Debian",
-                Version = "22.2",
+                Version = "22.3",
                 CreatedYear = "2006",
                 BeginnerRating = 5,
+                // NÃO declarar UbiquityPreseed aqui até a receita partman ser validada num
+                // boot real. Já foi declarado antes disso uma vez (2026-08-05) e o resultado
+                // foi o partman reparticionar o disco inteiro no modo dual-boot: ESP apagada,
+                // entradas EFI de todas as outras distros perdidas, máquina sem bootloader.
+                // O que faltava está em openspec/changes/mint-ubiquity-autoinstall —
+                // partman-auto/init_automatically_partition + o confirm_write_new_label.
                 ImagePath = "pack://application:,,,/Assets/Images/mint.png",
                 DownloadLink = "https://linuxmint.com/download.php",
-                DirectDownloadLink = "https://mint.portalidea.com.br/iso/stable/22.2/linuxmint-22.2-cinnamon-64bit.iso",
+                DirectDownloadLink = "https://mint.portalidea.com.br/iso/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso",
                 CarouselImages = new[]
                 {
                     "pack://application:,,,/Assets/Images/Mint/Mint1.png",
@@ -221,7 +227,7 @@ namespace LinuxHub.Common.Data
         /// Entre vários Ids que casam, vence o mais específico (o mais longo): o nome
         /// <c>xubuntu-25.10-desktop-amd64.iso</c> contém "ubuntu", e antes quem ganhava era a
         /// primeira entrada da lista — o Ubuntu. Uma ISO de Xubuntu/Kubuntu era detectada como
-        /// Ubuntu, o que arrastava junto o <see cref="DistroInfo.SupportsAutoinstall"/> dele e
+        /// Ubuntu, o que arrastava junto o <see cref="DistroInfo.UnattendedInstall"/> dele e
         /// fazia o wizard oferecer instalação automática pra uma distro nunca validada.
         /// </summary>
         public static DistroInfo? FindByIsoFileName(string fileName)

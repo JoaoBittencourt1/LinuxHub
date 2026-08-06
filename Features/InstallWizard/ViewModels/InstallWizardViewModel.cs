@@ -3,6 +3,7 @@ using System.Windows.Input;
 using LinuxHub.Common.Localization;
 using LinuxHub.Common.Models;
 using LinuxHub.Common.Mvvm;
+using LinuxHub.Features.InstallWizard.Models;
 using LinuxHub.Features.InstallWizard.Services;
 
 namespace LinuxHub.Features.InstallWizard.ViewModels
@@ -17,7 +18,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private readonly InstallerConfigBuilder _configBuilder;
         private readonly IInstallerConfigWriter _configWriter;
         private readonly IDiskPartitioningService _diskPartitioning;
-        private readonly IAutoinstallPreparationService _autoinstallPreparation;
+        private readonly IUnattendedInstallPreparerRegistry _unattendedPreparers;
         private readonly IBootStagingService _bootStaging;
         private readonly IBootSecurityService _bootSecurity;
         private readonly IStagingPartitionService _stagingPartition;
@@ -32,7 +33,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             InstallerConfigBuilder configBuilder,
             IInstallerConfigWriter configWriter,
             IDiskPartitioningService diskPartitioning,
-            IAutoinstallPreparationService autoinstallPreparation,
+            IUnattendedInstallPreparerRegistry unattendedPreparers,
             IBootStagingService bootStaging,
             IBootSecurityService bootSecurity,
             IStagingPartitionService stagingPartition,
@@ -44,7 +45,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             _configBuilder = configBuilder ?? throw new ArgumentNullException(nameof(configBuilder));
             _configWriter = configWriter ?? throw new ArgumentNullException(nameof(configWriter));
             _diskPartitioning = diskPartitioning ?? throw new ArgumentNullException(nameof(diskPartitioning));
-            _autoinstallPreparation = autoinstallPreparation ?? throw new ArgumentNullException(nameof(autoinstallPreparation));
+            _unattendedPreparers = unattendedPreparers ?? throw new ArgumentNullException(nameof(unattendedPreparers));
             _bootStaging = bootStaging ?? throw new ArgumentNullException(nameof(bootStaging));
             _bootSecurity = bootSecurity ?? throw new ArgumentNullException(nameof(bootSecurity));
             _stagingPartition = stagingPartition ?? throw new ArgumentNullException(nameof(stagingPartition));
@@ -384,9 +385,11 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 isoPathForGrub = StagingPartitionService.IsoGrubPath;
             }
 
-            // Distro sem autoinstall validado (ou usuário desligou o toggle): só prepara o
-            // boot até o instalador nativo da ISO — sem install.conf, sem semente de
-            // cloud-init, o resto da instalação fica por conta do usuário dentro dele.
+            // Distro sem mecanismo validado (ou usuário desligou o toggle): só prepara o
+            // boot até o instalador nativo da ISO — sem install.conf, sem configuração
+            // desatendida, o resto da instalação fica por conta do usuário dentro dele.
+            UnattendedBootParameters unattended = UnattendedBootParameters.Interactive;
+
             if (Iso.IsAutoinstallActive)
             {
                 progress.Report(loc["Wizard_InstallStepWritingConfig"]);
@@ -406,10 +409,13 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 var config = _configBuilder.Build(request);
                 _configWriter.Save(config);
 
-                // No substituir precisa vir depois da staging: o autoinstall descreve o disco
-                // incluindo a partição de staging como preservada, senão o curtin a trata como
-                // espaço livre e apaga a ISO que está usando para rodar.
-                _autoinstallPreparation.Prepare(config, targetDiskIndex, staging);
+                // No substituir precisa vir depois da staging: a configuração desatendida
+                // descreve o disco incluindo a partição de staging como preservada, senão o
+                // instalador a trata como espaço livre e apaga a ISO que está usando pra rodar.
+                unattended = _unattendedPreparers
+                    .Resolve(Iso.ActiveMechanism)
+                    .Prepare(config, targetDiskIndex, staging)
+                    .BootParameters;
             }
 
             progress.Report(loc["Wizard_InstallStepStagingBoot"]);
@@ -419,7 +425,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 IsoPath: isoPathForGrub,
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,
-                EnableAutoinstall: Iso.IsAutoinstallActive));
+                Unattended: unattended));
         }
     }
 }

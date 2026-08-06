@@ -48,7 +48,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                 request.DistroName,
                 request.IsoPath,
                 includeWindowsChainload: !request.IsUefi,
-                enableAutoinstall: request.EnableAutoinstall);
+                unattended: request.Unattended);
 
             if (request.IsUefi)
                 InstallUefi(request, grubCfg);

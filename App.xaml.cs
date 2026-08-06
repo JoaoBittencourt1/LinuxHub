@@ -35,8 +35,14 @@ namespace LinuxHub
 
             ICloudInitSeedWriter cloudInitSeedWriter = new CloudInitSeedWriter();
             IDiskLayoutProvider diskLayoutProvider = new DiskLayoutProvider();
-            IAutoinstallPreparationService autoinstallPreparationService =
-                new AutoinstallPreparationService(cloudInitSeedWriter, diskLayoutProvider);
+            IUnattendedInitrdWriter unattendedInitrdWriter = new UnattendedInitrdWriter();
+            IUnattendedInstallPreparerRegistry unattendedPreparerRegistry =
+                new UnattendedInstallPreparerRegistry(
+                [
+                    new SubiquityInstallPreparer(cloudInitSeedWriter, diskLayoutProvider),
+                    new UbiquityInstallPreparer(
+                        cloudInitSeedWriter, diskLayoutProvider, unattendedInitrdWriter),
+                ]);
 
             IGrubAssetProvider grubAssetProvider = new GrubAssetProvider();
             IMbrBackupService mbrBackupService = new MbrBackupService();
@@ -59,7 +65,7 @@ namespace LinuxHub
                 installerConfigBuilder,
                 installerConfigWriter,
                 diskPartitioningService,
-                autoinstallPreparationService,
+                unattendedPreparerRegistry,
                 bootStagingService,
                 bootSecurityService,
                 stagingPartitionService,

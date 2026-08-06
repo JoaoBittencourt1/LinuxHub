@@ -3,7 +3,7 @@ using LinuxHub.Common.Models;
 namespace LinuxHub.Features.InstallWizard.Services
 {
     /// <summary><paramref name="IsExpectedVersion"/> só é relevante quando
-    /// <see cref="DistroInfo.SupportsAutoinstall"/> é true — um arquivo cujo nome não bate com
+    /// <see cref="DistroInfo.SupportsUnattendedInstall"/> é true — um arquivo cujo nome não bate com
     /// a versão testada do catálogo (ex.: "ubuntu-26.04...iso" contra o Ubuntu 24.04 validado)
     /// não impede a seleção nem desliga o toggle de autoinstall, só liga um alerta de que ele
     /// pode não funcionar nessa versão.</summary>
