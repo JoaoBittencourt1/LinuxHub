@@ -22,6 +22,7 @@ namespace LinuxHub.Features.Catalog.ViewModels
             _maintainerKey = distro.MaintainerKey;
             CreatedYear = distro.CreatedYear;
             BeginnerRating = distro.BeginnerRating;
+            IsUntested = !distro.IsTested;
             ImagePath = distro.ImagePath;
             DownloadLink = distro.DownloadLink;
             CarouselItems = distro.CarouselImages;
@@ -50,6 +51,11 @@ namespace LinuxHub.Features.Catalog.ViewModels
         public string Maintainer => LocalizationManager.Instance[_maintainerKey];
         public string CreatedYear { get; }
         public int BeginnerRating { get; }
+
+        /// <summary>Exposto na forma negada porque é assim que a View usa: o aviso aparece
+        /// para quem NÃO foi testada, e é a maioria do catálogo. Ver
+        /// <see cref="DistroInfo.IsTested"/>.</summary>
+        public bool IsUntested { get; }
         public string ImagePath { get; }
         public string DownloadLink { get; }
         public IReadOnlyList<string> CarouselItems { get; }

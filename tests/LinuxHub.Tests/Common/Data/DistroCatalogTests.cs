@@ -59,5 +59,32 @@ namespace LinuxHub.Tests.Common.Data
         [Fact]
         public void UnattendedInstall_DefaultsToNone() =>
             Assert.Equal(UnattendedInstallMechanism.None, new DistroInfo().UnattendedInstall);
+
+        /// <summary>É o que decide se a UI mostra o aviso vermelho e o ícone de risco. Marcar
+        /// uma distro como testada sem ter testado remove esses dois avisos de uma vez.</summary>
+        [Fact]
+        public void IsTested_IsClaimedOnlyByDistrosActuallyExercised()
+        {
+            string[] tested = DistroCatalog.All
+                .Where(distro => distro.IsTested)
+                .Select(distro => distro.Id)
+                .ToArray();
+
+            Assert.Equal(new[] { "ubuntu", "mint" }, tested);
+        }
+
+        /// <summary>O padrão de uma entrada nova é "não testada": esquecer de declarar deixa
+        /// os avisos LIGADOS, que é o lado seguro do erro.</summary>
+        [Fact]
+        public void IsTested_DefaultsToFalse() => Assert.False(new DistroInfo().IsTested);
+
+        /// <summary>Testar o boot é pré-requisito de declarar mecanismo de instalação
+        /// desatendida, nunca o contrário — o inverso significaria automatizar uma distro em
+        /// que o app nunca chegou nem ao instalador.</summary>
+        [Fact]
+        public void UnattendedInstall_IsNeverClaimedByAnUntestedDistro() =>
+            Assert.All(
+                DistroCatalog.All.Where(distro => distro.SupportsUnattendedInstall),
+                distro => Assert.True(distro.IsTested, $"'{distro.Id}' declara mecanismo sem estar testada"));
     }
 }

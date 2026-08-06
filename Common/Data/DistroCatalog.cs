@@ -25,6 +25,7 @@ namespace LinuxHub.Common.Data
                 Version = "24.04.4",
                 CreatedYear = "2004",
                 BeginnerRating = 5,
+                IsTested = true,
                 UnattendedInstall = UnattendedInstallMechanism.Subiquity,
                 ImagePath = "pack://application:,,,/Assets/Images/Ubuntu.png",
                 DownloadLink = "https://ubuntu.com/download/desktop",
@@ -43,6 +44,9 @@ namespace LinuxHub.Common.Data
                 Version = "22.3",
                 CreatedYear = "2006",
                 BeginnerRating = 5,
+                // Boot pela staging testado de verdade (foi ele que expôs o initrd.lz).
+                // A instalação desatendida é outra história — ver abaixo.
+                IsTested = true,
                 // NÃO declarar UbiquityPreseed aqui até a receita partman ser validada num
                 // boot real. Já foi declarado antes disso uma vez (2026-08-05) e o resultado
                 // foi o partman reparticionar o disco inteiro no modo dual-boot: ESP apagada,

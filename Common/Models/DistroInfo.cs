@@ -11,6 +11,20 @@ namespace LinuxHub.Common.Models
         /// <summary>Quão recomendada a distro é para iniciantes, de 1 (nada) a 5 (muito).</summary>
         public int BeginnerRating { get; set; }
 
+        /// <summary>
+        /// Se o fluxo do app já foi exercitado de verdade nesta distro — baixar a ISO, montar
+        /// o boot pela staging e chegar ao instalador dela. Nada disso é genérico: cada distro
+        /// empacota o initrd com um nome diferente, boota o live de um jeito diferente e traz
+        /// um instalador diferente. As não marcadas aqui não estão quebradas por definição,
+        /// só nunca foram testadas — e o usuário precisa saber disso antes de reiniciar a
+        /// máquina.
+        ///
+        /// É independente de <see cref="UnattendedInstall"/>: o Mint boota (testado) mas ainda
+        /// não tem instalação desatendida validada. Testar o boot é pré-requisito de declarar
+        /// mecanismo, nunca o contrário.
+        /// </summary>
+        public bool IsTested { get; set; }
+
         /// <summary>Mecanismo de instalação desatendida desta build — <see
         /// cref="UnattendedInstallMechanism.None"/> (o padrão) para toda build que não foi
         /// validada de ponta a ponta. Para essas, o wizard só prepara o boot até o instalador

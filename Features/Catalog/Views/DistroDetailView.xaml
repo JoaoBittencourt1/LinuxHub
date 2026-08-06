@@ -7,6 +7,7 @@
 
     <UserControl.Resources>
         <conv:RatingToStarsConverter x:Key="RatingToStars"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
 
     <Grid Margin="24">
@@ -35,6 +36,18 @@
                        FontSize="28"
                        FontWeight="Bold"
                        Margin="0,0,0,6"/>
+
+            <!-- Aviso de distro não testada: vem antes de tudo (inclusive da descrição) de
+                 propósito — quem abre esta tela está decidindo se instala, e a decisão muda
+                 se o app nunca foi exercitado nessa distro. Severity="Error" e não "Warning"
+                 porque a consequência possível é a máquina não iniciar. -->
+            <ui:InfoBar Severity="Error"
+                        IsOpen="True"
+                        IsClosable="False"
+                        Margin="0,0,0,14"
+                        Title="{loc:Loc CatalogDetail_UntestedWarningTitle}"
+                        Message="{loc:Loc CatalogDetail_UntestedWarningMessage}"
+                        Visibility="{Binding IsUntested, Converter={StaticResource BoolToVis}}"/>
 
             <!-- Metadados: origem e mantenedor -->
             <StackPanel Orientation="Horizontal" Margin="0,0,0,14">

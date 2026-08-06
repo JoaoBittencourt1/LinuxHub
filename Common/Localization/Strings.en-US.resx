@@ -452,4 +452,13 @@ Select a valid Linux ISO.</value>
   <data name="Wizard_TestedDistroWarningMessage" xml:space="preserve">
     <value>Automated installation has only been tested with Ubuntu 24.04. The other distributions and versions in the catalog have not been validated and may fail partway through, after the disk has already been modified.</value>
   </data>
+  <data name="CatalogDetail_UntestedWarningTitle" xml:space="preserve">
+    <value>Untested distro</value>
+  </data>
+  <data name="CatalogDetail_UntestedWarningMessage" xml:space="preserve">
+    <value>LinuxBit has not been tested with this distro yet. Installing may fail or leave the computer unable to boot. So far only Ubuntu and Linux Mint have been properly verified.</value>
+  </data>
+  <data name="Wizard_UntestedDistroTooltip" xml:space="preserve">
+    <value>Untested distro — installation may fail</value>
+  </data>
 </root>

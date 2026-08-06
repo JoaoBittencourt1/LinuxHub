@@ -12,6 +12,7 @@
         <sys:BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBooleanConverter x:Key="InverseBool"/>
         <conv:EnumMatchConverter x:Key="EnumMatch"/>
+        <conv:FalseToVisibleConverter x:Key="FalseToVisible"/>
     </UserControl.Resources>
 
     <Grid>
@@ -95,10 +96,28 @@
                             <TextBlock Text="{loc:Loc Wizard_SelectedDistributionLabel}" Opacity="0.7" Margin="0,0,0,6"/>
 
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- Sem DisplayMemberPath: cada item carrega o ícone de risco
+                                     das distros nunca testadas (DistroInfo.IsTested), para a
+                                     escolha já nascer informada em vez de o usuário descobrir
+                                     depois de reiniciar. -->
                                 <ComboBox Width="220"
                                           ItemsSource="{Binding Iso.Distros}"
-                                          DisplayMemberPath="Name"
-                                          SelectedItem="{Binding Iso.SelectedDistro}"/>
+                                          SelectedItem="{Binding Iso.SelectedDistro}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="Warning24"
+                                                               FontSize="16"
+                                                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,0,6,0"
+                                                               ToolTipService.ToolTip="{loc:Loc Wizard_UntestedDistroTooltip}"
+                                                               Visibility="{Binding IsTested, Converter={StaticResource FalseToVisible}}"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
 
                                 <ui:Button Content="{loc:Loc Wizard_DownloadIsoButton}"
                                            Appearance="Primary"
