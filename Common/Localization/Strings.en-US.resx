@@ -94,10 +94,10 @@
     <value>Install now</value>
   </data>
   <data name="CatalogDetail_DownloadLabel" xml:space="preserve">
-    <value>Download:</value>
+    <value>Download from the official website:</value>
   </data>
   <data name="CatalogDetail_DownloadLinkText" xml:space="preserve">
-    <value>Click here to download!</value>
+    <value>Go to official website ↗</value>
   </data>
   <data name="CatalogDetail_LinkOpenFailedTitle" xml:space="preserve">
     <value>Error</value>
@@ -460,5 +460,20 @@ Select a valid Linux ISO.</value>
   </data>
   <data name="Wizard_UntestedDistroTooltip" xml:space="preserve">
     <value>Untested distro — installation may fail</value>
+  </data>
+  <data name="UpdateNotice_Title" xml:space="preserve">
+    <value>Update available</value>
+  </data>
+  <data name="UpdateNotice_Message" xml:space="preserve">
+    <value>A newer version of LinuxBit is available. Updating may fix known issues and improve your experience.</value>
+  </data>
+  <data name="UpdateNotice_Versions" xml:space="preserve">
+    <value>You are running version {0} — version {1} is available.</value>
+  </data>
+  <data name="UpdateNotice_Download" xml:space="preserve">
+    <value>Download update</value>
+  </data>
+  <data name="UpdateNotice_Dismiss" xml:space="preserve">
+    <value>Not now</value>
   </data>
 </root>

@@ -2,6 +2,7 @@ using System.Windows;
 using LinuxHub.Features.Catalog.ViewModels;
 using LinuxHub.Features.InstallWizard.Services;
 using LinuxHub.Features.InstallWizard.ViewModels;
+using LinuxHub.Features.UpdateCheck.Services;
 using LinuxHub.Shell;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -71,9 +72,16 @@ namespace LinuxHub
                 stagingPartitionService,
                 isoFileInfoProvider);
 
+            IUpdateCheckService updateCheckService = new GitHubUpdateCheckService();
+            var updateNoticePresenter = new UpdateNoticePresenter(updateCheckService);
+
             var mainWindow = new MainWindow(catalogViewModel, installWizardViewModel);
             MainWindow = mainWindow;
             mainWindow.Show();
+
+            // Depois do Show(), e sem esperar: a janela precisa estar visível e utilizável
+            // mesmo que a rede esteja lenta ou não responda.
+            updateNoticePresenter.CheckInBackground(mainWindow);
         }
     }
 }
