@@ -76,6 +76,25 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 UbiquityPreseedBuilder.BuildPreseed(Config(), Hash, "d=/dev/sda", isReplaceMode: false),
                 "ubiquity/reboot"));
 
+        /// <summary>
+        /// A página `prepare` trava a instalação se estas duas não vierem respondidas — no
+        /// teste em VM de 2026-08-10 o Ubiquity emitiu <c>INPUT high ubiquity/use_nonfree</c>,
+        /// renderizou o widget e ficou esperando. Nenhuma leitura estática do pacote tinha
+        /// revelado essa parada, então o teste existe para que ela não volte em silêncio.
+        /// </summary>
+        [Fact]
+        public void BuildPreseed_AnswersThePreparePageInsteadOfStopping()
+        {
+            string preseed = UbiquityPreseedBuilder.BuildPreseed(
+                Config(), Hash, "d=/dev/sda", isReplaceMode: false);
+
+            Assert.Equal("true", ValueOf(preseed, "ubiquity/use_nonfree"));
+
+            // Baixar atualizações depende de rede, que não é garantida; sem isso o passo
+            // trava por minutos quando ela falta.
+            Assert.Equal("false", ValueOf(preseed, "ubiquity/download_updates"));
+        }
+
         /// <summary>A receita vai num arquivo, não inline: ela tem espaços e quebras de linha,
         /// que não cabem num valor de debconf numa linha só.</summary>
         [Fact]
@@ -85,22 +104,28 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 "partman-auto/expert_recipe_file"));
 
         /// <summary>
-        /// `partman-auto/method` significa DISCO INTEIRO: em `display.d/10initial_auto` (o
-        /// partman da própria ISO), method+disk caem direto em `autopartition "$id"`. No
-        /// dual-boot isso apagaria o Windows.
+        /// EXPERIMENTAL (task 5b.6) — no dual-boot o `partman-auto/method` agora É emitido,
+        /// porque o teste em VM de 2026-08-10 provou que ele é o interruptor do modo automático
+        /// inteiro: sem a chave, o ubiquity fica em `auto_state = None` e nada é automatizado.
         ///
-        /// Pior: com `method` setado e `partman-auto/disk` VAZIO, o mesmo script elege sozinho
-        /// o disco quando a máquina só tem um. Foi assim que a instalação de 2026-08-05 apagou
-        /// a ESP do usuário. Não emitir `method` no dual-boot fecha esse caminho na origem.
+        /// Isso torna esta a asserção mais importante do arquivo: `method` sozinho significa
+        /// DISCO INTEIRO. É a companhia do `init_automatically_partition` que o converte em
+        /// "usar o espaço livre". Se alguma refatoração deixar cair a segunda chave e mantiver
+        /// a primeira, o resultado não é uma pergunta ao usuário — é o Windows apagado, o
+        /// mecanismo exato do incidente de 2026-08-05.
         /// </summary>
         [Fact]
-        public void BuildPreseed_DualBoot_NeverSetsTheWholeDiskMethod()
+        public void BuildPreseed_DualBoot_NeverSetsTheMethodWithoutTheFreeSpaceChoice()
         {
             string preseed = UbiquityPreseedBuilder.BuildPreseed(
                 Config(), Hash, "d=/dev/sda", isReplaceMode: false);
 
-            Assert.DoesNotContain("partman-auto/method", preseed);
-            Assert.Contains("biggest_free", preseed);
+            if (!preseed.Contains("partman-auto/method"))
+                return;
+
+            Assert.Equal(
+                UbiquityPreseedBuilder.DualBootAutomaticPartitionChoice,
+                ValueOf(preseed, "partman-auto/init_automatically_partition"));
         }
 
         /// <summary>No substituir o disco inteiro É o alvo, então `regular` é o correto — e é

@@ -53,6 +53,23 @@ namespace LinuxHub.Features.InstallWizard.Services
         public const string AutomaticParameter = "automatic-ubiquity";
 
         /// <summary>
+        /// EXPERIMENTAL — valor de <c>partman-auto/init_automatically_partition</c> no
+        /// dual-boot, sob investigação por tentativa e erro em VM (task 5b.6).
+        ///
+        /// O log do teste de 2026-08-10 provou que <c>partman-auto/method</c> é o interruptor
+        /// do modo automático inteiro: sem ele o ubiquity lê a chave, não acha valor e fica em
+        /// <c>auto_state = None</c> — a pergunta do particionamento nunca chega a ser feita.
+        /// Ligar o <c>method</c> no dual-boot reabre o risco que ele fechava: se este valor não
+        /// casar, o partman reparticiona o DISCO INTEIRO em vez de perguntar. É o mecanismo
+        /// exato do incidente de 2026-08-05.
+        ///
+        /// Enquanto este valor não estiver comprovado num boot real, a build que o contém é de
+        /// VM com snapshot, não de release. Os candidatos vêm de
+        /// <c>/lib/partman/automatically_partition/*/</c> na ISO.
+        /// </summary>
+        public const string DualBootAutomaticPartitionChoice = "biggest_free";
+
+        /// <summary>
         /// Monta o <c>preseed.cfg</c>. <paramref name="passwordHash"/> é o hash SHA-512-crypt
         /// da senha: o preseed é gravado numa partição do Windows e sobrevive ao boot, então a
         /// senha em texto claro aqui ficaria legível para qualquer um com acesso ao disco.
@@ -87,6 +104,21 @@ namespace LinuxHub.Features.InstallWizard.Services
             Append(sb, "d-i", "netcfg/get_hostname", "string", config.Hostname);
             sb.AppendLine();
 
+            // A página `prepare` do Ubiquity (ubi-prepare.Page) pergunta estas duas. Sem elas o
+            // instalador para e espera resposta — observado no teste em VM de 2026-08-10, onde
+            // ele emitiu `INPUT high ubiquity/use_nonfree` e renderizou o widget. Nenhuma
+            // leitura estática do pacote tinha apontado essa parada.
+            sb.AppendLine("# --- Preparação ---");
+            // Codecs e drivers proprietários: o Mint é distro de iniciante e já os traz por
+            // padrão na instalação interativa — negar aqui entregaria uma máquina com menos
+            // suporte de mídia e Wi-Fi do que quem instala pelo caminho normal.
+            Append(sb, "ubiquity", "ubiquity/use_nonfree", "boolean", "true");
+            // Baixar atualizações durante a instalação depende de rede, que o LinuxHub não
+            // garante — e é justamente o passo que trava por minutos quando ela falta.
+            // Atualizar depois do primeiro boot é o caminho seguro.
+            Append(sb, "ubiquity", "ubiquity/download_updates", "boolean", "false");
+            sb.AppendLine();
+
             sb.AppendLine("# --- Disco alvo ---");
             // O caminho do disco no Linux não é previsível a partir do Windows, então ele é
             // resolvido em tempo de boot pela tabela de partição e escrito de volta no debconf
@@ -97,30 +129,29 @@ namespace LinuxHub.Features.InstallWizard.Services
             sb.AppendLine("# --- Particionamento ---");
             Append(sb, "d-i", "partman-auto/expert_recipe_file", "string", RecipePathInLiveFilesystem);
 
-            if (isReplaceMode)
+            // `regular` em `display.d/10initial_auto` (partman da ISO): method+disk caem no ramo
+            // `autopartition "$id"`. No modo substituir isso é exatamente o objetivo — o disco
+            // inteiro é para ser reparticionado.
+            //
+            // No dual-boot, NÃO é o objetivo, e ele está aqui assim mesmo por uma razão medida:
+            // o teste de 2026-08-10 mostrou que o ubiquity consulta `partman-auto/method` para
+            // decidir se entra em modo automático, e sem a chave fica em `auto_state = None`
+            // para sempre — nenhuma automação acontece, o particionamento vira manual. O
+            // interruptor da automação e o gatilho do disco inteiro são a MESMA chave.
+            //
+            // Consequência que não dá para esconder: no dual-boot, se
+            // `DualBootAutomaticPartitionChoice` não casar com uma opção real do partman, o que
+            // acontece não é "ele pergunta" — é o disco inteiro ser reparticionado. Enquanto
+            // esse valor não estiver comprovado, esta configuração é de VM com snapshot.
+            Append(sb, "d-i", "partman-auto/method", "string", "regular");
+
+            if (!isReplaceMode)
             {
-                // `regular` só é correto aqui: em `display.d/10initial_auto` (partman da ISO),
-                // method+disk caem no ramo `autopartition "$id"`, que reparticiona o DISCO
-                // INTEIRO sem perguntar nada. É exatamente o que o modo substituir quer.
-                Append(sb, "d-i", "partman-auto/method", "string", "regular");
-            }
-            else
-            {
-                // E é exatamente o que o dual-boot NÃO quer — por isso `method` fica de fora
-                // aqui. Além de significar disco inteiro, ele arma um atalho perigoso: com
-                // `method` setado e `partman-auto/disk` vazio, o mesmo script elege sozinho o
-                // disco quando a máquina só tem um. Foi assim que a instalação de 2026-08-05
-                // apagou a ESP do usuário — o alvo não tinha sido gravado e o partman escolheu.
-                // Sem `method`, esse caminho não existe.
-                //
-                // O dual-boot precisa do espaço livre, não do disco: a escolha vem do
-                // `automatically_partition`, cujo valor é um id `$dev//$id` calculado em
-                // runtime (`automatically_partition/50biggest_free/choices`). Não dá para
-                // preseedar um literal com certeza — mandamos `biggest_free` como tentativa: se
-                // o partman casar pelo nome do diretório, a instalação segue sozinha; se não
-                // casar, ele simplesmente pergunta essa única tela. Falha segura, e o log do
-                // teste diz qual é o valor aceito (task 5b.6).
-                Append(sb, "d-i", "partman-auto/init_automatically_partition", "select", "biggest_free");
+                // Só no dual-boot: diz ao partman para usar o espaço livre em vez de tomar o
+                // disco. É esta linha, e só ela, que separa "instalar ao lado do Windows" de
+                // "apagar o Windows" — ver o comentário de DualBootAutomaticPartitionChoice.
+                Append(sb, "d-i", "partman-auto/init_automatically_partition", "select",
+                    DualBootAutomaticPartitionChoice);
             }
 
             // As confirmações do partman. Ficam ligadas para o teste em VM exercitar o caminho
