@@ -89,7 +89,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         /// declaram um mecanismo validado de ponta a ponta — as demais nem oferecem a opção.</summary>
         [Theory]
         [InlineData("ubuntu", true)]
-        [InlineData("mint", true)]
+        [InlineData("mint", false)]
         [InlineData("xubuntu", false)]
         [InlineData("arch", false)]
         public void AutoinstallToggle_IsVisibleOnlyForDistrosWithAMechanism(
@@ -107,7 +107,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         /// o wizard gera a configuração de um instalador para outro.</summary>
         [Theory]
         [InlineData("ubuntu", UnattendedInstallMechanism.Subiquity)]
-        [InlineData("mint", UnattendedInstallMechanism.UbiquityPreseed)]
+        [InlineData("mint", UnattendedInstallMechanism.None)]
         [InlineData("arch", UnattendedInstallMechanism.None)]
         public void ActiveMechanism_FollowsTheSelectedDistro(
             string distroId, UnattendedInstallMechanism expected)

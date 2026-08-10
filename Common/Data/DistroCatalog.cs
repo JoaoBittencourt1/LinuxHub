@@ -47,25 +47,18 @@ namespace LinuxHub.Common.Data
                 // Boot pela staging testado de verdade (foi ele que expôs o initrd.lz).
                 // A instalação desatendida é outra história — ver abaixo.
                 IsTested = true,
-                // ============================================================================
-                // HABILITADO SOMENTE PARA O TESTE EM VM (tasks 6.3/6.4 de
-                // openspec/changes/mint-ubiquity-autoinstall). NÃO INSTALAR NUMA MÁQUINA REAL
-                // COM ESTA LINHA LIGADA, E NÃO PUBLICAR RELEASE ASSIM.
+                // Mint fica SEM instalação desatendida, e não por falta de tentativa: o teste
+                // em VM de 2026-08-10 exercitou o caminho completo e mostrou que ele não tem
+                // como ser fechado com segurança. O ubiquity consulta `partman-auto/method`
+                // para entrar em modo automático — sem a chave, `auto_state` fica em None e
+                // nada é automatizado; com ela, o partman reparticiona o disco inteiro se o
+                // `init_automatically_partition` não casar. É a mesma chave para as duas
+                // coisas, então "automatizar o dual-boot" e "arriscar o disco do usuário" são
+                // inseparáveis aqui. Foi assim que a ESP do usuário se perdeu em 2026-08-05.
                 //
-                // Este caminho ainda não passou por nenhum boot real. Da última vez que foi
-                // declarado sem essa prova (2026-08-05), o partman reparticionou o disco
-                // inteiro no modo dual-boot: ESP apagada, entradas EFI de todas as outras
-                // distros perdidas, máquina sem bootloader.
-                //
-                // As confirmações destrutivas estão ligadas de propósito (task 5b.7) para o
-                // teste exercitar o caminho completo — ou seja, o instalador NÃO vai parar e
-                // perguntar antes de escrever. A única trava que restava contra uma máquina
-                // real era esta declaração estar em None, e ela está desligada agora.
-                //
-                // Depois do teste: se 6.3/6.4 passarem, isto vira declaração definitiva e as
-                // tasks são marcadas; se não passarem, VOLTA PARA None.
-                // ============================================================================
-                UnattendedInstall = UnattendedInstallMechanism.UbiquityPreseed,
+                // constitution.md §6.1: automação incompleta é preferível a automação
+                // insegura. O boot pela staging continua automático; a escolha da partição
+                // fica com o usuário, na tela do próprio instalador.
                 ImagePath = "pack://application:,,,/Assets/Images/mint.png",
                 DownloadLink = "https://linuxmint.com/download.php",
                 DirectDownloadLink = "https://mint.portalidea.com.br/iso/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso",

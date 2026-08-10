@@ -34,15 +34,16 @@ namespace LinuxHub.Tests.Common.Data
         public void FindByIsoFileName_UnknownName_ReturnsNull() =>
             Assert.Null(DistroCatalog.FindByIsoFileName("slackware-15.0-install-dvd.iso"));
 
-        /// <summary>Fixa qual mecanismo cada distro declara, e não só "tem ou não tem":
-        /// declarar o mecanismo errado gera um preseed para quem espera autoinstall (ou
-        /// vice-versa), o que só apareceria num boot real.
+        /// <summary>Só quem foi validado de ponta a ponta declara mecanismo — é o que sustenta
+        /// o toggle de instalação automática aparecer nessas distros e em mais nenhuma. O teste
+        /// fixa o mecanismo de cada uma, e não só "tem ou não tem": declarar o mecanismo errado
+        /// gera um preseed para quem espera autoinstall (ou vice-versa), o que só apareceria
+        /// num boot real.
         ///
-        /// ATENÇÃO — o Mint está aqui como habilitação para o teste em VM das tasks 6.3/6.4
-        /// de openspec/changes/mint-ubiquity-autoinstall, NÃO como capacidade validada. Este
-        /// teste deixou de ser a trava de §7.1 enquanto essa linha existir; a trava passou a
-        /// ser o comentário no catálogo. Se 6.3/6.4 não passarem, Mint volta para None aqui e
-        /// no catálogo.</summary>
+        /// O Mint não está aqui por decisão, não por pendência: o teste em VM de 2026-08-10
+        /// mostrou que o dual-boot dele não tem automação segura possível — a chave que liga o
+        /// modo automático é a mesma que arma o disco inteiro. Ver o comentário no
+        /// DistroCatalog.</summary>
         [Fact]
         public void UnattendedInstall_IsClaimedOnlyByValidatedBuilds()
         {
@@ -54,7 +55,6 @@ namespace LinuxHub.Tests.Common.Data
                 new Dictionary<string, UnattendedInstallMechanism>
                 {
                     ["ubuntu"] = UnattendedInstallMechanism.Subiquity,
-                    ["mint"] = UnattendedInstallMechanism.UbiquityPreseed,
                 },
                 declared);
         }
