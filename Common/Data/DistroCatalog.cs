@@ -47,12 +47,25 @@ namespace LinuxHub.Common.Data
                 // Boot pela staging testado de verdade (foi ele que expôs o initrd.lz).
                 // A instalação desatendida é outra história — ver abaixo.
                 IsTested = true,
-                // NÃO declarar UbiquityPreseed aqui até a receita partman ser validada num
-                // boot real. Já foi declarado antes disso uma vez (2026-08-05) e o resultado
-                // foi o partman reparticionar o disco inteiro no modo dual-boot: ESP apagada,
-                // entradas EFI de todas as outras distros perdidas, máquina sem bootloader.
-                // O que faltava está em openspec/changes/mint-ubiquity-autoinstall —
-                // partman-auto/init_automatically_partition + o confirm_write_new_label.
+                // ============================================================================
+                // HABILITADO SOMENTE PARA O TESTE EM VM (tasks 6.3/6.4 de
+                // openspec/changes/mint-ubiquity-autoinstall). NÃO INSTALAR NUMA MÁQUINA REAL
+                // COM ESTA LINHA LIGADA, E NÃO PUBLICAR RELEASE ASSIM.
+                //
+                // Este caminho ainda não passou por nenhum boot real. Da última vez que foi
+                // declarado sem essa prova (2026-08-05), o partman reparticionou o disco
+                // inteiro no modo dual-boot: ESP apagada, entradas EFI de todas as outras
+                // distros perdidas, máquina sem bootloader.
+                //
+                // As confirmações destrutivas estão ligadas de propósito (task 5b.7) para o
+                // teste exercitar o caminho completo — ou seja, o instalador NÃO vai parar e
+                // perguntar antes de escrever. A única trava que restava contra uma máquina
+                // real era esta declaração estar em None, e ela está desligada agora.
+                //
+                // Depois do teste: se 6.3/6.4 passarem, isto vira declaração definitiva e as
+                // tasks são marcadas; se não passarem, VOLTA PARA None.
+                // ============================================================================
+                UnattendedInstall = UnattendedInstallMechanism.UbiquityPreseed,
                 ImagePath = "pack://application:,,,/Assets/Images/mint.png",
                 DownloadLink = "https://linuxmint.com/download.php",
                 DirectDownloadLink = "https://mint.portalidea.com.br/iso/stable/22.3/linuxmint-22.3-cinnamon-64bit.iso",
