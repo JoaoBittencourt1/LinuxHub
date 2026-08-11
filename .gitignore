@@ -27,3 +27,8 @@ LinuxHub-win-x64*/
 *.g.i.cs
 *.baml
 *.g.resources
+
+# Planning and agent config
+openspec/
+.claude/
+constitution.md

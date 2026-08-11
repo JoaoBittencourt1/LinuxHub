@@ -74,4 +74,5 @@ When run, the project should start normally.
  
 ## License
 
-This project currently does not have a defined license. Use and contributions are at the user's own risk.
+This project is distributed under the GNU General Public License v3.0. See
+[`LICENSE`](LICENSE).

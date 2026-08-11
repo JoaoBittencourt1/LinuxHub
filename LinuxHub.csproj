@@ -8,6 +8,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\Icons\favicon(2).ico</ApplicationIcon>
     <Version>1.2.4</Version>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <Copyright>Copyright (C) 2026 LinuxHub contributors. Licensed under GPL-3.0-only.</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
