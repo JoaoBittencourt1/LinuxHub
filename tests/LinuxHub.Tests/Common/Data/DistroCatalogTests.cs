@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using LinuxHub.Common.Data;
 using LinuxHub.Common.Models;
 using Xunit;
@@ -55,6 +55,7 @@ namespace LinuxHub.Tests.Common.Data
                 new Dictionary<string, UnattendedInstallMechanism>
                 {
                     ["ubuntu"] = UnattendedInstallMechanism.Subiquity,
+                    ["arch"] = UnattendedInstallMechanism.Archinstall,
                 },
                 declared);
         }
@@ -75,7 +76,7 @@ namespace LinuxHub.Tests.Common.Data
                 .Select(distro => distro.Id)
                 .ToArray();
 
-            Assert.Equal(new[] { "ubuntu", "mint" }, tested);
+            Assert.Equal(new[] { "ubuntu", "mint", "arch" }, tested);
         }
 
         /// <summary>O padrão de uma entrada nova é "não testada": esquecer de declarar deixa

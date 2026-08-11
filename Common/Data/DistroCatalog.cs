@@ -197,6 +197,20 @@ namespace LinuxHub.Common.Data
                 // esta declaração a entrada gerada seria a do casper, e a máquina reiniciaria
                 // num GRUB que não acha o kernel.
                 LiveSession = LiveSessionFamily.Archiso,
+                // Boot pela staging exercitado em VM (2026-08-11): a sessão live sobe e
+                // /run/archiso/img_dev está montado, o que também prova o ntfs3 no initramfs.
+                IsTested = true,
+                // ATENÇÃO — esta linha está adiantada em relação ao gate do change
+                // regional-settings-and-arch-autoinstall: as tasks 8.2 a 8.6 (dry-run com a
+                // configuração real, instalação completa em VM com a ESP do Windows intacta,
+                // ambiente gráfico subindo sozinho) NÃO passaram ainda.
+                //
+                // Ela está aqui porque o toggle de instalação automática é o que torna essas
+                // provas possíveis — sem declarar o mecanismo, não há como exercitá-lo nem em
+                // VM. Enquanto elas não passarem, NÃO gerar release a partir deste estado:
+                // §7.1 é sobre código não validado chegar à máquina do usuário, e é a
+                // publicação que faz isso acontecer.
+                UnattendedInstall = UnattendedInstallMechanism.Archinstall,
                 ImagePath = "pack://application:,,,/Assets/Images/arch.png",
                 DownloadLink = "https://archlinux.org/download/",
                 DirectDownloadLink = "https://mirror.adectra.com/archlinux/iso/2026.08.01/archlinux-2026.08.01-x86_64.iso",

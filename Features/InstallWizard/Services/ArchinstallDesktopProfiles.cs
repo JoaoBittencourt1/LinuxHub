@@ -28,18 +28,28 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// entra em <c>details</c>.</summary>
         public const string DesktopProfileName = "Desktop";
 
+        /// <summary>O greeter padrão do projeto. Padronizar num só reduz a superfície do que
+        /// precisa funcionar no primeiro boot: o SDDM sobe tanto sessão Wayland quanto X11 e
+        /// serve a todos os ambientes abaixo.</summary>
+        private const string DefaultGreeter = "sddm";
+
         public static IReadOnlyList<ArchinstallDesktopProfile> All { get; } =
         [
-            new("GNOME", "gdm"),
-            new("KDE Plasma", "plasma-login-manager"),
-            new("Xfce4", "lightdm-gtk-greeter"),
-            new("Cinnamon", "lightdm-gtk-greeter"),
-            new("Mate", "lightdm-gtk-greeter"),
-            new("Budgie", "lightdm-slick-greeter"),
+            new("GNOME", DefaultGreeter),
+            new("KDE Plasma", DefaultGreeter),
+            new("Xfce4", DefaultGreeter),
+            new("Cinnamon", DefaultGreeter),
+            new("Mate", DefaultGreeter),
+            new("Budgie", DefaultGreeter),
+            new("Hyprland", DefaultGreeter),
+            new("Sway", DefaultGreeter),
+            new("i3-wm", DefaultGreeter),
+
+            // A exceção, e não por descuido: a sessão do COSMIC depende do greeter próprio dela
+            // (é ele que prepara o ambiente que o compositor espera). Trocá-lo pelo SDDM aqui
+            // entregaria justamente o que o greeter existe para evitar — uma máquina que liga
+            // sem chegar ao desktop.
             new("Cosmic", "cosmic-greeter"),
-            new("Hyprland", "sddm"),
-            new("Sway", "lightdm-gtk-greeter"),
-            new("i3-wm", "lightdm-gtk-greeter"),
         ];
 
         public static ArchinstallDesktopProfile? Find(string? profileName) =>

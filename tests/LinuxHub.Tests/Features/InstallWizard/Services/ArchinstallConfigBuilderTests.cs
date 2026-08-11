@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using LinuxHub.Features.InstallWizard.Models;
 using LinuxHub.Features.InstallWizard.Services;
 using Xunit;
@@ -185,7 +185,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             Assert.Equal("Desktop", profile.GetProperty("profile").GetProperty("main").GetString());
             Assert.Equal("GNOME", profile.GetProperty("profile").GetProperty("details")[0].GetString());
-            Assert.Equal("gdm", profile.GetProperty("greeter").GetString());
+            Assert.Equal("sddm", profile.GetProperty("greeter").GetString());
         }
 
         /// <summary>Sem ambiente escolhido o Arch é instalado limpo — o padrão da distro, e uma
@@ -204,6 +204,68 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Equal("joao", user.GetProperty("username").GetString());
             Assert.Equal("$6$salt$hash", user.GetProperty("enc_password").GetString());
             Assert.True(user.GetProperty("sudo").GetBoolean());
+        }
+
+        /// <summary>
+        /// A pilha aberta funciona em qualquer GPU. Detectar a placa e escolher o driver
+        /// "melhor" erraria para cima em alguns casos (o módulo Nvidia aberto só serve
+        /// Turing+), e uma máquina que liga sem vídeo é um erro que só aparece depois do
+        /// reboot.
+        /// </summary>
+        [Fact]
+        public void GraphicsDriver_IsTheOpenSourceStack()
+        {
+            var config = CreateConfig();
+            config.DesktopEnvironment = "GNOME";
+
+            Assert.Equal(
+                "All open-source",
+                BuildJson(config).GetProperty("profile_config").GetProperty("gfx_driver").GetString());
+        }
+
+        /// <summary>Baixar pacotes de perto em vez de sortear um servidor do outro lado do
+        /// mundo. A região sai do locale que o usuário já revisou, não de uma segunda leitura
+        /// que poderia divergir do que ele viu.</summary>
+        [Fact]
+        public void MirrorRegion_FollowsTheChosenLocale()
+        {
+            JsonElement regions = BuildJson()
+                .GetProperty("mirror_config")
+                .GetProperty("mirror_regions");
+
+            Assert.True(regions.TryGetProperty("Brazil", out _));
+        }
+
+        /// <summary>Sem mirror publicado no país, nenhuma região é declarada — e o archinstall
+        /// usa a mirrorlist global que a ISO já traz. Chutar um país vizinho seria pior.</summary>
+        [Fact]
+        public void MirrorRegion_UnknownCountry_IsOmittedInsteadOfGuessed()
+        {
+            var config = CreateConfig();
+            config.Locale = "en_ZW.UTF-8";
+
+            Assert.False(BuildJson(config).TryGetProperty("mirror_config", out _));
+        }
+
+        /// <summary>No archinstall, "swap" é zram: comprime em RAM em vez de reservar disco —
+        /// o comportamento certo para uma instalação que divide o disco com o Windows.</summary>
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Swap_FollowsTheConfiguration(bool enabled)
+        {
+            var config = CreateConfig();
+            config.SwapEnabled = enabled;
+
+            Assert.Equal(enabled, BuildJson(config).GetProperty("swap").GetBoolean());
+        }
+
+        [Fact]
+        public void InstallsTheStandardKernel()
+        {
+            JsonElement kernels = BuildJson().GetProperty("kernels");
+
+            Assert.Equal("linux", Assert.Single(kernels.EnumerateArray()).GetString());
         }
 
         /// <summary>Sem ESP não há onde o GRUB se instalar, e criar uma exigiria mexer no

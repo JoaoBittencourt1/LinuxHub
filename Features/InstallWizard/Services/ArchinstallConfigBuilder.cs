@@ -41,6 +41,17 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// </summary>
         private const string EspMountpoint = "/efi";
 
+        /// <summary>
+        /// Valor exato do <c>GfxDriver</c> do archinstall 4.4. Instala a pilha aberta inteira,
+        /// que funciona em qualquer GPU sem o app ter que adivinhar qual placa a máquina tem.
+        ///
+        /// Detectar e escolher o driver "melhor" seria tentador e é justamente o que não
+        /// convém aqui: errar para cima (Nvidia Turing+ quando a placa é mais antiga) entrega
+        /// uma máquina que liga sem vídeo, e esse erro só apareceria depois do reboot. A pilha
+        /// aberta é a escolha que não tem esse modo de falha.
+        /// </summary>
+        private const string OpenSourceGraphicsDriver = "All open-source";
+
         private const long MebiByte = 1024 * 1024;
 
         public static string Build(
@@ -135,11 +146,28 @@ namespace LinuxHub.Features.InstallWizard.Services
             json.AppendLine("        \"sys_enc\": \"UTF-8\"");
             json.AppendLine("    },");
 
+            // Mirrors da região do usuário quando o país dela publica algum. A lista de
+            // servidores vai vazia de propósito: o archinstall resolve a região pelo NOME
+            // contra a lista que ele busca em tempo de instalação, e ordena por velocidade.
+            if (ArchMirrorRegions.FromLocale(config.Locale) is { } mirrorRegion)
+            {
+                json.AppendLine("    \"mirror_config\": {");
+                json.AppendLine("        \"mirror_regions\": {");
+                json.AppendLine($"            {Quote(mirrorRegion)}: []");
+                json.AppendLine("        }");
+                json.AppendLine("    },");
+            }
+
             json.AppendLine("    \"ntp\": true,");
 
             string? profileConfig = BuildProfileConfig(config.DesktopEnvironment);
             if (profileConfig is not null)
                 json.AppendLine(profileConfig);
+
+            // "swap" no archinstall é zram, não partição — ele comprime em RAM em vez de
+            // reservar espaço em disco, que é o comportamento certo para uma instalação que
+            // divide o disco com o Windows.
+            json.AppendLine($"    \"swap\": {(config.SwapEnabled ? "true" : "false")},");
 
             json.AppendLine($"    \"timezone\": {Quote(config.Timezone)},");
 
@@ -180,7 +208,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // O greeter é o que faz a sessão gráfica subir sozinha no primeiro boot. Sem ele o
             // ambiente é instalado e a máquina liga num terminal.
             json.AppendLine($"        \"greeter\": {Quote(profile.Greeter)},");
-            json.AppendLine("        \"gfx_driver\": null");
+            json.AppendLine($"        \"gfx_driver\": {Quote(OpenSourceGraphicsDriver)}");
             json.Append("    },");
 
             return json.ToString().TrimEnd('\n', '\r');

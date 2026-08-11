@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using LinuxHub.Common.Data;
 using LinuxHub.Common.Models;
 using LinuxHub.Features.Catalog.ViewModels;
@@ -18,7 +18,7 @@ namespace LinuxHub.Tests.Features.Catalog.ViewModels
         [InlineData("ubuntu", false)]
         [InlineData("mint", false)]
         [InlineData("fedora", true)]
-        [InlineData("arch", true)]
+        [InlineData("arch", false)]
         public void IsUntested_MirrorsTheCatalog(string distroId, bool expected) =>
             Assert.Equal(expected, new DistroDetailViewModel(Distro(distroId)).IsUntested);
     }

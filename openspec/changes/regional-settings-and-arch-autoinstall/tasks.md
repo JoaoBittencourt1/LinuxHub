@@ -45,8 +45,8 @@ instalação que hoje funciona: nada de condicional dentro do gerador atual
 - [x] 4.5 Emitir `copytoram=n` na entrada do Arch, com o porquê no código: com o default, o archiso desmonta `/run/archiso/img_dev` ainda no initramfs e o `script=` some antes do login (decisão 10). É um default que falha calado.
 - [x] 4.6 Declarar a família archiso na entrada do Arch do catálogo. Isto **não** é o gate — o gate é `UnattendedInstall`, que continua `None`.
 - [x] 4.7 Suíte verde, com o teste de 4.1 passando sem ter sido editado.
-- [ ] 4.8 **Em VM, com snapshot antes.** Bootar o Arch pela staging nos dois modos até a sessão live. É aqui que se prova o `ntfs3` no initramfs (Open Question do `design.md`) e que `/run/archiso/img_dev` está montado na sessão.
-- [ ] 4.9 Só depois de 4.8 passar: `IsTested = true` para o Arch, e ajustar o teste que fixa quais distros estão testadas.
+- [x] 4.8 **Em VM, com snapshot antes.** Bootar o Arch pela staging nos dois modos até a sessão live. É aqui que se prova o `ntfs3` no initramfs (Open Question do `design.md`) e que `/run/archiso/img_dev` está montado na sessão. — Passou em 2026-08-11, na segunda tentativa: a primeira caiu em `can't find command 'probe'` e expôs que o GRUB embarcado não tem esse módulo (ver o commit `8f608c4`).
+- [x] 4.9 Só depois de 4.8 passar: `IsTested = true` para o Arch, e ajustar o teste que fixa quais distros estão testadas.
 
 ## 5. Gerador do script de instalação do Arch
 
@@ -90,6 +90,6 @@ de configuração, e a VM é cara e pega o resto. Inverter desperdiça snapshots
 - [ ] 8.4 **Em VM, com snapshot antes.** Idem no modo substituir, confirmando que a staging preservada não quebrou a sessão live no meio da instalação.
 - [ ] 8.5 Confirmar que o ambiente gráfico escolhido inicia sozinho no primeiro boot, sem nenhum comando do usuário — instalar o ambiente sem o meio de iniciá-lo entrega uma máquina que liga num terminal.
 - [ ] 8.6 Confirmar que o GRUB instalado coube na ESP existente sem que ela precisasse ser redimensionada, e que foi para `\EFI\arch\` — não para o caminho de mídia removível.
-- [ ] 8.7 Só depois de 8.2–8.6 passarem: declarar `Archinstall` para o Arch no catálogo e ajustar os testes que fixam quais distros declaram mecanismo.
+- [ ] 8.7 Só depois de 8.2–8.6 passarem: declarar `Archinstall` para o Arch no catálogo e ajustar os testes que fixam quais distros declaram mecanismo. — **A linha JÁ ESTÁ virada**, adiantada em relação ao gate e a pedido explícito: sem o mecanismo declarado o toggle não aparece, e sem o toggle não há como exercitar 8.2–8.6 nem em VM. Esta task só fecha quando elas passarem. Até lá: **não gerar release**, porque é a publicação que faz código não validado chegar à máquina do usuário (§7.1), não a declaração em si.
 - [ ] 8.8 Instalação do Ubuntu para confirmar ausência de regressão no caminho subiquity, agora com os campos regionais vindos da detecção e a entrada de boot vinda da abstração nova.
 - [ ] 8.9 Registrar em `TEST_MATRIX.md` o que ficou coberto por boot real e o que permanece coberto só por teste unitário — incluindo a partição de staging que sobra no modo substituir, que é pendência declarada e não risco anotado.
