@@ -479,6 +479,12 @@ Selecione uma ISO Linux válida.</value>
   <data name="Wizard_RegionalFallbackWarningMessage" xml:space="preserve">
     <value>Alguma dessas configurações não tem equivalente conhecido no Linux e está mostrando um valor padrão. Vale conferir os três campos antes de continuar.</value>
   </data>
+  <data name="Wizard_DesktopEnvironmentTitle" xml:space="preserve">
+    <value>Ambiente gráfico</value>
+  </data>
+  <data name="Wizard_DesktopEnvironmentHint" xml:space="preserve">
+    <value>Esta distro é instalada sem ambiente gráfico. Escolha o que será instalado junto — sem escolher, o sistema inicia em modo texto.</value>
+  </data>
   <data name="UpdateNotice_Title" xml:space="preserve">
     <value>Nova versão disponível</value>
   </data>

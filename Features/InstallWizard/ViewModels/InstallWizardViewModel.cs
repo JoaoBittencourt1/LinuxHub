@@ -66,6 +66,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
                 OnPropertyChanged(nameof(IsAccountStepVisible));
                 OnPropertyChanged(nameof(IsRegionalStepVisible));
+                OnPropertyChanged(nameof(IsDesktopEnvironmentStepVisible));
             };
 
             InstallCommand = new RelayCommand(BeginInstall);
@@ -80,6 +81,13 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
         public bool IsAccountStepVisible => Iso.IsAutoinstallActive;
         public bool IsRegionalStepVisible => Iso.IsAutoinstallActive;
+
+        /// <summary>A escolha do ambiente gráfico vem do MECANISMO declarado, nunca da
+        /// identidade da distro (§2): a maioria das ISOs já embute um ambiente, e oferecer uma
+        /// opção que seria ignorada promete um controle que o usuário não tem. Uma distro nova
+        /// que declare um mecanismo capaz disso passa a oferecê-la sem tocar nesta lógica.</summary>
+        public bool IsDesktopEnvironmentStepVisible =>
+            Iso.ActiveMechanism.SupportsDesktopEnvironmentChoice();
 
         /// <summary>Não nulo entre o clique em "Instalar" e a confirmação/cancelamento
         /// do usuário — a instalação de fato só ocorre depois de confirmada.</summary>
@@ -416,7 +424,11 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                     Hostname: Account.Hostname,
                     Locale: Regional.Locale,
                     Keymap: Regional.Keymap,
-                    Timezone: Regional.Timezone);
+                    Timezone: Regional.Timezone,
+                    // Só chega ao instalador quando o mecanismo de fato oferece a escolha —
+                    // senão seria um valor gravado a partir de um seletor que o usuário
+                    // nunca viu.
+                    DesktopEnvironment: IsDesktopEnvironmentStepVisible ? Regional.DesktopEnvironment : string.Empty);
 
                 var config = _configBuilder.Build(request);
                 _configWriter.Save(config);
@@ -437,7 +449,8 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 IsoPath: isoPathForGrub,
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,
-                Unattended: unattended));
+                Unattended: unattended,
+                LiveSession: distro.LiveSession));
         }
     }
 }

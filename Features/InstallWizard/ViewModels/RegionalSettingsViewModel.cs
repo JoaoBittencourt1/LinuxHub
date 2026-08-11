@@ -18,6 +18,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private string _locale;
         private string _keymap;
         private string _timezone;
+        private string _desktopEnvironment = string.Empty;
 
         public RegionalSettingsViewModel(ISystemInfoProvider systemInfo)
         {
@@ -65,5 +66,18 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         /// declarado do mapeamento. Não impede nada — só torna visível o que antes era um
         /// chute calado, para o usuário conferir esse campo antes de instalar.</summary>
         public bool HasUndetectedSetting { get; }
+
+        /// <summary>Os ambientes gráficos oferecidos. Nomes próprios são dado, isentos de
+        /// localização por §4.</summary>
+        public IReadOnlyList<ArchinstallDesktopProfile> AvailableDesktopEnvironments { get; } =
+            ArchinstallDesktopProfiles.All;
+
+        /// <summary>Ambiente gráfico escolhido, ou vazio para instalar o sistema limpo — que é
+        /// o padrão do Arch e uma escolha legítima, não um estado por preencher.</summary>
+        public string DesktopEnvironment
+        {
+            get => _desktopEnvironment;
+            set => SetProperty(ref _desktopEnvironment, value);
+        }
     }
 }

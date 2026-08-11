@@ -16,7 +16,8 @@ namespace LinuxHub.Features.InstallWizard.Services
         string Hostname,
         string Locale,
         string Keymap,
-        string Timezone);
+        string Timezone,
+        string DesktopEnvironment = "");
 
     /// <summary>
     /// Monta um <see cref="InstallerConfig"/> a partir do estado do wizard. Não depende
@@ -61,6 +62,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                 Locale = request.Locale,
                 Timezone = request.Timezone,
                 Keymap = request.Keymap,
+                DesktopEnvironment = request.DesktopEnvironment,
 
                 SwapEnabled = true,
                 SwapSizeGb = 8

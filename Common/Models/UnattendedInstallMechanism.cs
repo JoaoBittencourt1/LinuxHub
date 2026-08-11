@@ -26,5 +26,28 @@ namespace LinuxHub.Common.Models
         /// debconf, particionamento por receita <c>partman</c>, ativado pelo parâmetro
         /// <c>automatic-ubiquity</c> na linha de kernel.</summary>
         UbiquityPreseed,
+
+        /// <summary>
+        /// <c>archinstall</c> (Arch Linux): configuração JSON entregue à sessão live pelo
+        /// parâmetro de boot <c>script=</c>, particionamento por caminho de dispositivo.
+        ///
+        /// É o único mecanismo em que o app não gera a configuração final: o
+        /// <c>disk_config</c> endereça partições por caminho de kernel (<c>/dev/nvme0n1p3</c>),
+        /// que não existe do lado do Windows, então o app gera um script que resolve os
+        /// PARTUUIDs e emite o JSON já dentro da sessão live (design.md, decisão 9).
+        /// </summary>
+        Archinstall,
+    }
+
+    public static class UnattendedInstallMechanismExtensions
+    {
+        /// <summary>
+        /// Se o mecanismo permite escolher o ambiente gráfico da instalação. A pergunta é sobre
+        /// o MECANISMO, nunca sobre a identidade da distro (§2): a maioria das ISOs do catálogo
+        /// já embute um ambiente, e oferecer uma escolha que seria ignorada promete ao usuário
+        /// um controle que ele não tem.
+        /// </summary>
+        public static bool SupportsDesktopEnvironmentChoice(this UnattendedInstallMechanism mechanism) =>
+            mechanism == UnattendedInstallMechanism.Archinstall;
     }
 }

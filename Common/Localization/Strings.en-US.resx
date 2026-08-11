@@ -479,6 +479,12 @@ Select a valid Linux ISO.</value>
   <data name="Wizard_RegionalFallbackWarningMessage" xml:space="preserve">
     <value>One of these settings has no known Linux equivalent and is showing a default value. It is worth checking all three fields before continuing.</value>
   </data>
+  <data name="Wizard_DesktopEnvironmentTitle" xml:space="preserve">
+    <value>Desktop environment</value>
+  </data>
+  <data name="Wizard_DesktopEnvironmentHint" xml:space="preserve">
+    <value>This distro installs without a desktop environment. Pick the one to install alongside it — without a choice, the system starts in text mode.</value>
+  </data>
   <data name="UpdateNotice_Title" xml:space="preserve">
     <value>Update available</value>
   </data>

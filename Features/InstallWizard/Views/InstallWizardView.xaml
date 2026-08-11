@@ -350,6 +350,23 @@
                     </StackPanel>
                 </ui:Card>
 
+                <!-- Ambiente gráfico: só aparece para distro cujo MECANISMO declarado suporta a
+                     escolha. A maioria das ISOs já embute um ambiente, e oferecer uma opção que
+                     seria ignorada promete um controle que o usuário não tem. Os nomes próprios
+                     são dado (§4); os rótulos ao redor vêm dos .resx. -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding IsDesktopEnvironmentStepVisible, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_DesktopEnvironmentTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
+                        <TextBlock Text="{loc:Loc Wizard_DesktopEnvironmentHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <ComboBox ItemsSource="{Binding Regional.AvailableDesktopEnvironments}"
+                                  DisplayMemberPath="ProfileName"
+                                  SelectedValuePath="ProfileName"
+                                  SelectedValue="{Binding Regional.DesktopEnvironment}"/>
+                    </StackPanel>
+                </ui:Card>
+
                 <ui:InfoBar IsOpen="True"
                             IsClosable="False"
                             Severity="Warning"

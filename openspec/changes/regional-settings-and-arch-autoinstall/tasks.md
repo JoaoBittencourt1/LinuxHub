@@ -38,13 +38,13 @@ produzida. A regra que rege esta seção é não colocar em risco o único camin
 instalação que hoje funciona: nada de condicional dentro do gerador atual
 (decisão 12 do `design.md`).
 
-- [ ] 4.1 **Antes de mexer em qualquer coisa**: teste de caracterização travando a entrada de boot gerada hoje para as distros do catálogo. É ele, e só ele, que prova depois que o Ubuntu não regrediu.
-- [ ] 4.2 Extrair a montagem da entrada da ISO para uma abstração, com a implementação casper carregando o texto atual **sem alteração nenhuma**.
-- [ ] 4.3 Declarar a família de sessão live como dado em `DistroInfo`, com casper como padrão, e resolver a implementação por esse dado — nunca por `distro.Id` (§2), mesmo padrão do `UnattendedInstallPreparerRegistry`.
-- [ ] 4.4 Implementar a entrada do archiso a partir da receita do fornecedor (`configs/releng/grub/loopback.cfg`): kernel e initramfs em `/arch/boot/x86_64/`, `archisobasedir`, `img_dev=PARTUUID=…`, `img_loop=…`. Sem `loopback loop` — quem monta o laço é o initramfs.
-- [ ] 4.5 Emitir `copytoram=n` na entrada do Arch, com o porquê no código: com o default, o archiso desmonta `/run/archiso/img_dev` ainda no initramfs e o `script=` some antes do login (decisão 10). É um default que falha calado.
-- [ ] 4.6 Declarar a família archiso na entrada do Arch do catálogo. Isto **não** é o gate — o gate é `UnattendedInstall`, que continua `None`.
-- [ ] 4.7 Suíte verde, com o teste de 4.1 passando sem ter sido editado.
+- [x] 4.1 **Antes de mexer em qualquer coisa**: teste de caracterização travando a entrada de boot gerada hoje para as distros do catálogo. É ele, e só ele, que prova depois que o Ubuntu não regrediu.
+- [x] 4.2 Extrair a montagem da entrada da ISO para uma abstração, com a implementação casper carregando o texto atual **sem alteração nenhuma**.
+- [x] 4.3 Declarar a família de sessão live como dado em `DistroInfo`, com casper como padrão, e resolver a implementação por esse dado — nunca por `distro.Id` (§2), mesmo padrão do `UnattendedInstallPreparerRegistry`.
+- [x] 4.4 Implementar a entrada do archiso a partir da receita do fornecedor (`configs/releng/grub/loopback.cfg`): kernel e initramfs em `/arch/boot/x86_64/`, `archisobasedir`, `img_dev=PARTUUID=…`, `img_loop=…`. Sem `loopback loop` — quem monta o laço é o initramfs.
+- [x] 4.5 Emitir `copytoram=n` na entrada do Arch, com o porquê no código: com o default, o archiso desmonta `/run/archiso/img_dev` ainda no initramfs e o `script=` some antes do login (decisão 10). É um default que falha calado.
+- [x] 4.6 Declarar a família archiso na entrada do Arch do catálogo. Isto **não** é o gate — o gate é `UnattendedInstall`, que continua `None`.
+- [x] 4.7 Suíte verde, com o teste de 4.1 passando sem ter sido editado.
 - [ ] 4.8 **Em VM, com snapshot antes.** Bootar o Arch pela staging nos dois modos até a sessão live. É aqui que se prova o `ntfs3` no initramfs (Open Question do `design.md`) e que `/run/archiso/img_dev` está montado na sessão.
 - [ ] 4.9 Só depois de 4.8 passar: `IsTested = true` para o Arch, e ajustar o teste que fixa quais distros estão testadas.
 
@@ -54,23 +54,23 @@ O app gera um script que gera o JSON na sessão live (decisão 9 do `design.md`)
 Tudo que não depende da máquina é dado literal emitido pelo app; só os caminhos
 de partição são resolvidos em runtime.
 
-- [ ] 5.1 Adicionar o valor `Archinstall` ao enum `UnattendedInstallMechanism`, sem declarar ainda para nenhuma distro no catálogo.
-- [ ] 5.2 Implementar o gerador do script como classe pura, testável sem rede e sem UI (§5), por comparação de texto — como `AutoinstallBuilder` e `GrubConfigBuilder` já são.
-- [ ] 5.3 O script resolve os PARTUUIDs da raiz e da ESP com as ferramentas da sessão live e **sai sem chamar o `archinstall`** se algum não resolver. Teste travando essa saída: é o que separa "falha parando" de "instala em outro disco" (§6.1).
-- [ ] 5.4 Emitir o particionamento com `"wipe": false` no dispositivo e `status: "existing"` na ESP do Windows, com o `dev_path` resolvido. **Teste travando as duas coisas** — são elas que separam "instalar ao lado" de "apagar o Windows".
-- [ ] 5.5 Emitir `bootloader_config` com `"Grub"` **e `"removable": false`**, travado em teste. O default `true` instalaria no caminho de mídia removível, que numa máquina com Windows é o fallback do firmware; e systemd-boot não cabe numa ESP de 100 MB (decisão 4).
-- [ ] 5.6 Emitir `locale_config.sys_lang`, `locale_config.kb_layout` e `timezone` a partir do `InstallerConfig` — os mesmos três campos da Parte A, que já saem no formato que o `archinstall` espera.
-- [ ] 5.7 Emitir `profile_config` com `main: "Desktop"` e o ambiente escolhido em `details`, junto com o greeter padrão dele — sem greeter a máquina liga num terminal.
-- [ ] 5.8 No modo substituir, declarar a partição de staging como `existing` e não apagá-la (decisão 11): é dela que a sessão live está lendo a própria raiz. Teste travando.
-- [ ] 5.9 Implementar o preparer do mecanismo ao lado de `SubiquityInstallPreparer` e `UbiquityInstallPreparer`, resolvido pelo `UnattendedInstallPreparerRegistry` existente — nada de `if (distro.Id == "arch")` (§2). Ele grava o script ao lado da ISO e devolve o `script=/run/archiso/img_dev/…` nos parâmetros de boot.
-- [ ] 5.10 Suíte verde.
+- [x] 5.1 Adicionar o valor `Archinstall` ao enum `UnattendedInstallMechanism`, sem declarar ainda para nenhuma distro no catálogo.
+- [x] 5.2 Implementar o gerador do script como classe pura, testável sem rede e sem UI (§5), por comparação de texto — como `AutoinstallBuilder` e `GrubConfigBuilder` já são.
+- [x] 5.3 O script resolve os PARTUUIDs da raiz e da ESP com as ferramentas da sessão live e **sai sem chamar o `archinstall`** se algum não resolver. Teste travando essa saída: é o que separa "falha parando" de "instala em outro disco" (§6.1).
+- [x] 5.4 Emitir o particionamento com `"wipe": false` no dispositivo e `status: "existing"` na ESP do Windows, com o `dev_path` resolvido. **Teste travando as duas coisas** — são elas que separam "instalar ao lado" de "apagar o Windows".
+- [x] 5.5 Emitir `bootloader_config` com `"Grub"` **e `"removable": false`**, travado em teste. O default `true` instalaria no caminho de mídia removível, que numa máquina com Windows é o fallback do firmware; e systemd-boot não cabe numa ESP de 100 MB (decisão 4).
+- [x] 5.6 Emitir `locale_config.sys_lang`, `locale_config.kb_layout` e `timezone` a partir do `InstallerConfig` — os mesmos três campos da Parte A, que já saem no formato que o `archinstall` espera.
+- [x] 5.7 Emitir `profile_config` com `main: "Desktop"` e o ambiente escolhido em `details`, junto com o greeter padrão dele — sem greeter a máquina liga num terminal.
+- [ ] 5.8 No modo substituir, declarar a partição de staging como `existing` e não apagá-la (decisão 11): é dela que a sessão live está lendo a própria raiz. Teste travando. **Adiada**: o preparer recusa o modo substituir por enquanto (§6.1 — automação incompleta é preferível a insegura). Além da staging presa, o `umount_all_existing` do archinstall desmonta todas as partições do disco alvo antes de particionar, o que inclui a que sustenta a raiz da sessão live. Precisa de VM antes de existir código.
+- [x] 5.9 Implementar o preparer do mecanismo ao lado de `SubiquityInstallPreparer` e `UbiquityInstallPreparer`, resolvido pelo `UnattendedInstallPreparerRegistry` existente — nada de `if (distro.Id == "arch")` (§2). Ele grava o script ao lado da ISO e devolve o `script=/run/archiso/img_dev/…` nos parâmetros de boot.
+- [x] 5.10 Suíte verde.
 
 ## 6. Escolha de ambiente gráfico na UI
 
-- [ ] 6.1 Adicionar o campo opcional de ambiente gráfico ao `InstallerConfig` (decisão 5 do `design.md`).
-- [ ] 6.2 Expor a lista na ViewModel, com visibilidade derivada do **mecanismo declarado** pela distro — mesma regra de `IsAutoinstallToggleVisible`, nunca a identidade da distro.
-- [ ] 6.3 Adicionar o seletor à UI. Os nomes próprios (Hyprland, GNOME, KDE Plasma) são dado, isentos de localização por §4; os rótulos ao redor não são e vão nos dois `.resx`.
-- [ ] 6.4 Teste travando que o seletor não aparece para distro cujo mecanismo não suporta a escolha.
+- [x] 6.1 Adicionar o campo opcional de ambiente gráfico ao `InstallerConfig` (decisão 5 do `design.md`).
+- [x] 6.2 Expor a lista na ViewModel, com visibilidade derivada do **mecanismo declarado** pela distro — mesma regra de `IsAutoinstallToggleVisible`, nunca a identidade da distro.
+- [x] 6.3 Adicionar o seletor à UI. Os nomes próprios (Hyprland, GNOME, KDE Plasma) são dado, isentos de localização por §4; os rótulos ao redor não são e vão nos dois `.resx`.
+- [x] 6.4 Teste travando que o seletor não aparece para distro cujo mecanismo não suporta a escolha.
 
 ## 7. Catálogo do Arch
 
@@ -84,7 +84,7 @@ de partição são resolvidos em runtime.
 A ordem importa: o boot (seção 4) é pré-requisito, o dry-run é barato e pega erro
 de configuração, e a VM é cara e pega o resto. Inverter desperdiça snapshots.
 
-- [ ] 8.1 `dotnet build` e `dotnet test` — build limpo e suíte verde.
+- [x] 8.1 `dotnet build` e `dotnet test` — build limpo e suíte verde.
 - [ ] 8.2 **`--dry-run` com a configuração que o script gera na própria sessão live**, nos dois modos. Nenhum setor é tocado; erro aqui é corrigido sem custo. Confirma também que os caminhos resolvidos em runtime são aceitos.
 - [ ] 8.3 **Em VM, com snapshot antes.** Modo dual-boot: a instalação conclui sozinha, e ao final a ESP e as partições do Windows estão **intactas** e ambos os sistemas bootam. Capturar os logs do instalador.
 - [ ] 8.4 **Em VM, com snapshot antes.** Idem no modo substituir, confirmando que a staging preservada não quebrou a sessão live no meio da instalação.

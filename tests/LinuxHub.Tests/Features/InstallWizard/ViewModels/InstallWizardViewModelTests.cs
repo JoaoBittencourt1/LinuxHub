@@ -492,6 +492,36 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             Assert.False(vm.IsRegionalStepVisible);
         }
 
+        /// <summary>
+        /// O Ubuntu declara subiquity, cuja ISO já embute o GNOME — oferecer a escolha ali
+        /// prometeria um controle que o usuário não tem. A regra é do MECANISMO, não da
+        /// identidade da distro: é o que faz uma distro nova passar a oferecer (ou não) a opção
+        /// sem tocar na lógica da interface.
+        /// </summary>
+        [Fact]
+        public void DesktopEnvironmentStep_HiddenWhenTheMechanismDoesNotSupportTheChoice()
+        {
+            var vm = BuildViewModel(new CapturingBootStagingService());
+
+            Assert.Equal(UnattendedInstallMechanism.Subiquity, vm.Iso.ActiveMechanism);
+            Assert.False(vm.IsDesktopEnvironmentStepVisible);
+        }
+
+        /// <summary>E o valor escolhido não chega ao instalador quando o seletor nem apareceu —
+        /// senão o wizard gravaria uma decisão que o usuário nunca viu.</summary>
+        [Fact]
+        public async Task DesktopEnvironment_IsNotWrittenWhenTheStepIsHidden()
+        {
+            var configWriter = new FakeInstallerConfigWriter();
+            var vm = BuildViewModel(new CapturingBootStagingService(), configWriter: configWriter);
+
+            vm.Regional.DesktopEnvironment = "Hyprland";
+
+            await ReplaceInstallAsync(vm);
+
+            Assert.Equal(string.Empty, configWriter.Saved!.DesktopEnvironment);
+        }
+
         private static async Task ReplaceInstallAsync(InstallWizardViewModel vm)
         {
             vm.InstallCommand.Execute(null);
