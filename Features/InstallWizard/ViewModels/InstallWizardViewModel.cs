@@ -30,6 +30,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             IsoAcquisitionViewModel iso,
             TargetSelectionViewModel target,
             AccountViewModel account,
+            RegionalSettingsViewModel regional,
             InstallerConfigBuilder configBuilder,
             IInstallerConfigWriter configWriter,
             IDiskPartitioningService diskPartitioning,
@@ -42,6 +43,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             Iso = iso ?? throw new ArgumentNullException(nameof(iso));
             Target = target ?? throw new ArgumentNullException(nameof(target));
             Account = account ?? throw new ArgumentNullException(nameof(account));
+            Regional = regional ?? throw new ArgumentNullException(nameof(regional));
             _configBuilder = configBuilder ?? throw new ArgumentNullException(nameof(configBuilder));
             _configWriter = configWriter ?? throw new ArgumentNullException(nameof(configWriter));
             _diskPartitioning = diskPartitioning ?? throw new ArgumentNullException(nameof(diskPartitioning));
@@ -53,12 +55,17 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
             Iso.Notify += (title, message, isError) => Notify?.Invoke(title, message, isError);
 
-            // A conta (usuário/senha/hostname) só existe pro fluxo de autoinstall — quando ele
-            // não roda, é o instalador nativo da própria ISO que vai perguntar isso.
+            // A conta (usuário/senha/hostname) e as informações regionais só existem pro fluxo
+            // de autoinstall — quando ele não roda, é o instalador nativo da própria ISO que
+            // vai perguntar isso, e oferecer aqui uma escolha que seria ignorada prometeria ao
+            // usuário um controle que ele não tem.
             Iso.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName == nameof(IsoAcquisitionViewModel.IsAutoinstallActive))
-                    OnPropertyChanged(nameof(IsAccountStepVisible));
+                if (e.PropertyName != nameof(IsoAcquisitionViewModel.IsAutoinstallActive))
+                    return;
+
+                OnPropertyChanged(nameof(IsAccountStepVisible));
+                OnPropertyChanged(nameof(IsRegionalStepVisible));
             };
 
             InstallCommand = new RelayCommand(BeginInstall);
@@ -67,10 +74,12 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         public IsoAcquisitionViewModel Iso { get; }
         public TargetSelectionViewModel Target { get; }
         public AccountViewModel Account { get; }
+        public RegionalSettingsViewModel Regional { get; }
 
         public ICommand InstallCommand { get; }
 
         public bool IsAccountStepVisible => Iso.IsAutoinstallActive;
+        public bool IsRegionalStepVisible => Iso.IsAutoinstallActive;
 
         /// <summary>Não nulo entre o clique em "Instalar" e a confirmação/cancelamento
         /// do usuário — a instalação de fato só ocorre depois de confirmada.</summary>
@@ -404,7 +413,10 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                     LinuxPartitionSizeGb: (int)Target.LinuxPartitionSizeGb,
                     Username: Account.Username,
                     Password: Account.Password,
-                    Hostname: Account.Hostname);
+                    Hostname: Account.Hostname,
+                    Locale: Regional.Locale,
+                    Keymap: Regional.Keymap,
+                    Timezone: Regional.Timezone);
 
                 var config = _configBuilder.Build(request);
                 _configWriter.Save(config);

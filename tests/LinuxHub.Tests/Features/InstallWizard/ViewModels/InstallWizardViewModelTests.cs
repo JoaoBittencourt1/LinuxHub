@@ -53,14 +53,16 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
         private sealed class FakeInstallerConfigWriter : IInstallerConfigWriter
         {
-            public void Save(InstallerConfig config) { }
+            public InstallerConfig? Saved { get; private set; }
+
+            public void Save(InstallerConfig config) => Saved = config;
         }
 
         private sealed class FakeSystemInfoProvider : ISystemInfoProvider
         {
-            public string GetLocale() => "pt_BR.UTF-8";
-            public string GetKeymap() => "br";
-            public string GetTimezone() => "America/Sao_Paulo";
+            public DetectedRegionalSetting GetLocale() => DetectedRegionalSetting.Detected("pt_BR.UTF-8");
+            public DetectedRegionalSetting GetKeymap() => DetectedRegionalSetting.Detected("br");
+            public DetectedRegionalSetting GetTimezone() => DetectedRegionalSetting.Detected("America/Sao_Paulo");
         }
 
         private sealed class FakeEspLocatorService : IEspLocatorService
@@ -173,7 +175,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             IIsoFileInfoProvider? isoFileInfo = null,
             FakeStagingPartitionService? staging = null,
             FakeDiskPartitioningService? partitioning = null,
-            FakePartitionInventoryService? partitions = null)
+            FakePartitionInventoryService? partitions = null,
+            FakeInstallerConfigWriter? configWriter = null)
         {
             var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository());
             var target = new TargetSelectionViewModel(
@@ -185,8 +188,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 iso,
                 target,
                 new AccountViewModel { Username = "joao", Password = "123", ConfirmPassword = "123", Hostname = "pc" },
-                new InstallerConfigBuilder(new FakeSystemInfoProvider(), new FakeEspLocatorService()),
-                new FakeInstallerConfigWriter(),
+                new RegionalSettingsViewModel(new FakeSystemInfoProvider()),
+                new InstallerConfigBuilder(new FakeEspLocatorService()),
+                configWriter ?? new FakeInstallerConfigWriter(),
                 partitioning ?? new FakeDiskPartitioningService(),
                 new UnattendedInstallPreparerRegistry([new FakeUnattendedInstallPreparer()]),
                 bootStaging,
@@ -431,6 +435,70 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             Assert.Equal(0, staging.CreateCalls);
             Assert.Null(staging.CopiedFrom);
             Assert.Equal(@"C:\isos\ubuntu.iso", bootStaging.LastRequest!.IsoPath);
+        }
+
+        /// <summary>
+        /// O usuário chega ao passo regional e segue sem mexer em nada: o que a tela mostrava
+        /// é o que vai para a instalação. Antes deste change nem chegava a existir tela — o
+        /// teclado era <c>"us"</c> e o fuso <c>"America/Sao_Paulo"</c>, escritos direto.
+        /// </summary>
+        [Fact]
+        public async Task Install_WritesTheRegionalSettingsExactlyAsShown()
+        {
+            var configWriter = new FakeInstallerConfigWriter();
+            var vm = BuildViewModel(new CapturingBootStagingService(), configWriter: configWriter);
+
+            await ReplaceInstallAsync(vm);
+
+            Assert.Equal(vm.Regional.Locale, configWriter.Saved!.Locale);
+            Assert.Equal(vm.Regional.Keymap, configWriter.Saved.Keymap);
+            Assert.Equal(vm.Regional.Timezone, configWriter.Saved.Timezone);
+        }
+
+        /// <summary>
+        /// E quando ele corrige, é a correção que vale — um teclado físico diferente do
+        /// configurado no Windows é caso comum, e a detecção pode simplesmente errar.
+        /// </summary>
+        [Fact]
+        public async Task Install_CorrectedRegionalSettings_OverrideTheDetectedOnes()
+        {
+            var configWriter = new FakeInstallerConfigWriter();
+            var vm = BuildViewModel(new CapturingBootStagingService(), configWriter: configWriter);
+
+            vm.Regional.Locale = "de_DE.UTF-8";
+            vm.Regional.Keymap = "de";
+            vm.Regional.Timezone = "Europe/Berlin";
+
+            await ReplaceInstallAsync(vm);
+
+            Assert.Equal("de_DE.UTF-8", configWriter.Saved!.Locale);
+            Assert.Equal("de", configWriter.Saved.Keymap);
+            Assert.Equal("Europe/Berlin", configWriter.Saved.Timezone);
+        }
+
+        /// <summary>Idioma, teclado e fuso só são perguntados quando a instalação desatendida
+        /// vai de fato rodar: sem ela quem pergunta é o instalador nativo da ISO, e oferecer
+        /// uma escolha que seria ignorada promete um controle que o usuário não tem.</summary>
+        [Fact]
+        public void RegionalStep_FollowsWhetherTheUnattendedInstallWillRun()
+        {
+            var vm = BuildViewModel(new CapturingBootStagingService());
+
+            Assert.True(vm.Iso.IsAutoinstallActive);
+            Assert.True(vm.IsRegionalStepVisible);
+
+            vm.Iso.UseAutoinstall = false;
+
+            Assert.False(vm.IsRegionalStepVisible);
+        }
+
+        private static async Task ReplaceInstallAsync(InstallWizardViewModel vm)
+        {
+            vm.InstallCommand.Execute(null);
+            // Modo substituir exige confirmação tipada.
+            vm.PendingConfirmation!.TypedConfirmation = vm.PendingConfirmation.ConfirmationWord;
+            vm.PendingConfirmation.ConfirmCommand.Execute(null);
+            await WaitUntilIdleAsync(vm);
         }
 
         [Fact]

@@ -305,6 +305,51 @@
                     </StackPanel>
                 </ui:Card>
 
+                <!-- Idioma, teclado e fuso: como a conta, só existe pro fluxo de autoinstall —
+                     sem ele quem pergunta isso é o instalador nativo da ISO. Os três campos
+                     nascem com o que foi detectado do Windows e podem ser corrigidos; o valor
+                     que aparece aqui é o que vai para a instalação. -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding IsRegionalStepVisible, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_RegionalSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
+                        <TextBlock Text="{loc:Loc Wizard_RegionalSectionHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <!-- Alguma das três não teve correspondência e está mostrando o padrão
+                             declarado do mapeamento. Não bloqueia nada: só torna visível o que
+                             antes era um valor chumbado que ninguém via. -->
+                        <ui:InfoBar IsOpen="{Binding Regional.HasUndetectedSetting, Mode=OneWay}"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Message="{loc:Loc Wizard_RegionalFallbackWarningMessage}"
+                                    Margin="0,0,0,10"/>
+
+                        <TextBlock Text="{loc:Loc Wizard_LocaleLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                        <ComboBox Margin="0,0,0,10"
+                                  ItemsSource="{Binding Regional.AvailableLocales}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Regional.Locale}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding NativeName}"/>
+                                        <TextBlock Text="{Binding Value}" Opacity="0.6" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="{loc:Loc Wizard_KeymapLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                        <ComboBox Margin="0,0,0,10"
+                                  ItemsSource="{Binding Regional.AvailableKeymaps}"
+                                  SelectedItem="{Binding Regional.Keymap}"/>
+
+                        <TextBlock Text="{loc:Loc Wizard_TimezoneLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                        <ComboBox ItemsSource="{Binding Regional.AvailableTimezones}"
+                                  SelectedItem="{Binding Regional.Timezone}"/>
+                    </StackPanel>
+                </ui:Card>
+
                 <ui:InfoBar IsOpen="True"
                             IsClosable="False"
                             Severity="Warning"

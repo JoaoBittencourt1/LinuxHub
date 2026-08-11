@@ -32,7 +32,7 @@ namespace LinuxHub
             IDiskPartitioningService diskPartitioningService = new DiskPartitioningService();
             ISystemInfoProvider systemInfoProvider = new SystemInfoProvider();
             IInstallerConfigWriter installerConfigWriter = new InstallerConfigWriter();
-            var installerConfigBuilder = new InstallerConfigBuilder(systemInfoProvider, espLocatorService);
+            var installerConfigBuilder = new InstallerConfigBuilder(espLocatorService);
 
             ICloudInitSeedWriter cloudInitSeedWriter = new CloudInitSeedWriter();
             IDiskLayoutProvider diskLayoutProvider = new DiskLayoutProvider();
@@ -59,10 +59,14 @@ namespace LinuxHub
             var isoAcquisitionViewModel = new IsoAcquisitionViewModel(isoDownloadService, distroDetectionService, downloadedIsoRepository);
             var targetSelectionViewModel = new TargetSelectionViewModel(diskInventoryService, partitionInventoryService, firmwareService);
             var accountViewModel = new AccountViewModel();
+            // Construído aqui, na thread de UI: o layout de teclado que o SystemInfoProvider lê
+            // é o da thread que pergunta (ver o comentário lá).
+            var regionalSettingsViewModel = new RegionalSettingsViewModel(systemInfoProvider);
             var installWizardViewModel = new InstallWizardViewModel(
                 isoAcquisitionViewModel,
                 targetSelectionViewModel,
                 accountViewModel,
+                regionalSettingsViewModel,
                 installerConfigBuilder,
                 installerConfigWriter,
                 diskPartitioningService,

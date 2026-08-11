@@ -6,13 +6,6 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 {
     public class InstallerConfigBuilderTests
     {
-        private sealed class FakeSystemInfoProvider : ISystemInfoProvider
-        {
-            public string GetLocale() => "pt_BR.UTF-8";
-            public string GetKeymap() => "br";
-            public string GetTimezone() => "America/Sao_Paulo";
-        }
-
         private sealed class FakeEspLocatorService : IEspLocatorService
         {
             public int? EspIndex { get; set; }
@@ -39,13 +32,16 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             LinuxPartitionSizeGb: 0,
             Username: "user",
             Password: "pass",
-            Hostname: "host");
+            Hostname: "host",
+            Locale: "pt_BR.UTF-8",
+            Keymap: "br",
+            Timezone: "America/Sao_Paulo");
 
         [Fact]
         public void Build_Uefi_UsesEspLookup_NotFixedIndex()
         {
             var espLocator = new FakeEspLocatorService { EspIndex = 3 };
-            var builder = new InstallerConfigBuilder(new FakeSystemInfoProvider(), espLocator);
+            var builder = new InstallerConfigBuilder(espLocator);
 
             var config = builder.Build(CreateRequest(isUefi: true));
 
@@ -56,11 +52,33 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void Build_Bios_NeverLooksUpEsp()
         {
             var espLocator = new FakeEspLocatorService { EspIndex = 3 };
-            var builder = new InstallerConfigBuilder(new FakeSystemInfoProvider(), espLocator);
+            var builder = new InstallerConfigBuilder(espLocator);
 
             var config = builder.Build(CreateRequest(isUefi: false));
 
             Assert.Null(config.EfiPartitionIndex);
+        }
+
+        /// <summary>
+        /// Os três campos regionais saem do pedido, não de uma leitura do sistema feita aqui
+        /// dentro: quem os apresenta e permite corrigir é o passo regional do wizard, e ler de
+        /// novo neste ponto abriria divergência entre o que o usuário viu e o que foi gravado.
+        /// </summary>
+        [Fact]
+        public void Build_CarriesTheRegionalSettingsOfTheRequest()
+        {
+            var builder = new InstallerConfigBuilder(new FakeEspLocatorService());
+
+            var config = builder.Build(CreateRequest(isUefi: true) with
+            {
+                Locale = "de_DE.UTF-8",
+                Keymap = "de",
+                Timezone = "Europe/Berlin"
+            });
+
+            Assert.Equal("de_DE.UTF-8", config.Locale);
+            Assert.Equal("de", config.Keymap);
+            Assert.Equal("Europe/Berlin", config.Timezone);
         }
     }
 }

@@ -461,6 +461,24 @@ Select a valid Linux ISO.</value>
   <data name="Wizard_UntestedDistroTooltip" xml:space="preserve">
     <value>Untested distro — installation may fail</value>
   </data>
+  <data name="Wizard_RegionalSectionTitle" xml:space="preserve">
+    <value>Language, keyboard and time zone</value>
+  </data>
+  <data name="Wizard_RegionalSectionHint" xml:space="preserve">
+    <value>Detected from your Windows setup. Check them before installing — this is how the new system will start.</value>
+  </data>
+  <data name="Wizard_LocaleLabel" xml:space="preserve">
+    <value>System language</value>
+  </data>
+  <data name="Wizard_KeymapLabel" xml:space="preserve">
+    <value>Keyboard layout</value>
+  </data>
+  <data name="Wizard_TimezoneLabel" xml:space="preserve">
+    <value>Time zone</value>
+  </data>
+  <data name="Wizard_RegionalFallbackWarningMessage" xml:space="preserve">
+    <value>One of these settings has no known Linux equivalent and is showing a default value. It is worth checking all three fields before continuing.</value>
+  </data>
   <data name="UpdateNotice_Title" xml:space="preserve">
     <value>Update available</value>
   </data>

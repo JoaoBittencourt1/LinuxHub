@@ -461,6 +461,24 @@ Selecione uma ISO Linux válida.</value>
   <data name="Wizard_UntestedDistroTooltip" xml:space="preserve">
     <value>Distro não testada — a instalação pode falhar</value>
   </data>
+  <data name="Wizard_RegionalSectionTitle" xml:space="preserve">
+    <value>Idioma, teclado e fuso horário</value>
+  </data>
+  <data name="Wizard_RegionalSectionHint" xml:space="preserve">
+    <value>Detectados a partir do seu Windows. Confira antes de instalar — é assim que o sistema novo vai iniciar.</value>
+  </data>
+  <data name="Wizard_LocaleLabel" xml:space="preserve">
+    <value>Idioma do sistema</value>
+  </data>
+  <data name="Wizard_KeymapLabel" xml:space="preserve">
+    <value>Layout do teclado</value>
+  </data>
+  <data name="Wizard_TimezoneLabel" xml:space="preserve">
+    <value>Fuso horário</value>
+  </data>
+  <data name="Wizard_RegionalFallbackWarningMessage" xml:space="preserve">
+    <value>Alguma dessas configurações não tem equivalente conhecido no Linux e está mostrando um valor padrão. Vale conferir os três campos antes de continuar.</value>
+  </data>
   <data name="UpdateNotice_Title" xml:space="preserve">
     <value>Nova versão disponível</value>
   </data>
