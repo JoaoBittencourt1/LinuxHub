@@ -423,7 +423,7 @@
              em andamento não teria efeito algum e só confundiria. -->
         <Border Background="#CC000000"
                 Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVis}}">
-            <ui:Card MaxWidth="420"
+            <ui:Card MaxWidth="520"
                      Margin="24"
                      HorizontalAlignment="Center"
                      VerticalAlignment="Center">
@@ -443,6 +443,30 @@
                                TextWrapping="Wrap"
                                TextAlignment="Center"
                                Margin="0,10,0,0"/>
+
+                    <!-- Log acumulado: cada passo relatado vira uma linha, nunca sobrescrita —
+                         é o que deixa visível o que está sendo feito, e não só o passo atual. -->
+                    <Border Background="#14FFFFFF"
+                            CornerRadius="4"
+                            Margin="0,14,0,0"
+                            Padding="10,8"
+                            MaxHeight="160">
+                        <ScrollViewer x:Name="InstallLogScroll"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding InstallLog}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Opacity="0.85"
+                                                   TextWrapping="Wrap"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
                 </StackPanel>
             </ui:Card>
         </Border>

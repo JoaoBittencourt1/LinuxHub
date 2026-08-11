@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Input;
 using LinuxHub.Common.Data;
@@ -141,6 +142,13 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         public bool IsConfirming => PendingConfirmation is not null;
         public bool IsInstalling => InstallStatus is not null;
         public bool IsIdle => !IsConfirming && !IsInstalling;
+
+        /// <summary>Histórico acumulado dos passos da instalação em andamento, um item por
+        /// relato de progresso — nunca sobrescrito, ao contrário de <see cref="InstallStatus"/>
+        /// (que continua sendo só o passo atual, para o texto em destaque). Limpo no início de
+        /// cada tentativa, para que uma reinstalação depois de um erro não misture o histórico
+        /// antigo com o novo.</summary>
+        public ObservableCollection<string> InstallLog { get; } = new();
 
         public event Action<string, string, bool>? Notify;
 
@@ -377,14 +385,26 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             return overhead + _stagingPartition.RequiredBytesFor(isoSize);
         }
 
+        /// <summary>Acrescenta uma linha ao log visível. <see cref="Progress{T}"/> volta na
+        /// thread que o criou (a de UI, aqui), então mutar <see cref="InstallLog"/> direto é
+        /// seguro — mesma garantia de que já dependia <see cref="InstallStatus"/>.</summary>
+        private void AppendToInstallLog(string message) =>
+            InstallLog.Add($"{DateTime.Now:HH:mm:ss}  {message}");
+
         private async Task ExecuteInstallAsync(DistroInfo distro)
         {
             var loc = LocalizationManager.Instance;
-            var progress = new Progress<string>(step => InstallStatus = step);
+            var progress = new Progress<string>(step =>
+            {
+                InstallStatus = step;
+                AppendToInstallLog(step);
+            });
             bool autoinstallActive = Iso.IsAutoinstallActive;
 
             PendingConfirmation = null;
+            InstallLog.Clear();
             InstallStatus = loc["Wizard_InstallStepPreparing"];
+            AppendToInstallLog(InstallStatus);
 
             string? error = null;
             try
@@ -394,6 +414,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             catch (Exception ex)
             {
                 error = ex.Message;
+                AppendToInstallLog(error);
             }
             finally
             {

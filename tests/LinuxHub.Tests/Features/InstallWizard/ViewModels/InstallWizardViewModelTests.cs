@@ -445,6 +445,53 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             await WaitUntilIdleAsync(vm);
         }
 
+        /// <summary>O usuário pediu para ver o que está sendo feito durante a instalação: um
+        /// log acumulado, não só a última linha sobrescrevendo a anterior. Cada passo relatado
+        /// tem que virar uma entrada nova em <see cref="InstallWizardViewModel.InstallLog"/>,
+        /// preservando as anteriores.</summary>
+        [Fact]
+        public async Task Confirming_AccumulatesEachStepInTheInstallLog()
+        {
+            var bootStaging = new BlockingBootStagingService();
+            var vm = BuildViewModel(bootStaging);
+
+            await ConfirmAndWaitForInstallStartAsync(vm, bootStaging);
+
+            // Pelo menos o passo de preparação inicial e o passo em que a instalação está
+            // bloqueada (BlockingBootStagingService segura no boot staging) já têm que estar
+            // no log, como linhas distintas — não uma sobrescrevendo a outra.
+            Assert.True(vm.InstallLog.Count >= 2);
+            Assert.NotEqual(vm.InstallLog[0], vm.InstallLog[^1]);
+
+            bootStaging.Release();
+            await WaitUntilIdleAsync(vm);
+        }
+
+        /// <summary>Uma nova tentativa depois de um erro não pode misturar o histórico da
+        /// tentativa anterior com o da nova — confundiria o que de fato está acontecendo agora.</summary>
+        [Fact]
+        public async Task Confirming_ClearsThePreviousInstallLogOnANewAttempt()
+        {
+            var bootStaging = new BlockingBootStagingService();
+            var vm = BuildViewModel(bootStaging);
+
+            await ConfirmAndWaitForInstallStartAsync(vm, bootStaging);
+            int firstAttemptLogCount = vm.InstallLog.Count;
+            Assert.True(firstAttemptLogCount > 0);
+
+            bootStaging.Release();
+            await WaitUntilIdleAsync(vm);
+
+            await ConfirmAndWaitForInstallStartAsync(vm, bootStaging);
+
+            // O log da segunda tentativa não pode ser maior ou igual ao dobro do primeiro por
+            // acaso — o teste real é que ele não CRESCEU sobre o anterior sem limpar.
+            Assert.True(vm.InstallLog.Count <= firstAttemptLogCount);
+
+            bootStaging.Release();
+            await WaitUntilIdleAsync(vm);
+        }
+
         [Fact]
         public async Task InstallFinished_ReturnsWizardToIdle()
         {
