@@ -81,6 +81,30 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains(report.Warnings, w => w.Code == "COMPAT_W_BOOTNEXT_SKIPPED");
         }
 
+        /// <summary>
+        /// A fase 8 (design.md/tasks.md, "Validação em VM") exige rodar dentro de uma VM com
+        /// snapshot — mas o disco de sistema de qualquer VM local reporta `FriendlyName`
+        /// contendo "Virtual" (controlador SCSI sintético do Hyper-V, por exemplo), o que sem
+        /// este interruptor faz VirtualOrIscsiDiskRule recusar toda VM sempre, tornando a
+        /// própria fase 8 impossível de executar. iSCSI continua recusado incondicionalmente —
+        /// é um disco de rede numa máquina real, categoria diferente de "estou testando dentro
+        /// da minha própria VM".
+        /// </summary>
+        [Fact]
+        public void VirtualDisk_RejectedUnlessVmValidationSwitchIsOn()
+        {
+            var onlyVirtual = new CompatibilityPreflightRunner([new VirtualOrIscsiDiskRule()]);
+
+            var virtualDiskReport = onlyVirtual.Evaluate(new CompatibilityFacts { IsVirtualDisk = true });
+            Assert.Equal(
+                InstallationSafetySwitches.AllowVirtualDiskForVmValidation,
+                !virtualDiskReport.HasRejection);
+
+            var iscsiReport = onlyVirtual.Evaluate(new CompatibilityFacts { IsIscsi = true });
+            Assert.True(iscsiReport.HasRejection);
+            Assert.Contains(iscsiReport.Rejections, r => r.Code == "COMPAT_E_ISCSI");
+        }
+
         [Fact]
         public void Rules_AreIndependentlyComposable()
         {

@@ -38,7 +38,10 @@ namespace LinuxHub.Features.InstallWizard.Services
     {
         public CompatibilityFinding? Evaluate(CompatibilityFacts facts)
         {
-            if (facts.IsVirtualDisk == true)
+            // iSCSI nunca é dispensado por este interruptor — ver o doc-comment do switch em
+            // InstallationSafetySwitches: é um caso de disco remoto numa máquina real, diferente
+            // de testar dentro da própria VM.
+            if (facts.IsVirtualDisk == true && !InstallationSafetySwitches.AllowVirtualDiskForVmValidation)
             {
                 return new CompatibilityFinding(
                     CompatibilitySeverity.Reject,
