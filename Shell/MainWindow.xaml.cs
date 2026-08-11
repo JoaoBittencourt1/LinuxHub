@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Reflection;
 using System.Windows;
+using LinuxHub.Common.Appearance;
 using LinuxHub.Common.Localization;
 using LinuxHub.Common.Models;
+using LinuxHub.Common.Ui;
 using LinuxHub.Features.Catalog.ViewModels;
 using LinuxHub.Features.Catalog.Views;
 using LinuxHub.Features.InstallWizard.ViewModels;
@@ -12,25 +14,28 @@ using Wpf.Ui.Controls;
 namespace LinuxHub.Shell
 {
     /// <summary>
-    /// Shell da aplicação: hospeda as views de feature e troca o idioma. Sem lógica
-    /// de negócio. Navegação é troca direta de ContentControl.Content via Click de
-    /// botão — não usa o gerenciamento de conteúdo interno do NavigationView (que se
-    /// mostrou pouco confiável em teste manual: SelectionChanged nem sempre refletia
-    /// o item clicado). Button.Click é um evento simples e determinístico.
+    /// Application shell: hosts feature views and language/theme chrome. No business logic.
+    /// Navigation swaps ContentControl.Content via Button.Click (deterministic).
     /// </summary>
     public partial class MainWindow : FluentWindow
     {
         private readonly CatalogView _catalogView;
         private readonly InstallWizardView _installWizardView;
         private readonly InstallWizardViewModel _installWizardViewModel;
+        private readonly IThemeService _themeService;
 
-        public MainWindow(CatalogViewModel catalogViewModel, InstallWizardViewModel installWizardViewModel)
+        public MainWindow(
+            CatalogViewModel catalogViewModel,
+            InstallWizardViewModel installWizardViewModel,
+            IThemeService themeService)
         {
             ArgumentNullException.ThrowIfNull(catalogViewModel);
             ArgumentNullException.ThrowIfNull(installWizardViewModel);
+            ArgumentNullException.ThrowIfNull(themeService);
 
             InitializeComponent();
 
+            _themeService = themeService;
             _installWizardViewModel = installWizardViewModel;
             catalogViewModel.InstallRequested += OnInstallRequested;
 
@@ -40,12 +45,11 @@ namespace LinuxHub.Shell
             _catalogView = new CatalogView { DataContext = catalogViewModel };
             _installWizardView = new InstallWizardView { DataContext = installWizardViewModel };
 
+            RefreshThemeIcon();
             ShowCatalog();
         }
 
-        /// <summary>Atalho "instalar agora" da página da distro: além de trocar de painel,
-        /// deixa o wizard já apontado pra ela — chegar na tela de instalação e ter que
-        /// escolher a distro de novo era refazer a escolha que o usuário acabou de fazer.</summary>
+        /// <summary>Distro detail "install now" shortcut: switch panel and preselect distro.</summary>
         private void OnInstallRequested(DistroInfo distro)
         {
             _installWizardViewModel.Iso.PrepareForDistro(distro);
@@ -61,6 +65,7 @@ namespace LinuxHub.Shell
             ContentHost.Content = _catalogView;
             CatalogNavButton.Appearance = ControlAppearance.Secondary;
             InstallNavButton.Appearance = ControlAppearance.Transparent;
+            ContentTransition.PlayEnter(_catalogView);
         }
 
         private void ShowInstallWizard()
@@ -68,6 +73,21 @@ namespace LinuxHub.Shell
             ContentHost.Content = _installWizardView;
             InstallNavButton.Appearance = ControlAppearance.Secondary;
             CatalogNavButton.Appearance = ControlAppearance.Transparent;
+            ContentTransition.PlayEnter(_installWizardView);
+        }
+
+        private void ThemeButton_Click(object sender, RoutedEventArgs e)
+        {
+            _themeService.Toggle();
+            RefreshThemeIcon();
+        }
+
+        private void RefreshThemeIcon()
+        {
+            // Light mode → show moon (switch to dark). Dark mode → show sun (switch to light).
+            ThemeIcon.Symbol = _themeService.IsDark ? SymbolRegular.WeatherSunny24 : SymbolRegular.WeatherMoon24;
+            ThemeButton.ToolTip = LocalizationManager.Instance[
+                _themeService.IsDark ? "Shell_ThemeSwitchToLight" : "Shell_ThemeSwitchToDark"];
         }
 
         private void LanguageButton_Click(object sender, RoutedEventArgs e)

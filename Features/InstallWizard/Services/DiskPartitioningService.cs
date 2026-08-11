@@ -15,9 +15,17 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public sealed class DiskPartitioningService : IDiskPartitioningService
     {
+        private readonly IInstallationPlanMutationGuard _mutationGuard;
+
+        public DiskPartitioningService(IInstallationPlanMutationGuard mutationGuard)
+        {
+            _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
+        }
+
         public void ShrinkPartition(
             int diskIndex, int partitionIndex, long bytesToFree, int newPartitionsPlanned)
         {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             ElevatedPowerShellRunner.Run(
                 BuildScript(diskIndex, partitionIndex, bytesToFree, newPartitionsPlanned),
                 $"redimensionamento da partição {partitionIndex} do disco {diskIndex}");
@@ -26,6 +34,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         public void EnsureUnallocatedSpace(
             int diskIndex, long requiredBytes, int newPartitionsPlanned)
         {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             ElevatedPowerShellRunner.Run(
                 BuildEnsureSpaceScript(diskIndex, requiredBytes, newPartitionsPlanned),
                 $"abertura de espaço não alocado no disco {diskIndex}");

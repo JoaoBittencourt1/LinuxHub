@@ -32,8 +32,37 @@ namespace LinuxHub.Common.Models
         /// compatibilidade entre distros/versões, e nem todas usam o mesmo mecanismo.</summary>
         public UnattendedInstallMechanism UnattendedInstall { get; set; }
 
-        /// <summary>Atalho de leitura para "esta build tem algum mecanismo validado".</summary>
-        public bool SupportsUnattendedInstall => UnattendedInstall != UnattendedInstallMechanism.None;
+        /// <summary>SHA-256 do artefato de download, obtido da fonte oficial da distro — nunca
+        /// calculado a partir de um arquivo já baixado (isso só provaria consistência consigo
+        /// mesmo, não que o arquivo é o que deveria ser). Vazio para uma entrada cuja fonte não
+        /// publica SHA-256 (ver <see cref="HasVerifiableArtifact"/>): download automático fica
+        /// desligado para ela até que publique.</summary>
+        public string Sha256 { get; set; } = string.Empty;
+
+        /// <summary>Tamanho esperado do artefato em bytes, da mesma fonte que <see cref="Sha256"/>.
+        /// Conferido antes do hash — um arquivo de tamanho errado é rejeitado sem gastar tempo
+        /// calculando SHA-256 de um artefato já sabido divergente.</summary>
+        public long SizeBytes { get; set; }
+
+        /// <summary>Se esta build tem identidade criptográfica de referência. Sem ela, nem
+        /// download automático nem instalação desatendida podem ser oferecidos — ver
+        /// <see cref="SupportsUnattendedInstall"/>.</summary>
+        public bool HasVerifiableArtifact => !string.IsNullOrWhiteSpace(Sha256) && SizeBytes > 0;
+
+        /// <summary>Se esta entrada é exibida no catálogo e oferecida no seletor de download do
+        /// wizard. Uma entrada desabilitada permanece no código — com seu comentário explicando
+        /// o motivo — em vez de ser apagada: "temporariamente fora do ar" e "nunca existiu" são
+        /// coisas diferentes, e apagar perderia o trabalho de levantar versão/hash/link quando o
+        /// motivo for resolvido. Detecção por nome de arquivo (seleção manual) continua
+        /// funcionando para uma entrada desabilitada — este flag não é sobre confiança do
+        /// artefato, é só sobre o que é oferecido de cara.</summary>
+        public bool IsEnabled { get; set; } = true;
+
+        /// <summary>Atalho de leitura para "esta build tem algum mecanismo validado". Exige
+        /// também <see cref="HasVerifiableArtifact"/>: automação desatendida sobre um artefato
+        /// que o app não consegue verificar seria automação sobre um arquivo não confiável —
+        /// mesmo problema de fundo que o §6.1 da constitution já trata para particionamento.</summary>
+        public bool SupportsUnattendedInstall => UnattendedInstall != UnattendedInstallMechanism.None && HasVerifiableArtifact;
 
         /// <summary>Como esta build monta a sessão live, o que decide a entrada de boot usada
         /// para iniciá-la a partir de um arquivo. O padrão é <see cref="LiveSessionFamily.Casper"/>

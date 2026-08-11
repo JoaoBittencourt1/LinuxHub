@@ -3,11 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
+        xmlns:fx="clr-namespace:LinuxHub.Common.Ui"
         Title="{loc:Loc Shell_Title}"
-        Height="640"
-        Width="1040"
-        MinHeight="480"
-        MinWidth="760"
+        Height="700"
+        Width="1120"
+        MinHeight="520"
+        MinWidth="800"
         WindowBackdropType="Mica"
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterScreen">
@@ -20,12 +21,23 @@
 
         <ui:TitleBar Title="{loc:Loc Shell_Title}" Grid.Row="0">
             <ui:TitleBar.TrailingContent>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="VersionText"
                                VerticalAlignment="Center"
-                               Margin="0,0,8,0"
-                               Opacity="0.6"
+                               Margin="0,0,4,0"
+                               Opacity="0.55"
                                FontSize="11"/>
+
+                    <ui:Button x:Name="ThemeButton"
+                               Appearance="Transparent"
+                               ToolTip="{loc:Loc Shell_ThemeTooltip}"
+                               Click="ThemeButton_Click"
+                               Margin="0,0,2,0">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon x:Name="ThemeIcon" Symbol="WeatherMoon24"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
+
                     <ui:Button x:Name="LanguageButton"
                                Appearance="Transparent"
                                ToolTip="{loc:Loc Shell_LanguageTooltip}"
@@ -44,43 +56,65 @@
             </ui:TitleBar.TrailingContent>
         </ui:TitleBar>
 
-        <!-- Navegação por troca direta de conteúdo (ContentControl), não pelo
-             gerenciamento interno de conteúdo do NavigationView — mais simples e
-             previsível de verificar do que depender do comportamento interno dele. -->
-        <Grid Grid.Row="1">
+        <!-- Direct ContentControl swap (not NavigationView content host) — deterministic
+             SelectionChanged was unreliable in manual testing. -->
+        <Grid Grid.Row="1" Margin="12,4,12,12">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="190"/>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="12"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Margin="8,12,8,8">
-                <ui:Button x:Name="CatalogNavButton"
-                           Content="{loc:Loc Shell_NavCatalog}"
-                           Appearance="Secondary"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Left"
-                           Height="42"
-                           Margin="0,0,0,6"
-                           Click="CatalogNavButton_Click">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="Grid24"/>
-                    </ui:Button.Icon>
-                </ui:Button>
+            <Border Grid.Column="0"
+                    CornerRadius="10"
+                    Padding="10,12"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="{loc:Loc Shell_NavSectionLabel}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Opacity="0.55"
+                               Margin="8,0,8,10"/>
 
-                <ui:Button x:Name="InstallNavButton"
-                           Content="{loc:Loc Shell_NavInstall}"
-                           Appearance="Transparent"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Left"
-                           Height="42"
-                           Click="InstallNavButton_Click">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="Desktop24"/>
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
+                    <ui:Button x:Name="CatalogNavButton"
+                               Content="{loc:Loc Shell_NavCatalog}"
+                               Appearance="Secondary"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Left"
+                               Height="44"
+                               Margin="0,0,0,6"
+                               fx:PressFeedback.Enabled="True"
+                               Click="CatalogNavButton_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Grid24"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
 
-            <ContentControl x:Name="ContentHost" Grid.Column="1"/>
+                    <ui:Button x:Name="InstallNavButton"
+                               Content="{loc:Loc Shell_NavInstall}"
+                               Appearance="Transparent"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Left"
+                               Height="44"
+                               fx:PressFeedback.Enabled="True"
+                               Click="InstallNavButton_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Desktop24"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="2"
+                    CornerRadius="10"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    ClipToBounds="True">
+                <ContentControl x:Name="ContentHost"/>
+            </Border>
         </Grid>
     </Grid>
 </ui:FluentWindow>

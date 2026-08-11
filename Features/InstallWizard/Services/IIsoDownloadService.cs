@@ -21,7 +21,11 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// <summary>
         /// Baixa a ISO da distro para a pasta padrão de ISOs do LinuxHub e retorna o
         /// caminho do arquivo baixado. Em caso de cancelamento, o arquivo parcial é
-        /// removido e a exceção de cancelamento propaga para quem chamou.
+        /// removido e a exceção de cancelamento propaga para quem chamou. O SHA-256 é
+        /// calculado em streaming durante o download e conferido contra
+        /// <see cref="DistroInfo.Sha256"/>/<see cref="DistroInfo.SizeBytes"/>; uma
+        /// divergência apaga o arquivo e lança <see cref="ArtifactVerificationException"/> —
+        /// nenhum caminho de ISO é devolvido para um artefato que falhou a verificação.
         /// </summary>
         Task<string> DownloadAsync(DistroInfo distro, IProgress<IsoDownloadProgress> progress, CancellationToken cancellationToken);
     }

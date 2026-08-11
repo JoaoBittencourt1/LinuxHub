@@ -77,6 +77,18 @@
   <data name="Shell_LanguageEnUs" xml:space="preserve">
     <value>English (US)</value>
   </data>
+  <data name="Shell_ThemeTooltip" xml:space="preserve">
+    <value>Toggle light/dark theme</value>
+  </data>
+  <data name="Shell_ThemeSwitchToDark" xml:space="preserve">
+    <value>Use dark theme</value>
+  </data>
+  <data name="Shell_ThemeSwitchToLight" xml:space="preserve">
+    <value>Use light theme</value>
+  </data>
+  <data name="Shell_NavSectionLabel" xml:space="preserve">
+    <value>Navigate</value>
+  </data>
 
   <data name="CatalogDetail_Back" xml:space="preserve">
     <value>Back</value>
@@ -314,6 +326,9 @@ Note: suspending BitLocker is not enough — the data stays encrypted on disk. I
   <data name="Wizard_InstallStepPreparing" xml:space="preserve">
     <value>Preparing the installation…</value>
   </data>
+  <data name="Wizard_InstallStepPublishingPlan" xml:space="preserve">
+    <value>Publishing the installation plan…</value>
+  </data>
   <data name="Wizard_InstallStepShrinking" xml:space="preserve">
     <value>Shrinking the Windows partition…</value>
   </data>
@@ -332,6 +347,63 @@ Free up space on the disk, pick a larger target, or reduce the size reserved for
   </data>
   <data name="Wizard_InstallStepStagingBoot" xml:space="preserve">
     <value>Staging the Linux bootloader…</value>
+  </data>
+  <data name="Wizard_RollbackEncryptionDivergence" xml:space="preserve">
+    <value>Volume protection (BitLocker or equivalent) did not return to its pre-install state. Re-enable protection manually in Windows settings.</value>
+  </data>
+  <data name="Wizard_BitLockerQueryFailedMessage" xml:space="preserve">
+    <value>Could not verify encryption on volume {0}:. Without that confirmation, installation cannot continue.</value>
+  </data>
+  <data name="Wizard_InterruptedTransactionTitle" xml:space="preserve">
+    <value>Previous installation incomplete</value>
+  </data>
+  <data name="Wizard_InterruptedTransactionMessage" xml:space="preserve">
+    <value>A previous transaction is in state "{0}". {1} Resolve or remove that transaction before starting another install.</value>
+  </data>
+  <data name="Wizard_InterruptedTransactionBlocked" xml:space="preserve">
+    <value>A new installation cannot start while a previous unresolved transaction exists.</value>
+  </data>
+  <data name="Preflight_RejectTitle" xml:space="preserve">
+    <value>Incompatible machine</value>
+  </data>
+  <data name="Preflight_WarnTitle" xml:space="preserve">
+    <value>Compatibility warning</value>
+  </data>
+  <data name="Preflight_RejectBlocked" xml:space="preserve">
+    <value>Compatibility preflight rejected this machine. Installation cannot continue.</value>
+  </data>
+  <data name="Preflight_RejectDynamicDisk" xml:space="preserve">
+    <value>The system disk is dynamic. Convert it to basic before installing.</value>
+  </data>
+  <data name="Preflight_RejectStorageSpaces" xml:space="preserve">
+    <value>Storage Spaces is not supported on this install path.</value>
+  </data>
+  <data name="Preflight_RejectUsbSystemDisk" xml:space="preserve">
+    <value>The system disk is on USB. Install from an internal disk.</value>
+  </data>
+  <data name="Preflight_RejectVirtualDisk" xml:space="preserve">
+    <value>A virtual disk (VHD/VHDX) is not a supported target.</value>
+  </data>
+  <data name="Preflight_RejectIscsi" xml:space="preserve">
+    <value>An iSCSI disk is not a supported target.</value>
+  </data>
+  <data name="Preflight_RejectRaidOrVmd" xml:space="preserve">
+    <value>A RAID/Intel RST/VMD controller was detected and cannot be addressed safely by this installer.</value>
+  </data>
+  <data name="Preflight_RejectIndeterminateTopology" xml:space="preserve">
+    <value>Disk topology could not be determined. Installation refuses rather than assuming the likely case.</value>
+  </data>
+  <data name="Preflight_RejectEncryptionUnreadable" xml:space="preserve">
+    <value>Volume encryption status could not be read. Installation refuses without that confirmation.</value>
+  </data>
+  <data name="Preflight_RejectEncryptionActive" xml:space="preserve">
+    <value>The system volume is still encrypted or protected. Turn protection off and finish decryption before installing.</value>
+  </data>
+  <data name="Preflight_WarnBootNextSkipped" xml:space="preserve">
+    <value>The BootNext probe was skipped. That is not treated as approval of boot order.</value>
+  </data>
+  <data name="Preflight_WarnBootNextFailed" xml:space="preserve">
+    <value>The BootNext probe failed. That is not treated as approval of boot order.</value>
   </data>
   <data name="Wizard_InstallProgressHint" xml:space="preserve">
     <value>Do not shut down or close LinuxBit. This can take a few minutes, and Windows will ask for administrator permission.</value>
@@ -406,6 +478,30 @@ Select a valid Linux ISO.</value>
   </data>
   <data name="Wizard_DownloadErrorTitle" xml:space="preserve">
     <value>Download error</value>
+  </data>
+  <data name="Wizard_VerifyingIsoLabel" xml:space="preserve">
+    <value>Verifying ISO integrity...</value>
+  </data>
+  <data name="Wizard_IsoVerificationFailedTitle" xml:space="preserve">
+    <value>Integrity verification failed</value>
+  </data>
+  <data name="Wizard_IsoVerificationFailedMessage" xml:space="preserve">
+    <value>The file does not match the published hash for {0}. It may be corrupted or have been tampered with — download it again or get the ISO directly from the official source.</value>
+  </data>
+  <data name="Wizard_IsoNoReferenceHashTitle" xml:space="preserve">
+    <value>No reference hash</value>
+  </data>
+  <data name="Wizard_IsoNoReferenceHashMessage" xml:space="preserve">
+    <value>{0} has no published reference hash; this file was accepted without integrity verification, and automatic installation is not available for it.</value>
+  </data>
+  <data name="Wizard_DistroNotVerifiableMessage" xml:space="preserve">
+    <value>This distro has no reference hash published by its official source — automatic download is disabled. Use manual selection if you already have the ISO.</value>
+  </data>
+  <data name="Wizard_CatalogFallbackTitle" xml:space="preserve">
+    <value>Catalog offline</value>
+  </data>
+  <data name="Wizard_CatalogFallbackMessage" xml:space="preserve">
+    <value>Could not fetch the latest signed catalog. The app is operating with the data embedded in the installed version — links, versions and hashes may be outdated.</value>
   </data>
   <data name="Wizard_ReplaceSystemDiskWarningMessage" xml:space="preserve">
     <value>This disk hosts the running Windows installation. It (and Windows) will be completely erased during the Linux installation, after rebooting — the wipe only happens after reboot, once Windows is no longer running.</value>

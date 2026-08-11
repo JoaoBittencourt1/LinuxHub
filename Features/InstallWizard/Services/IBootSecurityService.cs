@@ -1,23 +1,35 @@
 namespace LinuxHub.Features.InstallWizard.Services
 {
     /// <summary>
-    /// Checa as duas proteções do Windows que impedem o boot de staging de funcionar.
-    /// Nenhuma delas é contornável pelo app — as duas exigem ação do usuário fora dele —
-    /// então o único uso legítimo é recusar a instalação antes de escrever qualquer coisa.
+    /// BitLocker (or equivalent) state as conversion status + percent — never a boolean (task 6.4).
     /// </summary>
-    public interface IBootSecurityService
+    public sealed record VolumeEncryptionState(
+        string ConversionStatus,
+        double PercentComplete,
+        int ProtectionStatus,
+        bool QuerySucceeded)
     {
         /// <summary>
-        /// Secure Boot ligado: o firmware recusa carregar o <c>grubx64.efi</c> do LinuxHub,
-        /// que não é assinado por nenhuma CA que ele reconheça. Falha no firmware, antes de
-        /// qualquer código nosso rodar.
+        /// True only when the volume is fully decrypted and unprotected. Suspended protection
+        /// with remaining ciphertext is NOT treated as clear.
         /// </summary>
+        public bool IsFullyClear =>
+            QuerySucceeded &&
+            ProtectionStatus == 0 &&
+            PercentComplete <= 0.01 &&
+            string.Equals(ConversionStatus, "FullyDecrypted", StringComparison.OrdinalIgnoreCase);
+
+        public bool BlocksStagingBoot => QuerySucceeded && !IsFullyClear;
+    }
+
+    public interface IBootSecurityService
+    {
         bool IsSecureBootEnabled();
 
         /// <summary>
-        /// BitLocker ativo no volume que hospeda a ISO: o GRUB não tem suporte a BitLocker,
-        /// então o <c>search --file</c> varre a partição e não enxerga arquivo nenhum.
+        /// Reads conversion status and percent. A failed query must be treated as refusal —
+        /// never as "no encryption".
         /// </summary>
-        bool IsVolumeBitLockerProtected(char driveLetter);
+        VolumeEncryptionState GetVolumeEncryptionState(char driveLetter);
     }
 }

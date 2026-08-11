@@ -81,5 +81,8 @@ namespace LinuxHub.Features.InstallWizard.Services
 
             return cfg;
         }
+
+        public int? FindEfiPartitionIndex(int diskIndex) =>
+            _espLocator.FindEfiSystemPartitionIndex(diskIndex);
     }
 }

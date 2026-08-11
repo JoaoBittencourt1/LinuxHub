@@ -89,6 +89,57 @@ namespace LinuxHub.Features.InstallWizard.Services
         }
 
         /// <summary>
+        /// Runs a versioned script from <c>Scripts/</c> with caller-supplied arguments (D11).
+        /// Values must not be interpolated into the script body.
+        /// </summary>
+        public static string RunFile(string scriptPath, string arguments, string operationDescription)
+        {
+            if (string.IsNullOrWhiteSpace(scriptPath) || !File.Exists(scriptPath))
+                throw new FileNotFoundException("Elevated script file is missing.", scriptPath);
+
+            string logPath = Path.Combine(Path.GetTempPath(), $"linuxhub_{Guid.NewGuid():N}.log");
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments =
+                    $"/c chcp 65001 > nul && powershell.exe -NoProfile -ExecutionPolicy Bypass " +
+                    $"-WindowStyle Hidden -File \"{scriptPath}\" {arguments} > \"{logPath}\" 2>&1",
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+                UseShellExecute = true,
+            };
+
+            try
+            {
+                using var process = Process.Start(startInfo)
+                    ?? throw new InvalidOperationException(
+                        $"Não foi possível iniciar o processo elevado para {operationDescription}.");
+
+                process.WaitForExit();
+                string output = File.Exists(logPath) ? File.ReadAllText(logPath) : string.Empty;
+
+                DiagnosticLog.Write(
+                    $"{operationDescription} (exit={process.ExitCode})",
+                    $"--- script file ---{Environment.NewLine}{scriptPath}{Environment.NewLine}" +
+                    $"--- arguments ---{Environment.NewLine}{arguments}{Environment.NewLine}" +
+                    $"--- saída ---{Environment.NewLine}{output}");
+
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException(BuildFailureMessage(
+                        output, operationDescription, process.ExitCode));
+                }
+
+                return output;
+            }
+            finally
+            {
+                if (File.Exists(logPath))
+                    File.Delete(logPath);
+            }
+        }
+
+        /// <summary>
         /// Envolve o script num try/catch que reduz qualquer falha — <c>throw</c> do próprio
         /// script ou erro de cmdlet — a uma linha só. Fica aqui, e não em cada serviço, para
         /// valer pra todo script elevado sem repetir o bloco. O <c>-replace</c> achata

@@ -6,6 +6,7 @@
              xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
              xmlns:conv="clr-namespace:LinuxHub.Features.InstallWizard.Views.Converters"
              xmlns:models="clr-namespace:LinuxHub.Common.Models"
+             xmlns:fx="clr-namespace:LinuxHub.Common.Ui"
              xmlns:views="clr-namespace:LinuxHub.Features.InstallWizard.Views">
 
     <UserControl.Resources>
@@ -62,6 +63,17 @@
                                        Margin="8,0,0,0"
                                        Click="BrowseIso_Click"/>
                         </Grid>
+
+                        <!-- Verificação da ISO selecionada manualmente: só uma leitura completa
+                             do arquivo prova a integridade dele, e isso pode levar dezenas de
+                             segundos numa ISO de vários GB — sem isto a UI pareceria travada. -->
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,0,0,12"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding Iso.IsVerifyingManualIso, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar Width="260" Value="{Binding Iso.ManualVerificationPercent, Mode=OneWay}"/>
+                            <TextBlock Text="{loc:Loc Wizard_VerifyingIsoLabel}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
 
                         <!-- ISOs já baixadas: só aparece sozinha (sem o combo de baixar outra
                              junto) pra não deixar dois campos disputando qual ISO vale. -->
@@ -135,6 +147,15 @@
                                            Command="{Binding Iso.UseDownloadedIsoCommand}"
                                            Visibility="{Binding Iso.IsBackToDownloadedVisible, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
+
+                            <!-- Substitui o botão de download quando a distro escolhida não tem
+                                 hash de referência publicado — a UI explica o motivo em vez de
+                                 só sumir com o botão (artifact-integrity spec). -->
+                            <TextBlock Text="{loc:Loc Wizard_DistroNotVerifiableMessage}"
+                                       Margin="0,6,0,0"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       Visibility="{Binding Iso.IsSelectedDistroUnverifiable, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>
 
                         <!-- Progresso -->
@@ -295,7 +316,7 @@
                                         Margin="0,0,0,4"/>
 
                         <TextBlock Text="{loc:Loc Wizard_PasswordMismatch}"
-                                   Foreground="#FF5C5C"
+                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
                                    FontSize="12"
                                    Margin="0,0,0,8"
                                    Visibility="{Binding Account.PasswordsMismatch, Converter={StaticResource BoolToVis}}"/>
@@ -380,11 +401,16 @@
                 <Border Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
                     <ui:Button Content="{loc:Loc Wizard_InstallButton}"
                                Appearance="Success"
+                               Icon="{ui:SymbolIcon Play24}"
                                HorizontalAlignment="Stretch"
                                HorizontalContentAlignment="Center"
-                               Height="44"
+                               Height="52"
+                               FontSize="16"
                                FontWeight="Bold"
                                Margin="0,0,0,24"
+                               fx:PressFeedback.Enabled="True"
+                               fx:AttentionPulse.Enabled="True"
+                               fx:AttentionPulse.GlowColor="#FF16C60A"
                                Command="{Binding InstallCommand}"/>
                 </Border>
 

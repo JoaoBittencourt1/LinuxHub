@@ -77,6 +77,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Versioned PowerShell for recovery/preflight (D11). Copied beside the exe so
+         ScriptCatalog / the AtStartup agent can resolve Scripts\ without assuming C:. -->
+    <Content Include="Scripts\**\*.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />
     <None Remove="tests\**" />

@@ -11,6 +11,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         private readonly IBootConfigurationService _bootConfiguration;
         private readonly IIsoBootEntryBuilderRegistry _isoBootEntryBuilders;
         private readonly IIsoHostPartitionLocator _isoHostPartitions;
+        private readonly IInstallationPlanMutationGuard _mutationGuard;
 
         public BootStagingService(
             IEspLocatorService espLocator,
@@ -18,7 +19,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             IMbrBackupService mbrBackup,
             IBootConfigurationService bootConfiguration,
             IIsoBootEntryBuilderRegistry isoBootEntryBuilders,
-            IIsoHostPartitionLocator isoHostPartitions)
+            IIsoHostPartitionLocator isoHostPartitions,
+            IInstallationPlanMutationGuard mutationGuard)
         {
             _isoHostPartitions = isoHostPartitions ?? throw new ArgumentNullException(nameof(isoHostPartitions));
             _espLocator = espLocator ?? throw new ArgumentNullException(nameof(espLocator));
@@ -26,11 +28,13 @@ namespace LinuxHub.Features.InstallWizard.Services
             _mbrBackup = mbrBackup ?? throw new ArgumentNullException(nameof(mbrBackup));
             _bootConfiguration = bootConfiguration ?? throw new ArgumentNullException(nameof(bootConfiguration));
             _isoBootEntryBuilders = isoBootEntryBuilders ?? throw new ArgumentNullException(nameof(isoBootEntryBuilders));
+            _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
         }
 
         public void InstallStagingBootloader(BootStagingRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
+            _mutationGuard.EnsurePublishedForDisk(request.TargetDiskIndex);
 
             // No modo substituir, IsoPath é um caminho GRUB dentro da partição de staging
             // (ex.: "/linuxhub.iso") — nunca existiu no sistema de arquivos do Windows, e não

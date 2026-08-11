@@ -34,7 +34,7 @@ namespace LinuxHub.Features.InstallWizard.Views
         private void OnNotify(string title, string message, bool isError) =>
             MessageBox.Show(message, title, MessageBoxButton.OK, isError ? MessageBoxImage.Error : MessageBoxImage.Information);
 
-        private void BrowseIso_Click(object sender, RoutedEventArgs e)
+        private async void BrowseIso_Click(object sender, RoutedEventArgs e)
         {
             var viewModel = (InstallWizardViewModel)DataContext;
 
@@ -46,7 +46,7 @@ namespace LinuxHub.Features.InstallWizard.Views
             };
 
             if (dialog.ShowDialog() == true)
-                viewModel.Iso.SelectManualIso(dialog.FileName);
+                await viewModel.Iso.SelectManualIsoAsync(dialog.FileName);
         }
 
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e) =>

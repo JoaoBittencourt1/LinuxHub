@@ -4,7 +4,9 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using LinuxHub.Common.Localization;
+using LinuxHub.Common.Ui;
 using LinuxHub.Features.Catalog.ViewModels;
 
 namespace LinuxHub.Features.Catalog.Views
@@ -24,6 +26,13 @@ namespace LinuxHub.Features.Catalog.Views
         {
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
+            IsVisibleChanged += OnIsVisibleChanged;
+        }
+
+        private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (e.NewValue is true && DataContext is DistroDetailViewModel)
+                PlayEntrance();
         }
 
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
@@ -41,7 +50,27 @@ namespace LinuxHub.Features.Catalog.Views
                 newVm.PropertyChanged += ViewModel_PropertyChanged;
                 newVm.DownloadLinkOpenFailed += OnDownloadLinkOpenFailed;
                 UpdateCarousel(newVm);
+                if (IsVisible)
+                    PlayEntrance();
             }
+        }
+
+        private void PlayEntrance()
+        {
+            // Wait for layout so UntestedBar Visibility is resolved before skipping collapsed.
+            Dispatcher.BeginInvoke(() =>
+            {
+                StaggeredReveal.Play(
+                [
+                    BackButton,
+                    HeroCard,
+                    MetaCard,
+                    UntestedBar,
+                    DescriptionCard,
+                    ScreenshotsCard,
+                    ActionsCard,
+                ]);
+            }, DispatcherPriority.Loaded);
         }
 
         private void OnDownloadLinkOpenFailed() =>

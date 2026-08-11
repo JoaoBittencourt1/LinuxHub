@@ -56,15 +56,23 @@ When run, the project should start normally.
 
 ## Release checklist
 
-- **Check the Arch Linux catalog entry before every release.** The Arch mirrors
-  keep only the last ~3 monthly ISOs, so `DistroCatalog`'s pinned Arch build
-  stops existing after a few months and the direct download turns into a 404 —
-  something the catalog cannot detect on its own. Ubuntu and Mint keep their
-  images online for years and do not need this.
-- Confirm the pinned Arch build is still published, and if it is not, bump both
-  `Version` and `DirectDownloadLink` to a build that is. The generic
-  `iso/latest/` address is deliberately not used: see the comment on the Arch
-  entry in `Common/Data/DistroCatalog.cs`.
+- **Check the Arch Linux and Kali catalog entries before every release.** Their
+  mirrors don't keep old releases online indefinitely, unlike Ubuntu and Mint,
+  so a pinned build silently turns into a 404 — something the catalog cannot
+  detect on its own. Confirm the pinned build is still published, and if not,
+  bump `Version` and `DirectDownloadLink` to one that is. The generic
+  `iso/latest/` address is deliberately not used for Arch: see the comment on
+  its entry in `Common/Data/DistroCatalog.cs`.
+- **Every time `Version` or `DirectDownloadLink` changes for an entry with
+  `Sha256`/`SizeBytes` set, refresh those two fields from the distro's official
+  checksum file** — never by hashing a file already downloaded locally, which
+  only proves self-consistency, not that the file is the right one. A stale
+  hash for a bumped build makes every future download of that distro fail
+  verification (`artifact-integrity` spec), not silently succeed unverified.
+- Entries without `Sha256`/`SizeBytes` (currently Kubuntu — its direct link
+  points at the wrong ISO at the source — and EndeavourOS — its official
+  source only publishes SHA-512) have automatic download disabled by design.
+  Revisit them if the underlying issue gets fixed upstream.
 
 ## Contribution
 
@@ -76,3 +84,12 @@ When run, the project should start normally.
 
 This project is distributed under the GNU General Public License v3.0. See
 [`LICENSE`](LICENSE).
+
+## Acknowledgments
+
+The transactional safety model adopted in `adopt-redacted-safety-model`
+(installation plan, state machine, verified rollback, recovery agent,
+compatibility preflight, signed catalog) is modeled after
+[REDACTED](https://github.com/ekimiateam/redacted) by Félix and Ekimia,
+also GNU GPL-3.0. See that change's `design.md` for the specific decisions
+adapted and why.

@@ -3,77 +3,89 @@ using Microsoft.Win32;
 namespace LinuxHub.Features.InstallWizard.Services
 {
     /// <summary>
-    /// Lê o estado das duas proteções direto das fontes autoritativas do Windows, nunca
-    /// inferindo uma da outra — são independentes: máquina pode ter Secure Boot sem
-    /// BitLocker e vice-versa.
+    /// Reads Secure Boot and volume encryption from authoritative Windows sources.
+    /// Encryption is reported as conversion status + percent (task 6.4), never a boolean.
     /// </summary>
     public sealed class BootSecurityService : IBootSecurityService
     {
         private const string SecureBootKeyPath = @"SYSTEM\CurrentControlSet\Control\SecureBoot\State";
         private const string SecureBootValueName = "UEFISecureBootEnabled";
 
-        internal const string ProtectedMarker = "BITLOCKER_ON";
-        internal const string UnprotectedMarker = "BITLOCKER_OFF";
-
-        /// <summary>
-        /// Lê o registro em vez de <c>Confirm-SecureBootUEFI</c>: o cmdlet exige elevação
-        /// (verificado — devolve "Não é possível definir privilégios apropriados"), enquanto
-        /// esta chave é legível por qualquer usuário. Isso permite recusar já na tela do
-        /// wizard, sem gastar um prompt de UAC só para descobrir que não dá para instalar.
-        ///
-        /// A chave não existe em máquina que bootou em BIOS legado — lá não há Secure Boot
-        /// para estar ligado, então ausência é <c>false</c>, não erro.
-        /// </summary>
         public bool IsSecureBootEnabled()
         {
             using RegistryKey? key = Registry.LocalMachine.OpenSubKey(SecureBootKeyPath);
-
             return key?.GetValue(SecureBootValueName) is int value && value == 1;
         }
 
-        /// <summary>
-        /// <c>ProtectionStatus</c> = 1 significa protegido (chave ativa). Vale notar que
-        /// SUSPENDER o BitLocker devolve 0 aqui e ainda assim deixa os dados cifrados no
-        /// disco — mas nesse estado o Windows já está decriptando ou a proteção está off, e
-        /// o caso que realmente quebra o GRUB (volume cifrado com proteção ativa) é o 1.
-        ///
-        /// Exige elevação: o namespace <c>MicrosoftVolumeEncryption</c> nega acesso a usuário
-        /// comum (verificado). Por isso roda pelo <see cref="ElevatedPowerShellRunner"/>, e
-        /// não com <c>Get-CimInstance</c> direto no processo do app.
-        /// </summary>
-        public bool IsVolumeBitLockerProtected(char driveLetter)
+        public VolumeEncryptionState GetVolumeEncryptionState(char driveLetter)
         {
             string output = ElevatedPowerShellRunner.Run(
-                BuildBitLockerScript(driveLetter),
-                $"verificação de BitLocker no volume {driveLetter}:");
+                BuildEncryptionScript(driveLetter),
+                $"volume encryption status on {driveLetter}:");
 
-            return output.Contains(ProtectedMarker, StringComparison.Ordinal);
+            if (output.Contains("ENC_QUERY_FAILED=true", StringComparison.Ordinal))
+            {
+                return new VolumeEncryptionState(
+                    ConversionStatus: "QueryFailed",
+                    PercentComplete: 0,
+                    ProtectionStatus: -1,
+                    QuerySucceeded: false);
+            }
+
+            string status = ReadMarker(output, "ENC_CONVERSION") ?? "Unknown";
+            double percent = 0;
+            if (double.TryParse(ReadMarker(output, "ENC_PERCENT"), out double parsed))
+                percent = parsed;
+            int protection = 0;
+            if (int.TryParse(ReadMarker(output, "ENC_PROTECTION"), out int parsedProtection))
+                protection = parsedProtection;
+
+            return new VolumeEncryptionState(status, percent, protection, QuerySucceeded: true);
         }
 
         /// <summary>
-        /// Tudo em uma linha por comando, sem continuação de crase: dentro de uma string
-        /// verbatim do C# a crase não é escape, então escrevê-la duplicada (o reflexo natural)
-        /// produz DUAS crases no arquivo — o PowerShell lê isso como uma crase literal virando
-        /// argumento e quebra o comando em statements soltos. O parser aceita, o script roda,
-        /// e o resultado é `$volume` nulo: a guarda reportaria "sem BitLocker" justamente numa
-        /// máquina com BitLocker. Bug real, pego antes de sair.
-        ///
-        /// Volume sem entrada no WMI (disco removível, filesystem não suportado) não é
-        /// BitLocker — daí o marcador negativo para lista vazia. Já uma FALHA na consulta sobe
-        /// como erro (ErrorActionPreference = Stop, sem SilentlyContinue): não conseguir
-        /// verificar não é o mesmo que verificar e não achar nada, e numa guarda de segurança
-        /// a dúvida tem que recusar a instalação, não liberá-la.
+        /// Emits conversion status, percent, and protection. Query failure is an explicit
+        /// marker — never ENC_CONVERSION=FullyDecrypted by omission.
         /// </summary>
-        internal static string BuildBitLockerScript(char driveLetter) => $@"
+        internal static string BuildEncryptionScript(char driveLetter) => $@"
 $ErrorActionPreference = 'Stop'
+try {{
+  $volumes = @(Get-CimInstance -Namespace 'root\CIMV2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume)
+  $alvo = $volumes | Where-Object {{ $_.DriveLetter -eq '{driveLetter}:' }} | Select-Object -First 1
+  if ($null -eq $alvo) {{
+    Write-Output 'ENC_CONVERSION=FullyDecrypted'
+    Write-Output 'ENC_PERCENT=0'
+    Write-Output 'ENC_PROTECTION=0'
+    exit 0
+  }}
+  $conversion = Invoke-CimMethod -InputObject $alvo -MethodName GetConversionStatus -ErrorAction Stop
+  $protection = Invoke-CimMethod -InputObject $alvo -MethodName GetProtectionStatus -ErrorAction Stop
+  if ($conversion.ReturnValue -ne 0 -or $protection.ReturnValue -ne 0) {{
+    Write-Output 'ENC_QUERY_FAILED=true'
+    exit 0
+  }}
+  $map = @{{ 0='FullyDecrypted'; 1='FullyEncrypted'; 2='EncryptionInProgress'; 3='DecryptionInProgress'; 4='EncryptionPaused'; 5='DecryptionPaused' }}
+  $status = $map[[int]$conversion.ConversionStatus]
+  if (-not $status) {{ $status = 'Unknown' }}
+  Write-Output (""ENC_CONVERSION={{0}}"" -f $status)
+  Write-Output (""ENC_PERCENT={{0}}"" -f [double]$conversion.EncryptionPercentage)
+  Write-Output (""ENC_PROTECTION={{0}}"" -f [int]$protection.ProtectionStatus)
+}} catch {{
+  Write-Output 'ENC_QUERY_FAILED=true'
+}}
+";
 
-$volumes = @(Get-CimInstance -Namespace 'root\CIMV2\Security\MicrosoftVolumeEncryption' -ClassName Win32_EncryptableVolume)
-$alvo = $volumes | Where-Object {{ $_.DriveLetter -eq '{driveLetter}:' }} | Select-Object -First 1
+        private static string? ReadMarker(string output, string key)
+        {
+            foreach (string line in output.Split('\n'))
+            {
+                string trimmed = line.Trim();
+                string prefix = key + "=";
+                if (trimmed.StartsWith(prefix, StringComparison.Ordinal))
+                    return trimmed[prefix.Length..].Trim();
+            }
 
-if ($null -ne $alvo -and $alvo.ProtectionStatus -eq 1) {{
-    Write-Output '{ProtectedMarker}'
-}} else {{
-    Write-Output '{UnprotectedMarker}'
-}}";
+            return null;
+        }
     }
 }

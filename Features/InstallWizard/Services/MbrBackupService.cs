@@ -13,22 +13,45 @@ namespace LinuxHub.Features.InstallWizard.Services
         internal const int SectorSize = 512;
         internal const int BootCodeSize = 440;
 
+        private readonly IInstallationPlanMutationGuard _mutationGuard;
+
+        public MbrBackupService(IInstallationPlanMutationGuard mutationGuard)
+        {
+            _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
+        }
+
         public string BackupMbr(int diskIndex, string backupPath)
         {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             ElevatedPowerShellRunner.Run(BuildBackupScript(diskIndex, backupPath), "backup do MBR");
             return backupPath;
         }
 
-        public void WriteBootCode(int diskIndex, string bootCodeFilePath) =>
+        public void WriteBootCode(int diskIndex, string bootCodeFilePath)
+        {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             ElevatedPowerShellRunner.Run(
                 BuildWriteBootCodeScript(diskIndex, bootCodeFilePath),
                 "escrita do código de boot no MBR");
+        }
 
-        public void RestoreMbr(int diskIndex, string backupPath) =>
-            ElevatedPowerShellRunner.Run(BuildRestoreScript(diskIndex, backupPath), "restauração do MBR");
+        public void RestoreMbr(int diskIndex, string backupPath)
+        {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
+            // Versioned Scripts/ payload (D11 / task 5.1) — disk index and path are arguments,
+            // never interpolated into a generated script body.
+            ElevatedPowerShellRunner.RunFile(
+                ScriptCatalog.GetPath(ScriptCatalog.RestoreMbr),
+                $"-DiskNumber {diskIndex} -BackupPath \"{EscapeForPowerShellArgument(backupPath)}\"",
+                "restauração do MBR");
+        }
+
+        internal static string EscapeForPowerShellArgument(string value) =>
+            value.Replace("\"", "`\"", StringComparison.Ordinal);
 
         public byte[] ReadMbr(int diskIndex)
         {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             string output = ElevatedPowerShellRunner.Run(BuildReadMbrScript(diskIndex), "leitura do MBR");
 
             var match = MbrBase64Regex().Match(output);
@@ -42,11 +65,13 @@ namespace LinuxHub.Features.InstallWizard.Services
             return mbr;
         }
 
-        public void WriteCoreImageToGap(int diskIndex, string coreImageFilePath) =>
+        public void WriteCoreImageToGap(int diskIndex, string coreImageFilePath)
+        {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             ElevatedPowerShellRunner.Run(
                 BuildWriteCoreImageScript(diskIndex, coreImageFilePath),
                 "escrita do core.img no gap pós-MBR");
-
+        }
         [GeneratedRegex(@"MBRBASE64:([A-Za-z0-9+/=]+)")]
         private static partial Regex MbrBase64Regex();
 
@@ -97,18 +122,6 @@ $stream = [System.IO.File]::Open('\\.\PhysicalDrive{diskIndex}', 'Open', 'ReadWr
 try {{
     $stream.Position = {SectorSize}
     $stream.Write($coreImage, 0, $coreImage.Length)
-}} finally {{
-    $stream.Close()
-}}";
-
-        internal static string BuildRestoreScript(int diskIndex, string backupPath) => $@"
-$ErrorActionPreference = 'Stop'
-$mbr = [System.IO.File]::ReadAllBytes('{backupPath}')
-if ($mbr.Length -ne {SectorSize}) {{ throw ""Backup de MBR inválido: $($mbr.Length) bytes, esperado {SectorSize}"" }}
-$stream = [System.IO.File]::Open('\\.\PhysicalDrive{diskIndex}', 'Open', 'ReadWrite', 'ReadWrite')
-try {{
-    $stream.Position = 0
-    $stream.Write($mbr, 0, {SectorSize})
 }} finally {{
     $stream.Close()
 }}";

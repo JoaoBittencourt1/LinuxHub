@@ -1,64 +1,60 @@
 using System.IO;
 using System.Windows.Input;
+using LinuxHub.Common.Data;
 using LinuxHub.Common.Localization;
 using LinuxHub.Common.Models;
 using LinuxHub.Common.Mvvm;
-using LinuxHub.Features.InstallWizard.Models;
 using LinuxHub.Features.InstallWizard.Services;
 
 namespace LinuxHub.Features.InstallWizard.ViewModels
 {
     /// <summary>
-    /// Orquestra as três etapas do wizard (ISO, alvo, conta), exige confirmação
-    /// destrutiva explícita e gera o <c>install.conf</c> ao confirmar. Ver
-    /// specs/install-wizard/spec.md.
+    /// Wizard presentation: confirmation, progress text, and startup warnings.
+    /// Disk/install sequencing is directed through <see cref="IInstallationFlowRunner"/>
+    /// and the execution ledger (D12) — this type does not own the step catalog.
     /// </summary>
     public class InstallWizardViewModel : ObservableObject
     {
-        private readonly InstallerConfigBuilder _configBuilder;
-        private readonly IInstallerConfigWriter _configWriter;
-        private readonly IDiskPartitioningService _diskPartitioning;
-        private readonly IUnattendedInstallPreparerRegistry _unattendedPreparers;
-        private readonly IBootStagingService _bootStaging;
         private readonly IBootSecurityService _bootSecurity;
         private readonly IStagingPartitionService _stagingPartition;
         private readonly IIsoFileInfoProvider _isoFileInfo;
+        private readonly IInstallationFlowRunner _flowRunner;
+        private readonly ICompatibilityPreflightRunner _compatibilityPreflight;
+        private readonly IInterruptedTransactionProbe _interruptedTransactionProbe;
         private ConfirmationViewModel? _pendingConfirmation;
         private string? _installStatus;
+        private CompatibilityPreflightReport? _lastCompatibilityReport;
+        private InterruptedTransactionInfo? _blockingTransaction;
+
+        /// <summary>Resultado da resolução do catálogo remoto no startup (App.xaml.cs), definido
+        /// antes de <see cref="RaiseStartupWarnings"/> rodar.</summary>
+        public CatalogFetchOutcome? CatalogOutcome { get; set; }
 
         public InstallWizardViewModel(
             IsoAcquisitionViewModel iso,
             TargetSelectionViewModel target,
             AccountViewModel account,
             RegionalSettingsViewModel regional,
-            InstallerConfigBuilder configBuilder,
-            IInstallerConfigWriter configWriter,
-            IDiskPartitioningService diskPartitioning,
-            IUnattendedInstallPreparerRegistry unattendedPreparers,
-            IBootStagingService bootStaging,
             IBootSecurityService bootSecurity,
             IStagingPartitionService stagingPartition,
-            IIsoFileInfoProvider isoFileInfo)
+            IIsoFileInfoProvider isoFileInfo,
+            IInstallationFlowRunner flowRunner,
+            ICompatibilityPreflightRunner? compatibilityPreflight = null,
+            IInterruptedTransactionProbe? interruptedTransactionProbe = null)
         {
             Iso = iso ?? throw new ArgumentNullException(nameof(iso));
             Target = target ?? throw new ArgumentNullException(nameof(target));
             Account = account ?? throw new ArgumentNullException(nameof(account));
             Regional = regional ?? throw new ArgumentNullException(nameof(regional));
-            _configBuilder = configBuilder ?? throw new ArgumentNullException(nameof(configBuilder));
-            _configWriter = configWriter ?? throw new ArgumentNullException(nameof(configWriter));
-            _diskPartitioning = diskPartitioning ?? throw new ArgumentNullException(nameof(diskPartitioning));
-            _unattendedPreparers = unattendedPreparers ?? throw new ArgumentNullException(nameof(unattendedPreparers));
-            _bootStaging = bootStaging ?? throw new ArgumentNullException(nameof(bootStaging));
             _bootSecurity = bootSecurity ?? throw new ArgumentNullException(nameof(bootSecurity));
             _stagingPartition = stagingPartition ?? throw new ArgumentNullException(nameof(stagingPartition));
             _isoFileInfo = isoFileInfo ?? throw new ArgumentNullException(nameof(isoFileInfo));
+            _flowRunner = flowRunner ?? throw new ArgumentNullException(nameof(flowRunner));
+            _compatibilityPreflight = compatibilityPreflight ?? CompatibilityPreflightRunner.CreateDefault();
+            _interruptedTransactionProbe = interruptedTransactionProbe ?? new InterruptedTransactionProbe();
 
             Iso.Notify += (title, message, isError) => Notify?.Invoke(title, message, isError);
 
-            // A conta (usuário/senha/hostname) e as informações regionais só existem pro fluxo
-            // de autoinstall — quando ele não roda, é o instalador nativo da própria ISO que
-            // vai perguntar isso, e oferecer aqui uma escolha que seria ignorada prometeria ao
-            // usuário um controle que ele não tem.
             Iso.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName != nameof(IsoAcquisitionViewModel.IsAutoinstallActive))
@@ -69,8 +65,36 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 OnPropertyChanged(nameof(IsDesktopEnvironmentStepVisible));
             };
 
-            InstallCommand = new RelayCommand(BeginInstall);
+            InstallCommand = new RelayCommand(BeginInstall, () => CanStartMutatingInstall);
         }
+
+        public CompatibilityPreflightReport? LastCompatibilityReport
+        {
+            get => _lastCompatibilityReport;
+            private set => SetProperty(ref _lastCompatibilityReport, value);
+        }
+
+        public InterruptedTransactionInfo? BlockingTransaction
+        {
+            get => _blockingTransaction;
+            private set
+            {
+                if (!SetProperty(ref _blockingTransaction, value))
+                    return;
+                OnPropertyChanged(nameof(HasBlockingTransaction));
+                OnPropertyChanged(nameof(CanStartMutatingInstall));
+                (InstallCommand as RelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+
+        public bool HasBlockingTransaction => BlockingTransaction is not null;
+
+        /// <summary>
+        /// False when a prior unresolved transaction exists or compatibility rejected the machine.
+        /// </summary>
+        public bool CanStartMutatingInstall =>
+            !HasBlockingTransaction &&
+            LastCompatibilityReport?.HasRejection != true;
 
         public IsoAcquisitionViewModel Iso { get; }
         public TargetSelectionViewModel Target { get; }
@@ -82,15 +106,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         public bool IsAccountStepVisible => Iso.IsAutoinstallActive;
         public bool IsRegionalStepVisible => Iso.IsAutoinstallActive;
 
-        /// <summary>A escolha do ambiente gráfico vem do MECANISMO declarado, nunca da
-        /// identidade da distro (§2): a maioria das ISOs já embute um ambiente, e oferecer uma
-        /// opção que seria ignorada promete um controle que o usuário não tem. Uma distro nova
-        /// que declare um mecanismo capaz disso passa a oferecê-la sem tocar nesta lógica.</summary>
         public bool IsDesktopEnvironmentStepVisible =>
             Iso.ActiveMechanism.SupportsDesktopEnvironmentChoice();
 
-        /// <summary>Não nulo entre o clique em "Instalar" e a confirmação/cancelamento
-        /// do usuário — a instalação de fato só ocorre depois de confirmada.</summary>
         public ConfirmationViewModel? PendingConfirmation
         {
             get => _pendingConfirmation;
@@ -104,10 +122,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             }
         }
 
-        /// <summary>Etapa em andamento, ou <c>null</c> fora de uma instalação. Encolher a
-        /// partição e preparar o boot bloqueiam por dezenas de segundos (processo elevado +
-        /// UAC + I/O de disco); sem esse estado a janela ficava congelada e sem resposta, o
-        /// que numa operação destrutiva se lê como travamento — daí a tela de progresso.</summary>
         public string? InstallStatus
         {
             get => _installStatus;
@@ -123,25 +137,69 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
         public bool IsConfirming => PendingConfirmation is not null;
         public bool IsInstalling => InstallStatus is not null;
-
-        /// <summary>Nem confirmando nem instalando: só aí o botão "Instalar" aparece.</summary>
         public bool IsIdle => !IsConfirming && !IsInstalling;
 
         public event Action<string, string, bool>? Notify;
 
-        /// <summary>
-        /// Chamado pela View depois de se inscrever em <see cref="Notify"/> — avisos que
-        /// dependem de estado calculado no construtor (ex.: UEFI) não podem ser disparados
-        /// do próprio construtor, porque ainda não há ninguém ouvindo o evento nesse ponto.
-        /// </summary>
         public void RaiseStartupWarnings()
         {
-            if (!Target.IsUefi)
+            var loc = LocalizationManager.Instance;
+
+            BlockingTransaction = _interruptedTransactionProbe.FindBlockingTransaction(
+                Path.GetPathRoot(Environment.SystemDirectory)?.TrimEnd('\\') ?? "C:");
+
+            if (BlockingTransaction is not null)
             {
-                var loc = LocalizationManager.Instance;
+                Notify?.Invoke(
+                    loc["Wizard_InterruptedTransactionTitle"],
+                    loc.Format(
+                        "Wizard_InterruptedTransactionMessage",
+                        BlockingTransaction.Status,
+                        BlockingTransaction.FailureMessage ?? BlockingTransaction.FailureCode ?? string.Empty),
+                    true);
+            }
+
+            if (!Target.IsUefi)
                 Notify?.Invoke(loc["Wizard_UefiWarningTitle"], loc["Wizard_UefiWarningMessage"], false);
+
+            switch (CatalogOutcome)
+            {
+                case CatalogFetchOutcome.NetworkUnavailable
+                    or CatalogFetchOutcome.SignatureInvalid
+                    or CatalogFetchOutcome.MalformedDocument:
+                    Notify?.Invoke(
+                        loc["Wizard_CatalogFallbackTitle"],
+                        loc["Wizard_CatalogFallbackMessage"],
+                        false);
+                    break;
             }
         }
+
+        /// <summary>
+        /// Applies preflight facts (from the versioned script or a test fixture). Rejection
+        /// blocks mutating install; warnings notify but allow advance (task 6.7).
+        /// </summary>
+        public void ApplyCompatibilityReport(CompatibilityPreflightReport report)
+        {
+            ArgumentNullException.ThrowIfNull(report);
+            LastCompatibilityReport = report;
+            OnPropertyChanged(nameof(CanStartMutatingInstall));
+            (InstallCommand as RelayCommand)?.RaiseCanExecuteChanged();
+
+            var loc = LocalizationManager.Instance;
+            foreach (CompatibilityFinding rejection in report.Rejections)
+            {
+                Notify?.Invoke(loc["Preflight_RejectTitle"], loc[rejection.MessageResourceKey], true);
+            }
+
+            foreach (CompatibilityFinding warning in report.Warnings)
+            {
+                Notify?.Invoke(loc["Preflight_WarnTitle"], loc[warning.MessageResourceKey], false);
+            }
+        }
+
+        public void ApplyCompatibilityFacts(CompatibilityFacts facts) =>
+            ApplyCompatibilityReport(_compatibilityPreflight.Evaluate(facts));
 
         private void BeginInstall()
         {
@@ -149,18 +207,27 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
             try
             {
+                if (!CanStartMutatingInstall)
+                {
+                    if (HasBlockingTransaction)
+                    {
+                        throw new InvalidOperationException(loc["Wizard_InterruptedTransactionBlocked"]);
+                    }
+
+                    throw new InvalidOperationException(loc["Preflight_RejectBlocked"]);
+                }
+
                 if (Iso.DisplayedDistro is not { } distro)
-                    throw new InvalidOperationException(loc["Wizard_NoDistroSelected"]);
+                    throw new InvalidOperationException(loc["Wizard_NoDistroSelectedMessage"]);
 
                 if (string.IsNullOrWhiteSpace(Iso.ResolvedIsoPath))
-                    throw new InvalidOperationException(loc["Wizard_NoIsoSelected"]);
+                    throw new InvalidOperationException(loc["Wizard_NoIsoSelectedMessage"]);
 
                 if (Iso.IsAutoinstallActive)
                 {
-                    if (string.IsNullOrWhiteSpace(Account.Username)
-                        || string.IsNullOrWhiteSpace(Account.Password)
-                        || string.IsNullOrWhiteSpace(Account.ConfirmPassword)
-                        || string.IsNullOrWhiteSpace(Account.Hostname))
+                    if (string.IsNullOrWhiteSpace(Account.Username) ||
+                        string.IsNullOrWhiteSpace(Account.Password) ||
+                        string.IsNullOrWhiteSpace(Account.Hostname))
                     {
                         throw new InvalidOperationException(loc["Wizard_AccountIncompleteMessage"]);
                     }
@@ -169,18 +236,12 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                         throw new InvalidOperationException(loc["Wizard_PasswordMismatchMessage"]);
                 }
 
-                // Sem alvo não há instalação: o dual-boot abre sem partição selecionada quando
-                // a máquina não tem nenhuma elegível (ou a detecção falhou), e sem esta guarda
-                // o clique em "Instalar" morria num NullReferenceException lá no RunInstall.
                 if (Target.IsDualBootMode && Target.SelectedPartition is null)
                     throw new InvalidOperationException(loc["Wizard_NoTargetPartitionSelected"]);
 
                 if (Target.IsReplaceMode && Target.SelectedDisk is null)
                     throw new InvalidOperationException(loc["Wizard_NoTargetDiskSelected"]);
 
-                // Barra aqui, e não no shrink: uma partição sem espaço livre suficiente é um
-                // alvo inviável de saída, e deixar passar significava gravar install.conf e
-                // preparar o boot antes do Windows recusar o encolhimento.
                 if (Target.IsDualBootMode && Target.PartitionSpaceError is { } spaceError)
                     throw new InvalidOperationException(spaceError);
 
@@ -191,7 +252,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
                 string summary = isReplace
                     ? loc.Format(
-                        Target.IsReplacingSystemDisk ? "Wizard_ConfirmReplaceSystemDiskSummary" : "Wizard_ConfirmReplaceSummary",
+                        Target.IsReplacingSystemDisk
+                            ? "Wizard_ConfirmReplaceSystemDiskSummary"
+                            : "Wizard_ConfirmReplaceSummary",
                         Target.SelectedDisk?.ToString() ?? string.Empty)
                     : loc.Format(
                         "Wizard_ConfirmShrinkSummary",
@@ -203,9 +266,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                     requiresTypedConfirmation: isReplace,
                     confirmationWord: loc["Wizard_ConfirmReplaceWord"]);
 
-                // Fire-and-forget deliberado: ExecuteInstallAsync trata os próprios erros e
-                // publica tudo via Notify/InstallStatus — não há nada pra aguardar aqui, e o
-                // handler de um evento síncrono não pode ser await-ado sem virar async void.
                 confirmation.Confirmed += () => _ = ExecuteInstallAsync(distro);
                 confirmation.Cancelled += () => PendingConfirmation = null;
 
@@ -217,43 +277,29 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             }
         }
 
-        /// <summary>
-        /// Secure Boot e BitLocker quebram o boot de staging de formas que o app não tem como
-        /// contornar — o firmware recusa o <c>grubx64.efi</c> não assinado, e o GRUB não lê
-        /// volume criptografado. Os dois só apareciam DEPOIS do reboot, numa tela preta, com o
-        /// disco já encolhido e uma entrada de boot pendurada (erro real numa VM com BitLocker).
-        /// Recusar aqui deixa a máquina exatamente como estava.
-        ///
-        /// A ordem não é acidental: Secure Boot sai do registro sem elevação, então checá-lo
-        /// primeiro evita gastar um prompt de UAC numa instalação que já está condenada.
-        /// </summary>
         private void EnsureBootSecurityAllowsInstall(LocalizationManager loc)
         {
             if (_bootSecurity.IsSecureBootEnabled())
                 throw new InvalidOperationException(loc["Wizard_SecureBootBlockedMessage"]);
 
-            // Dual-boot: o GRUB lê a ISO no volume do Windows — BitLocker nele é bloqueio duro.
-            // Substituir: a ISO vai para a staging, mas o preparo ainda ENCOLHE este volume e
-            // muda a cadeia de boot (pedido de chave de recuperação). Nos dois casos o volume
-            // da ISO é o que importa, e hoje ela mora nele antes do preparo.
             if (Path.GetPathRoot(Iso.ResolvedIsoPath) is not { Length: > 0 } root)
                 return;
 
             char driveLetter = root[0];
-            if (_bootSecurity.IsVolumeBitLockerProtected(driveLetter))
-                throw new InvalidOperationException(loc.Format("Wizard_BitLockerBlockedMessage", driveLetter));
+            VolumeEncryptionState encryption = _bootSecurity.GetVolumeEncryptionState(driveLetter);
+            if (!encryption.QuerySucceeded)
+            {
+                throw new InvalidOperationException(
+                    loc.Format("Wizard_BitLockerQueryFailedMessage", driveLetter));
+            }
+
+            if (encryption.BlocksStagingBoot)
+            {
+                throw new InvalidOperationException(
+                    loc.Format("Wizard_BitLockerBlockedMessage", driveLetter));
+            }
         }
 
-        /// <summary>
-        /// O preparo consome espaço que o usuário não pediu. No modo substituir: a partição de
-        /// staging (ISO + folga) e, com autoinstall, a semente. No dual-boot a ISO continua no
-        /// volume do Windows — só a semente entra na conta. Descobrir que não cabe DEPOIS de
-        /// encolher o Windows deixaria a máquina alterada por nada.
-        ///
-        /// A conta aqui é sobre o disco todo, não sobre o que o <c>Get-PartitionSupportedSize</c>
-        /// permite encolher: esse número exige elevação e sai no script, imediatamente antes da
-        /// escrita. Este é o filtro grosseiro, que pega o caso óbvio sem gastar um prompt de UAC.
-        /// </summary>
         private void EnsureDiskFitsThePreparation(LocalizationManager loc)
         {
             long required = PreparationOverheadBytes();
@@ -275,11 +321,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             }
         }
 
-        /// <summary>
-        /// Staging só no substituir: o dual-boot já preserva a partição que hospeda a ISO, então
-        /// copiá-la para uma partição dedicada era custo sem ganho (e o motivo desta mudança
-        /// nasceu do <c>layout: direct</c> do substituir, não do dual-boot).
-        /// </summary>
         private long PreparationOverheadBytes()
         {
             long overhead = Iso.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0;
@@ -290,33 +331,19 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             return overhead + _stagingPartition.RequiredBytesFor(isoSize);
         }
 
-        /// <summary>
-        /// Roda o trabalho pesado fora da thread de UI para que a tela de progresso de fato
-        /// desenhe. As etapas são publicadas por <see cref="IProgress{T}"/>, que devolve cada
-        /// atualização ao contexto de UI capturado aqui — escrever em
-        /// <see cref="InstallStatus"/> direto da thread de trabalho dependeria do marshalling
-        /// implícito do binding engine, que não vale pra tudo (comandos, coleções).
-        /// </summary>
         private async Task ExecuteInstallAsync(DistroInfo distro)
         {
             var loc = LocalizationManager.Instance;
             var progress = new Progress<string>(step => InstallStatus = step);
-
-            // Capturado aqui, antes do trabalho pesado: é o que decide qual mensagem final
-            // aparece, e o toggle não deve mudar no meio de uma instalação já em andamento.
             bool autoinstallActive = Iso.IsAutoinstallActive;
 
-            // Some o cartão de confirmação e abre a tela de progresso no mesmo passo: os dois
-            // são excludentes, e deixar o botão "Confirmar" clicável durante a instalação
-            // permitiria disparar um segundo shrink por cima do primeiro.
             PendingConfirmation = null;
             InstallStatus = loc["Wizard_InstallStepPreparing"];
 
             string? error = null;
-
             try
             {
-                await Task.Run(() => RunInstall(distro, progress));
+                await Task.Run(() => _flowRunner.Run(BuildFlowRequest(distro), progress));
             }
             catch (Exception ex)
             {
@@ -324,15 +351,9 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             }
             finally
             {
-                // Fecha a tela de progresso ANTES de notificar: o aviso é um MessageBox modal
-                // que só sai no clique do usuário, e um spinner girando atrás dele passaria a
-                // impressão de que ainda há operação de disco em andamento.
                 InstallStatus = null;
             }
 
-            // Sem autoinstall, quem termina a instalação de fato é o usuário dentro do
-            // instalador nativo da ISO — dizer "não precisa fazer nada" nesse caso seria
-            // enganoso, então a mensagem de sucesso muda conforme o modo usado.
             string successMessageKey = autoinstallActive
                 ? "Wizard_InstallSuccessMessage"
                 : "Wizard_InstallSuccessMessageManual";
@@ -343,118 +364,31 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 error is not null);
         }
 
-        /// <summary>
-        /// As três etapas de disco, na thread de trabalho. Não captura exceção nenhuma: quem
-        /// reporta é <see cref="ExecuteInstallAsync"/>, num ponto só — engolir aqui deixaria
-        /// a instalação seguir para o boot-staging com o disco em estado desconhecido.
-        /// </summary>
-        private void RunInstall(DistroInfo distro, IProgress<string> progress)
-        {
-            var loc = LocalizationManager.Instance;
-
-            int targetDiskIndex = Target.IsReplaceMode
-                ? Target.SelectedDisk!.Index
-                : Target.SelectedPartition!.DiskIndex;
-
-            // Um shrink só — encadear resizes no mesmo volume dobraria tempo e risco
-            // (design.md D4). Staging só entra no overhead do substituir.
-            long overheadBytes = PreparationOverheadBytes();
-
-            // Quantas partições o preparo ainda vai criar: a raiz do Linux sempre, a staging só
-            // no substituir, a semente só com autoinstall. A tabela precisa comportar todas —
-            // em MBR o teto é 4, e estourar no meio deixava o disco encolhido e a mensagem crua.
-            int newPartitions = 1
-                + (Target.IsReplaceMode ? 1 : 0)
-                + (Iso.IsAutoinstallActive ? 1 : 0);
-
-            if (Target.IsDualBootMode && Target.SelectedPartition is { } partition)
-            {
-                progress.Report(loc["Wizard_InstallStepShrinking"]);
-
-                // O overhead do preparo (semente) é ADICIONAL ao que o usuário pediu no slider.
-                _diskPartitioning.ShrinkPartition(
-                    partition.DiskIndex,
-                    partition.PartitionIndex,
-                    (long)Target.LinuxPartitionSizeGb * 1024 * 1024 * 1024 + overheadBytes,
-                    newPartitions);
-            }
-            else
-            {
-                // No modo substituir o disco cheio de Windows não tem onde acomodar a staging —
-                // este é o único ponto que abre esse espaço.
-                _diskPartitioning.EnsureUnallocatedSpace(
-                    targetDiskIndex, overheadBytes, newPartitions);
-            }
-
-            // Staging só no substituir: no dual-boot o curtin já preserva a partição do Windows
-            // que hospeda a ISO, então o GRUB continua achando-a com search --file no caminho
-            // original. Copiar ~7 GB e abrir partição extra era desnecessário nesse modo.
-            StagingPartition? staging = null;
-            string isoPathForGrub = Iso.ResolvedIsoPath!;
-
-            if (Target.IsReplaceMode)
-            {
-                progress.Report(loc["Wizard_InstallStepCopyingIso"]);
-
-                long isoSize = _isoFileInfo.GetSizeInBytes(Iso.ResolvedIsoPath!);
-                staging = _stagingPartition.Create(targetDiskIndex, isoSize);
-                _stagingPartition.CopyIso(staging, Iso.ResolvedIsoPath!, progress);
-                isoPathForGrub = StagingPartitionService.IsoGrubPath;
-            }
-
-            // Distro sem mecanismo validado (ou usuário desligou o toggle): só prepara o
-            // boot até o instalador nativo da ISO — sem install.conf, sem configuração
-            // desatendida, o resto da instalação fica por conta do usuário dentro dele.
-            UnattendedBootParameters unattended = UnattendedBootParameters.Interactive;
-
-            if (Iso.IsAutoinstallActive)
-            {
-                progress.Report(loc["Wizard_InstallStepWritingConfig"]);
-
-                var request = new BuildInstallerConfigRequest(
-                    Distro: distro,
-                    IsoPath: Iso.ResolvedIsoPath!,
-                    IsUefi: Target.IsUefi,
-                    Mode: Target.Mode,
-                    TargetDiskIndex: Target.IsReplaceMode ? Target.SelectedDisk?.Index : Target.SelectedPartition?.DiskIndex,
-                    TargetPartitionIndex: Target.IsDualBootMode ? Target.SelectedPartition?.PartitionIndex : null,
-                    LinuxPartitionSizeGb: (int)Target.LinuxPartitionSizeGb,
-                    Username: Account.Username,
-                    Password: Account.Password,
-                    Hostname: Account.Hostname,
-                    Locale: Regional.Locale,
-                    Keymap: Regional.Keymap,
-                    Timezone: Regional.Timezone,
-                    // Só chega ao instalador quando o mecanismo de fato oferece a escolha —
-                    // senão seria um valor gravado a partir de um seletor que o usuário
-                    // nunca viu.
-                    DesktopEnvironment: IsDesktopEnvironmentStepVisible ? Regional.DesktopEnvironment : string.Empty);
-
-                var config = _configBuilder.Build(request);
-                _configWriter.Save(config);
-
-                // No substituir precisa vir depois da staging: a configuração desatendida
-                // descreve o disco incluindo a partição de staging como preservada, senão o
-                // instalador a trata como espaço livre e apaga a ISO que está usando pra rodar.
-                unattended = _unattendedPreparers
-                    .Resolve(Iso.ActiveMechanism)
-                    .Prepare(config, targetDiskIndex, staging)
-                    .BootParameters;
-            }
-
-            progress.Report(loc["Wizard_InstallStepStagingBoot"]);
-
-            _bootStaging.InstallStagingBootloader(new BootStagingRequest(
-                DistroName: distro.Name,
-                IsoPath: isoPathForGrub,
+        private InstallationFlowRequest BuildFlowRequest(DistroInfo distro) =>
+            new(
+                Distro: distro,
+                IsoPath: Iso.ResolvedIsoPath!,
                 IsUefi: Target.IsUefi,
-                TargetDiskIndex: targetDiskIndex,
-                Unattended: unattended,
+                IsReplaceMode: Target.IsReplaceMode,
+                IsDualBootMode: Target.IsDualBootMode,
+                IsAutoinstallActive: Iso.IsAutoinstallActive,
+                ActiveMechanism: Iso.ActiveMechanism,
                 LiveSession: distro.LiveSession,
-                // Só o substituir precisa informar: lá a ISO foi copiada para a staging, e o
-                // caminho dela já não é consultável no Windows. No dual-boot ela continua num
-                // volume real e quem resolve é o boot-staging.
-                IsoHostPartitionUuid: staging?.PartitionUuid));
-        }
+                TargetDiskIndex: Target.IsReplaceMode
+                    ? Target.SelectedDisk!.Index
+                    : Target.SelectedPartition!.DiskIndex,
+                DualBootPartitionIndex: Target.IsDualBootMode
+                    ? Target.SelectedPartition?.PartitionIndex
+                    : null,
+                LinuxPartitionSizeGb: (int)Target.LinuxPartitionSizeGb,
+                Username: Account.Username,
+                Password: Account.Password,
+                Hostname: Account.Hostname,
+                Locale: Regional.Locale,
+                Keymap: Regional.Keymap,
+                Timezone: Regional.Timezone,
+                DesktopEnvironment: IsDesktopEnvironmentStepVisible
+                    ? Regional.DesktopEnvironment
+                    : string.Empty);
     }
 }

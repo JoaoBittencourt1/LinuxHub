@@ -1,3 +1,4 @@
+using System.IO;
 using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Models;
 using LinuxHub.Features.InstallWizard.Services;
@@ -29,6 +30,14 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         private sealed class FakeDownloadedIsoRepository : IDownloadedIsoRepository
         {
             public IReadOnlyList<DownloadedIso> GetAll() => Array.Empty<DownloadedIso>();
+        }
+
+        private sealed class FakeArtifactVerifier : IArtifactVerifier
+        {
+            public Task<ArtifactVerificationResult> VerifyFileAsync(
+                string filePath, string expectedSha256, long expectedSizeBytes,
+                IProgress<double>? progress, CancellationToken cancellationToken) =>
+                Task.FromResult(ArtifactVerificationResult.Verified());
         }
 
         private sealed class FakeDiskInventoryService : IDiskInventoryService
@@ -118,7 +127,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             public StagingPartition Create(int diskIndex, long isoSizeInBytes)
             {
                 CreateCalls++;
-                return new(diskIndex, 9, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
+                return new(diskIndex, 9, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE", OffsetBytes: 250L * 1024 * 1024 * 1024);
             }
 
             public void CopyIso(StagingPartition partition, string isoSourcePath, IProgress<string>? progress) =>
@@ -164,9 +173,132 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         {
             public bool SecureBoot { get; set; }
             public bool BitLocker { get; set; }
+            public bool EncryptionQueryFailed { get; set; }
 
             public bool IsSecureBootEnabled() => SecureBoot;
-            public bool IsVolumeBitLockerProtected(char driveLetter) => BitLocker;
+
+            public VolumeEncryptionState GetVolumeEncryptionState(char driveLetter) =>
+                EncryptionQueryFailed
+                    ? new VolumeEncryptionState("QueryFailed", 0, -1, QuerySucceeded: false)
+                    : BitLocker
+                        ? new VolumeEncryptionState("FullyEncrypted", 100, 1, QuerySucceeded: true)
+                        : new VolumeEncryptionState("FullyDecrypted", 0, 0, QuerySucceeded: true);
+        }
+
+        private sealed class FakeDiskLayoutProvider : IDiskLayoutProvider
+        {
+            public DiskLayout GetLayout(int diskIndex) => new(
+                Index: diskIndex,
+                SerialNumber: "TESTDISK",
+                Model: "Fake",
+                SizeBytes: 512L * 1024 * 1024 * 1024,
+                IsGpt: true,
+                IsLargestDisk: true,
+                IsSmallestDisk: true,
+                Partitions:
+                [
+                    new PartitionLayout(
+                        Number: 1,
+                        OffsetBytes: 1024 * 1024,
+                        SizeBytes: 100 * 1024 * 1024,
+                        GptType: "{c12a7328-f81f-11d2-ba4b-00a0c93ec93b}",
+                        IsEfiSystemPartition: true,
+                        Guid: "{11111111-1111-1111-1111-111111111111}"),
+                    new PartitionLayout(
+                        Number: 2,
+                        OffsetBytes: 101 * 1024 * 1024,
+                        SizeBytes: 200L * 1024 * 1024 * 1024,
+                        GptType: "{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}",
+                        IsEfiSystemPartition: false,
+                        Guid: "{22222222-2222-2222-2222-222222222222}"),
+                    new PartitionLayout(
+                        Number: 3,
+                        OffsetBytes: 400L * 1024 * 1024 * 1024,
+                        SizeBytes: 1L * 1024 * 1024 * 1024,
+                        GptType: "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}",
+                        IsEfiSystemPartition: false,
+                        Guid: "{33333333-3333-3333-3333-333333333333}"),
+                ],
+                Guid: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                UniqueId: "USBSTOR\\TEST",
+                LogicalSectorSizeBytes: 512);
+        }
+
+        private sealed class FakePlanPublisher : IInstallationPlanPublisher
+        {
+            public InstallationPlan? Current { get; private set; }
+            public string? PublishedPath { get; private set; }
+            public int PublishCalls { get; private set; }
+            public int StagingIdentityUpdates { get; private set; }
+
+            public string Publish(InstallationPlan plan, string password)
+            {
+                InstallationPlanValidator.Validate(plan);
+                string? directory = Path.GetDirectoryName(plan.Account.PasswordWindowsPath);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+                File.WriteAllText(plan.Account.PasswordWindowsPath, password);
+
+                Current = plan;
+                PublishedPath = @"C:\ProgramData\LinuxHub\Transactions\" + plan.PlanId + @"\installation-plan.json";
+                PublishCalls++;
+                return PublishedPath;
+            }
+
+            public InstallationPlan ReadValidated(string path) =>
+                Current ?? throw new InvalidOperationException("No plan.");
+
+            public void UpdateStagingIdentity(int number, long offsetBytes, string partitionUuid)
+            {
+                if (Current is null)
+                    throw new InvalidOperationException("No plan.");
+                Current.Disk.Installer.Number = number;
+                Current.Disk.Installer.OffsetBytes = offsetBytes;
+                Current.Disk.Installer.PartitionUuid = partitionUuid;
+                InstallationPlanValidator.Validate(Current);
+                StagingIdentityUpdates++;
+            }
+
+            public void Clear()
+            {
+                Current = null;
+                PublishedPath = null;
+            }
+        }
+
+        private sealed class InMemoryLedgerFactory : IInstallationExecutionLedgerFactory
+        {
+            public IInstallationExecutionLedger Create(string planId, string statePath) =>
+                new InMemoryLedger(InstallationStateMachine.Create(planId));
+
+            public IInstallationExecutionLedger Open(string statePath) =>
+                throw new NotSupportedException();
+
+            private sealed class InMemoryLedger : IInstallationExecutionLedger
+            {
+                private readonly InstallationStateMachine _machine;
+
+                public InMemoryLedger(InstallationStateMachine machine) => _machine = machine;
+
+                public string StatePath => "memory";
+                public InstallationExecutionState State => _machine.State;
+
+                public void StartStep(string step) => _machine.StartStep(step);
+                public void SkipOptionalStep(string step) => _machine.SkipOptionalStep(step);
+                public void CompleteStep(string step) => _machine.CompleteStep(step);
+                public void SetProgress(string stage, int overallPercent, int? detailPercent = null) =>
+                    _machine.SetProgress(stage, overallPercent, detailPercent);
+                public void Fail(string code, string message, string component) =>
+                    _machine.Fail(code, message, component);
+                public void MarkSucceeded() => _machine.MarkSucceeded();
+                public void BeginRollback() => _machine.BeginRollback();
+                public IReadOnlyList<string> GetCompensationCandidates() => _machine.GetCompensationCandidates();
+                public void CompleteCompensation(string step) => _machine.CompleteCompensation(step);
+                public void CompleteRollback() => _machine.CompleteRollback();
+                public void MarkRollbackIncomplete(string code, string message) =>
+                    _machine.MarkRollbackIncomplete(code, message);
+                public string? GetNextPendingArmedStepId() => _machine.GetNextPendingArmedStepId();
+            }
         }
 
         private static InstallWizardViewModel BuildViewModel(
@@ -176,27 +308,40 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             FakeStagingPartitionService? staging = null,
             FakeDiskPartitioningService? partitioning = null,
             FakePartitionInventoryService? partitions = null,
-            FakeInstallerConfigWriter? configWriter = null)
+            FakeInstallerConfigWriter? configWriter = null,
+            FakePlanPublisher? planPublisher = null,
+            IInterruptedTransactionProbe? interruptedProbe = null)
         {
-            var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository());
+            var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository(), new FakeArtifactVerifier());
             var target = new TargetSelectionViewModel(
                 new FakeDiskInventoryService(),
                 partitions ?? new FakePartitionInventoryService(),
                 new FakeFirmwareService());
+
+            var stagingService = staging ?? new FakeStagingPartitionService();
+            var isoInfo = isoFileInfo ?? new FakeIsoFileInfoProvider();
+            var flowRunner = new InstallationFlowRunner(
+                new FakeDiskLayoutProvider(),
+                planPublisher ?? new FakePlanPublisher(),
+                new InMemoryLedgerFactory(),
+                partitioning ?? new FakeDiskPartitioningService(),
+                stagingService,
+                isoInfo,
+                new InstallerConfigBuilder(new FakeEspLocatorService()),
+                configWriter ?? new FakeInstallerConfigWriter(),
+                new UnattendedInstallPreparerRegistry([new FakeUnattendedInstallPreparer()]),
+                bootStaging);
 
             var vm = new InstallWizardViewModel(
                 iso,
                 target,
                 new AccountViewModel { Username = "joao", Password = "123", ConfirmPassword = "123", Hostname = "pc" },
                 new RegionalSettingsViewModel(new FakeSystemInfoProvider()),
-                new InstallerConfigBuilder(new FakeEspLocatorService()),
-                configWriter ?? new FakeInstallerConfigWriter(),
-                partitioning ?? new FakeDiskPartitioningService(),
-                new UnattendedInstallPreparerRegistry([new FakeUnattendedInstallPreparer()]),
-                bootStaging,
                 bootSecurity ?? new FakeBootSecurityService(),
-                staging ?? new FakeStagingPartitionService(),
-                isoFileInfo ?? new FakeIsoFileInfoProvider());
+                stagingService,
+                isoInfo,
+                flowRunner,
+                interruptedTransactionProbe: interruptedProbe ?? new FakeInterruptedTransactionProbe());
 
             // ResolvedIsoPath só é preenchido pelo download ou pela seleção manual; o wizard
             // recusa instalar sem ele, então o teste passa pelo caminho de download falso.
@@ -207,6 +352,12 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             vm.Target.Mode = InstallMode.Replace;
 
             return vm;
+        }
+
+        private sealed class FakeInterruptedTransactionProbe : IInterruptedTransactionProbe
+        {
+            public InterruptedTransactionInfo? Info { get; set; }
+            public InterruptedTransactionInfo? FindBlockingTransaction(string systemDrive) => Info;
         }
 
         private static async Task ConfirmAndWaitForInstallStartAsync(
@@ -415,7 +566,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                     new PartitionInfo
                     {
                         DiskIndex = 0,
-                        PartitionIndex = 3,
+                        PartitionIndex = 2,
                         SizeBytes = 400L * 1024 * 1024 * 1024,
                         FreeSpaceBytes = 200L * 1024 * 1024 * 1024,
                         FileSystem = "NTFS"
@@ -547,6 +698,65 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             Assert.Equal(1, staging.CreateCalls);
             Assert.Equal(@"C:\isos\ubuntu.iso", staging.CopiedFrom);
             Assert.Equal(StagingPartitionService.IsoGrubPath, bootStaging.LastRequest!.IsoPath);
+        }
+
+        [Fact]
+        public void CompatibilityRejection_BlocksMutatingInstall()
+        {
+            var vm = BuildViewModel(new BlockingBootStagingService());
+            vm.ApplyCompatibilityFacts(new CompatibilityFacts
+            {
+                DiskIsDynamic = true,
+                TopologyDeterminate = true,
+                EncryptionQuerySucceeded = true,
+                EncryptionConversionStatus = "FullyDecrypted",
+                EncryptionPercentComplete = 0,
+                EncryptionProtectionStatus = 0,
+            });
+
+            Assert.False(vm.CanStartMutatingInstall);
+            Assert.False(vm.InstallCommand.CanExecute(null));
+            vm.InstallCommand.Execute(null);
+            Assert.Null(vm.PendingConfirmation);
+        }
+
+        [Fact]
+        public void CompatibilityWarning_AllowsAdvance()
+        {
+            var vm = BuildViewModel(new BlockingBootStagingService());
+            vm.ApplyCompatibilityFacts(new CompatibilityFacts
+            {
+                TopologyDeterminate = true,
+                EncryptionQuerySucceeded = true,
+                EncryptionConversionStatus = "FullyDecrypted",
+                EncryptionPercentComplete = 0,
+                EncryptionProtectionStatus = 0,
+                BootNextProbeResult = "skipped",
+            });
+
+            Assert.True(vm.CanStartMutatingInstall);
+            Assert.True(vm.InstallCommand.CanExecute(null));
+            Assert.NotEmpty(vm.LastCompatibilityReport!.Warnings);
+        }
+
+        [Fact]
+        public void PendingTransaction_BlocksNewInstall()
+        {
+            var probe = new FakeInterruptedTransactionProbe
+            {
+                Info = new InterruptedTransactionInfo(
+                    new string('c', 32),
+                    "state.json",
+                    "failed",
+                    "ROLLBACK_INCOMPLETE",
+                    "geometry"),
+            };
+            var vm = BuildViewModel(new BlockingBootStagingService(), interruptedProbe: probe);
+            vm.RaiseStartupWarnings();
+
+            Assert.True(vm.HasBlockingTransaction);
+            Assert.False(vm.CanStartMutatingInstall);
+            Assert.False(vm.InstallCommand.CanExecute(null));
         }
     }
 }
