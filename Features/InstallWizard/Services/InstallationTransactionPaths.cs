@@ -26,7 +26,9 @@ namespace LinuxHub.Features.InstallWizard.Services
         public static string GetTransactionRoot(string systemDrive, string planId)
         {
             string drive = NormalizeSystemDrive(systemDrive);
-            if (!PlanIdPattern.IsMatch(planId ?? string.Empty))
+            ArgumentNullException.ThrowIfNull(planId);
+
+            if (!PlanIdPattern.IsMatch(planId))
                 throw new ArgumentException("The installation plan identifier is invalid.", nameof(planId));
 
             return Path.Combine(drive + @"\", "ProgramData", "LinuxHub", "Transactions", planId);

@@ -1,3 +1,5 @@
+using System.IO;
+using LinuxHub.Common.Diagnostics;
 using LinuxHub.Common.Localization;
 using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Models;
@@ -168,7 +170,37 @@ namespace LinuxHub.Features.InstallWizard.Services
                     IsoHostPartitionUuid: staging?.PartitionUuid));
             });
 
+            // A senha em claro só existe para atravessar o lado Windows: quem a consome é o
+            // InstallerConfigFromPlan, e o que chega ao Linux é o hash já dentro do preseed /
+            // autoinstall. Passado esse ponto ela é resíduo — e mora sob ProgramData, que é
+            // legível por qualquer usuário da máquina. Some assim que deixa de ser necessária.
+            DeleteAccountSecret(plan);
+
             ledger.MarkSucceeded();
+        }
+
+        /// <summary>
+        /// Apaga o arquivo de senha em claro. Best-effort: não conseguir apagar não invalida
+        /// uma instalação que já deu certo, mas fica no log — um resíduo que ninguém percebe
+        /// é pior do que um que aparece no diagnóstico.
+        /// </summary>
+        private static void DeleteAccountSecret(InstallationPlan plan)
+        {
+            string path = plan.Account.PasswordWindowsPath;
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            try
+            {
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                DiagnosticLog.Write(
+                    "limpeza do segredo de conta",
+                    $"Não foi possível apagar {path}: {ex.Message}");
+            }
         }
 
         private InstallationPlan BuildPlan(
@@ -234,8 +266,53 @@ namespace LinuxHub.Features.InstallWizard.Services
             ledger.SetProgress(
                 stage: stepId.Replace('.', '-'),
                 overallPercent: InstallationProgressCatalog.GetOverallPercent(stepId));
-            action();
+
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                // Sem isto o estado durável fica parado em `running` com este passo ativo: o
+                // ledger é gravado em disco e sobrevive ao processo, então o
+                // InterruptedTransactionProbe passa a encontrar uma transação não resolvida em
+                // TODA abertura seguinte e bloqueia qualquer nova instalação — para sempre,
+                // porque nada apaga esse estado. Uma falha de passo tem que ser registrada como
+                // falha, não deixada em aberto.
+                // `component` só aceita uma fase (windows/live/target/rollback), não o id do
+                // passo — e o id já carrega a fase no prefixo ("windows.disk-prepared").
+                // Passar o id inteiro faria o próprio tratador lançar e mascarar a exceção
+                // original.
+                ledger.Fail(
+                    code: "STEP_FAILED",
+                    message: $"{stepId}: {ex.Message}",
+                    component: PhaseOf(stepId));
+                throw;
+            }
+
             ledger.CompleteStep(stepId);
+        }
+
+        /// <summary>
+        /// Fase a partir do prefixo do id do passo. Um id sem prefixo conhecido cai em
+        /// <see cref="InstallationPhase.Windows"/>: registrar a falha na fase errada é ruim,
+        /// mas não registrar nenhuma deixaria a transação presa em `running`, que é pior.
+        /// </summary>
+        private static string PhaseOf(string stepId)
+        {
+            int separator = stepId.IndexOf('.');
+            if (separator <= 0)
+                return InstallationPhase.Windows;
+
+            string prefix = stepId[..separator];
+            return prefix switch
+            {
+                InstallationPhase.Windows => InstallationPhase.Windows,
+                InstallationPhase.Live => InstallationPhase.Live,
+                InstallationPhase.Target => InstallationPhase.Target,
+                InstallationPhase.Rollback => InstallationPhase.Rollback,
+                _ => InstallationPhase.Windows,
+            };
         }
     }
 }

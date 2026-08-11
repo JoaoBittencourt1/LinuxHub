@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using LinuxHub.Common.Localization;
@@ -45,8 +46,23 @@ namespace LinuxHub.Features.InstallWizard.Views
                 CheckFileExists = true
             };
 
-            if (dialog.ShowDialog() == true)
+            if (dialog.ShowDialog() != true)
+                return;
+
+            // `async void`: exceção aqui não tem quem a observe e derruba o processo. E a
+            // seleção manual agora ABRE o arquivo para calcular o hash, então disco removível
+            // retirado, arquivo em uso ou permissão negada são falhas esperadas — não bug.
+            try
+            {
                 await viewModel.Iso.SelectManualIsoAsync(dialog.FileName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                OnNotify(
+                    LocalizationManager.Instance["Wizard_InstallErrorTitle"],
+                    ex.Message,
+                    isError: true);
+            }
         }
 
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e) =>

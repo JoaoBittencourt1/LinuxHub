@@ -60,9 +60,34 @@ namespace LinuxHub.Tests.Common.Data
         }
 
         /// <summary>Uma distro nova anunciada só pelo catálogo remoto não tem assets compilados
-        /// no executável — é ignorada, não criada "sem imagem".</summary>
+        /// no executável — é ignorada, não criada "sem imagem". As conhecidas continuam sendo
+        /// atualizadas normalmente.</summary>
         [Fact]
-        public void Merge_UnknownId_IsIgnored()
+        public void Merge_UnknownIdAmongKnownOnes_IsIgnored()
+        {
+            var unknown = ValidUbuntuEntry();
+            unknown.Id = "distro-nova-que-o-exe-nao-conhece";
+            var remote = new RemoteCatalogDocument
+            {
+                SchemaVersion = 1,
+                Distributions = { unknown, ValidUbuntuEntry() },
+            };
+
+            var merged = CatalogMerge.Merge(remote, new[] { LocalUbuntu });
+
+            Assert.NotNull(merged);
+            Assert.Equal(["ubuntu"], merged!.Select(distro => distro.Id));
+        }
+
+        /// <summary>
+        /// Um documento em que NENHUM id casa é rejeitado por inteiro, não reduzido a uma lista
+        /// vazia. Ele pode estar corretamente assinado — um catálogo de outra versão do produto,
+        /// ou com erro de digitação nos ids — e ainda assim não descreve o catálogo deste app.
+        /// Aceitá-lo trocaria todas as distros por nenhuma, sem aviso, porque a assinatura
+        /// conferiu.
+        /// </summary>
+        [Fact]
+        public void Merge_NoIdMatchesTheFallback_RejectsTheEntireDocument()
         {
             var unknown = ValidUbuntuEntry();
             unknown.Id = "distro-nova-que-o-exe-nao-conhece";
@@ -70,7 +95,7 @@ namespace LinuxHub.Tests.Common.Data
 
             var merged = CatalogMerge.Merge(remote, new[] { LocalUbuntu });
 
-            Assert.Empty(merged!);
+            Assert.Null(merged);
         }
 
         [Fact]
@@ -97,15 +122,16 @@ namespace LinuxHub.Tests.Common.Data
             Assert.Null(merged);
         }
 
+        /// <summary>Mesma razão do teste acima: um documento sem nenhuma distro não é um
+        /// catálogo válido para este app, e aceitá-lo deixaria o usuário com uma tela vazia.</summary>
         [Fact]
-        public void Merge_EmptyDistributions_ReturnsEmptyList()
+        public void Merge_EmptyDistributions_RejectsTheEntireDocument()
         {
             var remote = new RemoteCatalogDocument { SchemaVersion = 1, Distributions = { } };
 
             var merged = CatalogMerge.Merge(remote, new[] { LocalUbuntu });
 
-            Assert.NotNull(merged);
-            Assert.Empty(merged!);
+            Assert.Null(merged);
         }
 
         /// <summary>

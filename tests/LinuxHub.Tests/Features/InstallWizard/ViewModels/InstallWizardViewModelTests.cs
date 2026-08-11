@@ -86,16 +86,28 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             public long? ShrunkBytes { get; private set; }
             public int? NewPartitionsPlanned { get; private set; }
 
+            /// <summary>Quando definido, o passo de preparação de disco lança — é como os
+            /// testes exercitam o caminho de falha do ledger.</summary>
+            public Exception? Failure { get; set; }
+
             public void ShrinkPartition(
                 int diskIndex, int partitionIndex, long bytesToFree, int newPartitionsPlanned)
             {
+                if (Failure is not null)
+                    throw Failure;
+
                 ShrunkBytes = bytesToFree;
                 NewPartitionsPlanned = newPartitionsPlanned;
             }
 
             public void EnsureUnallocatedSpace(
-                int diskIndex, long requiredBytes, int newPartitionsPlanned) =>
+                int diskIndex, long requiredBytes, int newPartitionsPlanned)
+            {
+                if (Failure is not null)
+                    throw Failure;
+
                 NewPartitionsPlanned = newPartitionsPlanned;
+            }
         }
 
         private sealed class FakeUnattendedInstallPreparer : IUnattendedInstallPreparer
@@ -268,8 +280,11 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
 
         private sealed class InMemoryLedgerFactory : IInstallationExecutionLedgerFactory
         {
+            /// <summary>Último ledger criado, para o teste inspecionar o estado final.</summary>
+            public IInstallationExecutionLedger? Last { get; private set; }
+
             public IInstallationExecutionLedger Create(string planId, string statePath) =>
-                new InMemoryLedger(InstallationStateMachine.Create(planId));
+                Last = new InMemoryLedger(InstallationStateMachine.Create(planId));
 
             public IInstallationExecutionLedger Open(string statePath) =>
                 throw new NotSupportedException();
@@ -310,7 +325,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             FakePartitionInventoryService? partitions = null,
             FakeInstallerConfigWriter? configWriter = null,
             FakePlanPublisher? planPublisher = null,
-            IInterruptedTransactionProbe? interruptedProbe = null)
+            IInterruptedTransactionProbe? interruptedProbe = null,
+            ICompatibilityFactsProbe? compatibilityFacts = null,
+            InMemoryLedgerFactory? ledgerFactory = null)
         {
             var iso = new IsoAcquisitionViewModel(new FakeIsoDownloadService(), new FakeDistroDetectionService(), new FakeDownloadedIsoRepository(), new FakeArtifactVerifier());
             var target = new TargetSelectionViewModel(
@@ -323,7 +340,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             var flowRunner = new InstallationFlowRunner(
                 new FakeDiskLayoutProvider(),
                 planPublisher ?? new FakePlanPublisher(),
-                new InMemoryLedgerFactory(),
+                ledgerFactory ?? new InMemoryLedgerFactory(),
                 partitioning ?? new FakeDiskPartitioningService(),
                 stagingService,
                 isoInfo,
@@ -341,7 +358,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 stagingService,
                 isoInfo,
                 flowRunner,
-                interruptedTransactionProbe: interruptedProbe ?? new FakeInterruptedTransactionProbe());
+                interruptedTransactionProbe: interruptedProbe ?? new FakeInterruptedTransactionProbe(),
+                compatibilityFacts: compatibilityFacts ?? FakeCompatibilityFactsProbe.Compatible());
 
             // ResolvedIsoPath só é preenchido pelo download ou pela seleção manual; o wizard
             // recusa instalar sem ele, então o teste passa pelo caminho de download falso.
@@ -358,6 +376,40 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         {
             public InterruptedTransactionInfo? Info { get; set; }
             public InterruptedTransactionInfo? FindBlockingTransaction(string systemDrive) => Info;
+        }
+
+        private sealed class FakeCompatibilityFactsProbe : ICompatibilityFactsProbe
+        {
+            public CompatibilityFacts? Facts { get; set; }
+            public Exception? Failure { get; set; }
+            public int ReadCalls { get; private set; }
+            public int? LastDiskNumber { get; private set; }
+
+            /// <summary>Máquina que passa em todas as regras — o padrão dos testes que não
+            /// estão exercitando o preflight.</summary>
+            public static FakeCompatibilityFactsProbe Compatible() => new()
+            {
+                Facts = new CompatibilityFacts
+                {
+                    TopologyDeterminate = true,
+                    EncryptionQuerySucceeded = true,
+                    EncryptionConversionStatus = "FullyDecrypted",
+                    EncryptionPercentComplete = 0,
+                    EncryptionProtectionStatus = 0,
+                    BootNextProbeResult = "ok",
+                },
+            };
+
+            public CompatibilityFacts Read(int diskNumber, char systemDriveLetter)
+            {
+                ReadCalls++;
+                LastDiskNumber = diskNumber;
+
+                if (Failure is not null)
+                    throw Failure;
+
+                return Facts ?? new CompatibilityFacts();
+            }
         }
 
         private static async Task ConfirmAndWaitForInstallStartAsync(
@@ -700,6 +752,35 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             Assert.Equal(StagingPartitionService.IsoGrubPath, bootStaging.LastRequest!.IsoPath);
         }
 
+        /// <summary>
+        /// Um passo que falha tem que ser registrado como falha. O ledger é gravado em disco e
+        /// sobrevive ao processo: deixado em `running`, o InterruptedTransactionProbe encontra
+        /// uma transação não resolvida em toda abertura seguinte e bloqueia qualquer nova
+        /// instalação — para sempre, porque nada apaga esse estado. Uma instalação que falha
+        /// uma vez inutilizaria o app.
+        /// </summary>
+        [Fact]
+        public async Task FailedStep_MarksTheLedgerFailedInsteadOfLeavingItRunning()
+        {
+            var ledgers = new InMemoryLedgerFactory();
+            var partitioning = new FakeDiskPartitioningService
+            {
+                Failure = new InvalidOperationException("shrink falhou"),
+            };
+            var vm = BuildViewModel(
+                new BlockingBootStagingService(),
+                partitioning: partitioning,
+                ledgerFactory: ledgers);
+
+            vm.InstallCommand.Execute(null);
+            vm.PendingConfirmation!.ConfirmCommand.Execute(null);
+            await WaitUntilIdleAsync(vm);
+
+            Assert.NotNull(ledgers.Last);
+            Assert.Equal(InstallationStatus.Failed, ledgers.Last!.State.Status);
+            Assert.NotNull(ledgers.Last.State.Failure);
+        }
+
         [Fact]
         public void CompatibilityRejection_BlocksMutatingInstall()
         {
@@ -717,6 +798,68 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             Assert.False(vm.CanStartMutatingInstall);
             Assert.False(vm.InstallCommand.CanExecute(null));
             vm.InstallCommand.Execute(null);
+            Assert.Null(vm.PendingConfirmation);
+        }
+
+        /// <summary>
+        /// O preflight tem que RODAR contra a máquina, não só existir. Toda a máquina de regras
+        /// (disco dinâmico, Storage Spaces, RAID/VMD, BitLocker) já estava pronta e testada, mas
+        /// nada em produção executava o script: o gate ficava permanentemente aberto e a
+        /// instalação destrutiva seguia numa topologia recusada. É o padrão que constitution
+        /// §7.1 chama de gate desarmado em runtime.
+        /// </summary>
+        [Fact]
+        public void BeginInstall_RunsThePreflightAgainstTheTargetDisk()
+        {
+            var probe = FakeCompatibilityFactsProbe.Compatible();
+            var vm = BuildViewModel(new BlockingBootStagingService(), compatibilityFacts: probe);
+
+            vm.InstallCommand.Execute(null);
+
+            Assert.Equal(1, probe.ReadCalls);
+            Assert.NotNull(vm.PendingConfirmation);
+        }
+
+        [Fact]
+        public void BeginInstall_RejectedTopology_NeverReachesConfirmation()
+        {
+            var probe = new FakeCompatibilityFactsProbe
+            {
+                Facts = new CompatibilityFacts
+                {
+                    DiskIsDynamic = true,
+                    TopologyDeterminate = true,
+                    EncryptionQuerySucceeded = true,
+                    EncryptionConversionStatus = "FullyDecrypted",
+                    EncryptionPercentComplete = 0,
+                    EncryptionProtectionStatus = 0,
+                    BootNextProbeResult = "ok",
+                },
+            };
+            var vm = BuildViewModel(new BlockingBootStagingService(), compatibilityFacts: probe);
+
+            vm.InstallCommand.Execute(null);
+
+            Assert.Null(vm.PendingConfirmation);
+            Assert.True(vm.LastCompatibilityReport!.HasRejection);
+        }
+
+        /// <summary>
+        /// Uma topologia que não pôde ser lida é indistinguível de uma incompatível. §6.1 manda
+        /// parar em vez de assumir o caso provável — liberar aqui seria transformar uma falha de
+        /// consulta em permissão para reparticionar.
+        /// </summary>
+        [Fact]
+        public void BeginInstall_PreflightQueryFails_BlocksInsteadOfAssuming()
+        {
+            var probe = new FakeCompatibilityFactsProbe
+            {
+                Failure = new InvalidOperationException("script falhou"),
+            };
+            var vm = BuildViewModel(new BlockingBootStagingService(), compatibilityFacts: probe);
+
+            vm.InstallCommand.Execute(null);
+
             Assert.Null(vm.PendingConfirmation);
         }
 

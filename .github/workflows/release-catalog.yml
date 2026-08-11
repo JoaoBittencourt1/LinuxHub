@@ -1,0 +1,96 @@
+name: Release catalog
+
+# Disparo manual, de propósito (task 7.7): assinar e publicar não pode acontecer em todo push,
+# só quando alguém decide fazer um release do catálogo. Workflow separado do CI principal
+# também de propósito — só ele lê o secret da chave privada, então PRs (inclusive de forks)
+# nunca chegam perto dele.
+on:
+  workflow_dispatch:
+
+jobs:
+  sign-and-publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      # A assinatura só faz sentido sobre um documento que ainda bate com o schema — sem isso,
+      # um catálogo malformado seria assinado e publicado como se fosse confiável.
+      - name: Validar catálogo contra o schema antes de assinar
+        run: dotnet test tests/LinuxHub.Tests/LinuxHub.Tests.csproj --nologo --filter "FullyQualifiedName~DistributionCatalogExample_MatchesTheSchema"
+
+      - name: Gerar documento do catálogo
+        run: dotnet run --project tools/CatalogPublisher --configuration Release -- catalog.json
+
+      # A chave privada existe só como secret do pipeline (D8/task 2.2) — nunca em disco de
+      # desenvolvedor, nunca commitada. Sem o secret configurado, este passo falha, o que é o
+      # comportamento correto: melhor o release parar aqui do que publicar sem assinatura.
+      - name: Assinar documento do catálogo
+        shell: pwsh
+        env:
+          CATALOG_SIGNING_PRIVATE_KEY: ${{ secrets.CATALOG_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:CATALOG_SIGNING_PRIVATE_KEY)) {
+            throw "Secret CATALOG_SIGNING_PRIVATE_KEY não está configurado neste repositório."
+          }
+          ./tools/sign-catalog-document.ps1 `
+            -DocumentPath catalog.json `
+            -PrivateKeyPem $env:CATALOG_SIGNING_PRIVATE_KEY `
+            -SignaturePath catalog.json.sig
+
+      # Task 7.8: prova de que a chave privada não foi parar em nenhum artefato que este job
+      # está prestes a publicar. Os únicos arquivos publicados são o documento e a assinatura —
+      # nenhum dos dois deveria conter texto de chave privada nunca, mas confere em vez de supor.
+      - name: Confirmar que a chave privada não vaza nos artefatos publicados
+        shell: pwsh
+        run: |
+          $offenders = @()
+          foreach ($file in @("catalog.json", "catalog.json.sig")) {
+            if (Select-String -Path $file -Pattern "PRIVATE KEY" -Quiet) {
+              $offenders += $file
+            }
+          }
+          if ($offenders.Count -gt 0) {
+            throw "Material de chave privada encontrado em: $($offenders -join ', ')"
+          }
+          Write-Output "Nenhum artefato publicado contém material de chave privada."
+
+      # Complementa a verificação acima: confirma que o EXECUTÁVEL construído só carrega a
+      # chave pública embarcada (CatalogPublicKey.cs), nunca uma privada — checagem de fonte,
+      # não de binário, porque é onde a chave privada entraria se alguém a commitasse por engano.
+      - name: Confirmar que o código-fonte só embarca a chave pública
+        shell: pwsh
+        run: |
+          $hits = Select-String -Path "Common/Data/CatalogPublicKey.cs" -Pattern "BEGIN (RSA )?PRIVATE KEY"
+          if ($hits) {
+            throw "CatalogPublicKey.cs contém material de chave privada."
+          }
+          Write-Output "CatalogPublicKey.cs contém apenas a chave pública."
+
+      # A chave privada só precisa existir na memória deste processo, e só até o passo de
+      # assinatura. Limpá-la do ambiente aqui é defesa em profundidade — os secrets do GitHub
+      # Actions já são mascarados no log por padrão, mas nada depende só disso.
+      - name: Limpar a chave privada da memória do runner
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item Env:\CATALOG_SIGNING_PRIVATE_KEY -ErrorAction SilentlyContinue
+
+      # O destino final (servidor privado do operador, decisão da task 2.1) não é conhecido por
+      # este workflow — nenhuma URL/credencial de upload foi definida na mudança. Publicar aqui
+      # como artefato do próprio GitHub Actions é o que fica dentro do que este repositório sabe
+      # fazer sozinho; o hop final até o servidor do operador é um passo de infraestrutura dele,
+      # a ser adicionado quando esse destino existir (ex.: scp/rsync/aws s3 cp abaixo do
+      # upload-artifact, lendo host/credenciais de outro secret).
+      - name: Publicar documento e assinatura como artefato do workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: distribution-catalog-signed
+          path: |
+            catalog.json
+            catalog.json.sig
+          retention-days: 90

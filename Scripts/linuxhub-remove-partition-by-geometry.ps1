@@ -17,7 +17,7 @@ $ErrorActionPreference = 'Stop'
 
 # Ownership must already be proven by the C# caller (DiskOwnershipProof). This script
 # only removes the partition whose offset AND size match exactly — never "the last partition".
-$matches = @(
+$candidatePartitions = @(
     Get-Partition -DiskNumber $DiskNumber -ErrorAction Stop |
         Where-Object {
             [int64]$_.Offset -eq $OffsetBytes -and
@@ -25,13 +25,13 @@ $matches = @(
         }
 )
 
-if ($matches.Count -eq 0) {
+if ($candidatePartitions.Count -eq 0) {
     throw "No partition at disk $DiskNumber offset $OffsetBytes size $SizeBytes."
 }
-if ($matches.Count -gt 1) {
+if ($candidatePartitions.Count -gt 1) {
     throw "Ambiguous partition match at disk $DiskNumber offset $OffsetBytes size $SizeBytes."
 }
 
-Remove-Partition -DiskNumber $DiskNumber -PartitionNumber $matches[0].PartitionNumber -Confirm:$false
+Remove-Partition -DiskNumber $DiskNumber -PartitionNumber $candidatePartitions[0].PartitionNumber -Confirm:$false
 Write-Output "PARTITION_REMOVED=true"
-Write-Output ("PARTITION_NUMBER={0}" -f $matches[0].PartitionNumber)
+Write-Output ("PARTITION_NUMBER={0}" -f $candidatePartitions[0].PartitionNumber)

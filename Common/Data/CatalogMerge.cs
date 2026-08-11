@@ -17,7 +17,14 @@ namespace LinuxHub.Common.Data
     {
         /// <summary>Devolve null quando o documento tem qualquer entrada com enum inválido
         /// (<c>UnattendedInstall</c>/<c>LiveSession</c>) — o documento inteiro é malformado
-        /// nesse caso, não só a entrada (mesma regra de "rejeitar por inteiro" do plano, D2).</summary>
+        /// nesse caso, não só a entrada (mesma regra de "rejeitar por inteiro" do plano, D2).
+        ///
+        /// Também devolve null quando NENHUMA entrada casa com o fallback embarcado. Um
+        /// documento assim é sintaticamente válido e pode até estar corretamente assinado —
+        /// um catálogo de outra versão do produto, ou com um erro de digitação nos ids — mas
+        /// descreve um catálogo que não é o deste app. Aceitá-lo substituiria a lista inteira
+        /// de distros por uma vazia, deixando o usuário com uma tela sem nada e sem nenhum
+        /// aviso, já que a assinatura conferiu.</summary>
         public static IReadOnlyList<DistroInfo>? Merge(RemoteCatalogDocument remote, IReadOnlyList<DistroInfo> localFallback)
         {
             var localById = localFallback.ToDictionary(distro => distro.Id);
@@ -58,7 +65,7 @@ namespace LinuxHub.Common.Data
                 });
             }
 
-            return merged;
+            return merged.Count > 0 ? merged : null;
         }
     }
 }

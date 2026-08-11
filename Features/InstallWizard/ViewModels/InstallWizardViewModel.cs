@@ -21,6 +21,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private readonly IInstallationFlowRunner _flowRunner;
         private readonly ICompatibilityPreflightRunner _compatibilityPreflight;
         private readonly IInterruptedTransactionProbe _interruptedTransactionProbe;
+        private readonly ICompatibilityFactsProbe _compatibilityFacts;
         private ConfirmationViewModel? _pendingConfirmation;
         private string? _installStatus;
         private CompatibilityPreflightReport? _lastCompatibilityReport;
@@ -40,7 +41,8 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             IIsoFileInfoProvider isoFileInfo,
             IInstallationFlowRunner flowRunner,
             ICompatibilityPreflightRunner? compatibilityPreflight = null,
-            IInterruptedTransactionProbe? interruptedTransactionProbe = null)
+            IInterruptedTransactionProbe? interruptedTransactionProbe = null,
+            ICompatibilityFactsProbe? compatibilityFacts = null)
         {
             Iso = iso ?? throw new ArgumentNullException(nameof(iso));
             Target = target ?? throw new ArgumentNullException(nameof(target));
@@ -52,6 +54,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             _flowRunner = flowRunner ?? throw new ArgumentNullException(nameof(flowRunner));
             _compatibilityPreflight = compatibilityPreflight ?? CompatibilityPreflightRunner.CreateDefault();
             _interruptedTransactionProbe = interruptedTransactionProbe ?? new InterruptedTransactionProbe();
+            _compatibilityFacts = compatibilityFacts ?? new CompatibilityFactsProbe();
 
             Iso.Notify += (title, message, isError) => Notify?.Invoke(title, message, isError);
 
@@ -246,6 +249,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                     throw new InvalidOperationException(spaceError);
 
                 EnsureBootSecurityAllowsInstall(loc);
+                EnsureCompatibilityAllowsInstall(loc);
                 EnsureDiskFitsThePreparation(loc);
 
                 bool isReplace = Target.IsReplaceMode;
@@ -275,6 +279,48 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             {
                 Notify?.Invoke(loc["Wizard_InstallErrorTitle"], ex.Message, true);
             }
+        }
+
+        /// <summary>
+        /// Roda o preflight contra o disco alvo e interrompe se ele recusar a máquina.
+        ///
+        /// Acontece aqui, e não em <see cref="RaiseStartupWarnings"/>, porque o script exige o
+        /// número do disco: antes da escolha do alvo não há o que perguntar. E acontece ANTES
+        /// da confirmação, porque o que ele protege é o caminho destrutivo — recusar depois de
+        /// o usuário confirmar seria tarde.
+        ///
+        /// Falha ao consultar RECUSA, nunca libera: uma máquina cuja topologia não pôde ser
+        /// lida é indistinguível de uma incompatível, e §6.1 manda parar em vez de assumir o
+        /// caso provável.
+        /// </summary>
+        private void EnsureCompatibilityAllowsInstall(LocalizationManager loc)
+        {
+            int? diskNumber = Target.IsReplaceMode
+                ? Target.SelectedDisk?.Index
+                : Target.SelectedPartition?.DiskIndex;
+
+            if (diskNumber is not { } disk)
+                throw new InvalidOperationException(loc["Wizard_NoTargetDiskSelected"]);
+
+            char systemDrive = Path.GetPathRoot(Environment.SystemDirectory) is { Length: > 0 } root
+                ? root[0]
+                : 'C';
+
+            CompatibilityFacts facts;
+            try
+            {
+                facts = _compatibilityFacts.Read(disk, systemDrive);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    $"{loc["Preflight_RejectBlocked"]} ({ex.Message})", ex);
+            }
+
+            ApplyCompatibilityFacts(facts);
+
+            if (LastCompatibilityReport?.HasRejection == true)
+                throw new InvalidOperationException(loc["Preflight_RejectBlocked"]);
         }
 
         private void EnsureBootSecurityAllowsInstall(LocalizationManager loc)

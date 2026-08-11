@@ -17,3 +17,31 @@ jobs:
 
       - name: Build and test
         run: dotnet test tests/LinuxHub.Tests/LinuxHub.Tests.csproj --configuration Release --nologo
+
+      # Task 7.3: analisa os scripts elevados versionados (D11) — o corpo deles nunca é
+      # interpolado a partir de C#, então esta é a única checagem estática que os cobre.
+      - name: PSScriptAnalyzer sobre Scripts/
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+          $results = Invoke-ScriptAnalyzer -Path Scripts -Recurse -Severity Error
+          if ($results) {
+            $results | Format-Table RuleName, Severity, ScriptName, Line -AutoSize
+            throw "PSScriptAnalyzer found $($results.Count) error-severity issue(s) under Scripts/."
+          }
+          Write-Output "PSScriptAnalyzer: no error-severity findings."
+
+      # Task 7.3: o instalador Linux-side (installer/) é bash gerado/versionado — checagem de
+      # sintaxe pura (bash -n), sem executar nada.
+      - name: Validar sintaxe do bash em installer/
+        shell: bash
+        run: |
+          set -euo pipefail
+          status=0
+          while IFS= read -r -d '' file; do
+            if ! bash -n "$file"; then
+              echo "FALHOU: $file"
+              status=1
+            fi
+          done < <(find installer -name '*.sh' -print0)
+          exit $status

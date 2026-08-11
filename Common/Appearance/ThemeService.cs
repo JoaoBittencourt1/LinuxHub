@@ -76,9 +76,12 @@ namespace LinuxHub.Common.Appearance
                 if (string.Equals(value, "Light", StringComparison.OrdinalIgnoreCase))
                     return ApplicationTheme.Light;
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Preference is optional — fall back to Light.
+                // Preferência é opcional — cai no Light. UnauthorizedAccessException entra
+                // aqui porque isto roda em App.OnStartup, ANTES de existir qualquer janela:
+                // escapar mataria o app sem nenhuma tela para reportar o erro, e por causa
+                // de uma escolha de tema.
             }
 
             return null;
@@ -92,9 +95,9 @@ namespace LinuxHub.Common.Appearance
                     _settingsPath,
                     theme == ApplicationTheme.Dark ? "Dark" : "Light");
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Non-fatal: theme still applies for this session.
+                // Não fatal: o tema vale para esta sessão mesmo sem conseguir gravar.
             }
         }
     }
