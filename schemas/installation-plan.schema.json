@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linuxhub.example/schemas/installation-plan.schema.json",
+  "title": "LinuxHub Installation Plan",
+  "description": "Versioned contract published before any disk mutation. Shape authority only (D1/D2) — firmware/layout parity, geometry overlap, and staging size policy live in InstallationPlanValidator.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "planId",
+    "createdAtUtc",
+    "firmware",
+    "installMode",
+    "distribution",
+    "locale",
+    "account",
+    "disk",
+    "runtime"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "planId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "firmware": {
+      "enum": ["bios", "uefi"]
+    },
+    "installMode": {
+      "enum": ["replace", "dualboot"]
+    },
+    "distribution": {
+      "$ref": "#/$defs/distribution"
+    },
+    "locale": {
+      "$ref": "#/$defs/locale"
+    },
+    "account": {
+      "$ref": "#/$defs/account"
+    },
+    "disk": {
+      "$ref": "#/$defs/disk"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    }
+  },
+  "$defs": {
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "family",
+        "version",
+        "isoFileName",
+        "isoUrl",
+        "isoWindowsPath",
+        "isoSha256",
+        "isoSizeBytes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "family": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isoFileName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^/\\\\]+$"
+        },
+        "isoUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "isoWindowsPath": {
+          "type": "string",
+          "pattern": "^[A-Za-z]:[\\\\/]"
+        },
+        "isoSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "isoSizeBytes": {
+          "$ref": "#/$defs/positiveInteger"
+        }
+      }
+    },
+    "locale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locale", "timezone", "keymap"],
+      "properties": {
+        "locale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "keymap": {
+          "type": "string",
+          "minLength": 1
+        },
+        "desktopEnvironment": {
+          "type": "string"
+        }
+      }
+    },
+    "account": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["username", "passwordWindowsPath", "hostname"],
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passwordWindowsPath": {
+          "type": "string",
+          "pattern": "^[A-Za-z]:\\\\"
+        },
+        "hostname": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "disk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "uniqueId",
+        "partitionTableId",
+        "sizeBytes",
+        "logicalSectorSizeBytes",
+        "partitionStyle",
+        "systemDrive",
+        "windows",
+        "boot",
+        "recovery",
+        "installer"
+      ],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uniqueId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "partitionTableId": {
+          "type": "string",
+          "pattern": "^(?:mbr:[0-9a-f]{8}|gpt:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$"
+        },
+        "sizeBytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "logicalSectorSizeBytes": {
+          "enum": [512, 4096]
+        },
+        "partitionStyle": {
+          "enum": ["MBR", "GPT"]
+        },
+        "systemDrive": {
+          "type": "string",
+          "pattern": "^[A-Z]:$"
+        },
+        "windows": {
+          "$ref": "#/$defs/partitionIdentity"
+        },
+        "boot": {
+          "$ref": "#/$defs/partitionIdentity"
+        },
+        "recovery": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/partitionIdentity" }
+          ]
+        },
+        "installer": {
+          "$ref": "#/$defs/installerPartition"
+        }
+      }
+    },
+    "partitionIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "offsetBytes", "sizeBytes"],
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "offsetBytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "sizeBytes": {
+          "$ref": "#/$defs/positiveInteger"
+        }
+      }
+    },
+    "installerPartition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "offsetBytes",
+        "partitionUuid",
+        "finalSizeGiB",
+        "stagingSizeBytes"
+      ],
+      "properties": {
+        "number": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 1 }
+          ]
+        },
+        "offsetBytes": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/positiveInteger" }
+          ]
+        },
+        "partitionUuid": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "minLength": 1 }
+          ]
+        },
+        "finalSizeGiB": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stagingSizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transactionRootWindows"],
+      "properties": {
+        "transactionRootWindows": {
+          "type": "string",
+          "pattern": "^[A-Za-z]:\\\\"
+        },
+        "encryptionConversionStatus": {
+          "type": ["string", "null"]
+        },
+        "encryptionPercentComplete": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    }
+  }
+}
