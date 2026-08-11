@@ -269,6 +269,20 @@ sessão live. Ou seja, o script vai ao lado da ISO — exatamente onde
 E `img_dev` aceita `PARTUUID=` direto (o hook repassa a tag para o `mount`), o
 que fecha o transporte com o mesmo identificador estável da decisão 9.
 
+*Confirmado em boot real (2026-08-11), depois de uma tentativa falha:* a primeira
+implementação perguntava o UUID ao próprio GRUB em tempo de boot
+(`probe --fs-uuid`), como faz o `loopback.cfg` do fornecedor — seria melhor, por
+não depender de nada calculado no Windows. Não funciona aqui: o `grubx64.efi`
+que o app embarca é gerado com uma lista fixa de módulos que **não inclui
+`probe`**, e não acompanha diretório de módulos, então nem `insmod` resolve. A
+entrada morria em `can't find command 'probe'` e seguia com `img_dev=` vazio,
+caindo no prompt interativo do initramfs.
+
+Quem nomeia a partição, portanto, é o app: `IsoHostPartitionLocator` lê o
+PARTUUID pelo mesmo WMI que o resto do projeto já usa. Regerar o GRUB com o
+módulo `probe` foi descartado — trocaria uma peça de dado por uma peça binária
+regerada à mão, e o `core.img` do BIOS teria que ir junto.
+
 **`copytoram=n` é obrigatório.** O default é `auto`, que vira `y` sempre que o
 `airootfs.sfs` couber em RAM com folga de 2 GiB — e nesse caso o
 `archiso_loop_mount_handler` **desmonta** `/run/archiso/img_dev` ainda no

@@ -64,7 +64,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 "Arch Linux",
                 @"C:\ISOs\archlinux.iso",
                 includeWindowsChainload: false,
-                isoEntryBuilder: ArchisoIsoBootEntryBuilder.Instance);
+                isoEntryBuilder: ArchisoIsoBootEntryBuilder.Instance,
+                isoHostPartitionUuid: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
             Assert.Contains("archisobasedir=arch", config);
             Assert.DoesNotContain("boot=casper", config);

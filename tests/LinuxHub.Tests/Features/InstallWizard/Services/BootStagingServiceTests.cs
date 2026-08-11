@@ -34,6 +34,11 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             public string AddFirmwareBootEntry(string description, char driveLetter, string efiPathOnVolume) => "{guid}";
         }
 
+        private sealed class FakeIsoHostPartitionLocator : IIsoHostPartitionLocator
+        {
+            public string GetPartitionUuid(string windowsPath) => "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        }
+
         /// <summary>Os construtores reais: são classes puras de texto, sem I/O nem elevação,
         /// então substituí-los por fake só esconderia o arquivo que de fato é gerado.</summary>
         private static readonly IIsoBootEntryBuilderRegistry IsoBootEntryBuilders =
@@ -58,7 +63,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             File.WriteAllBytes(coreImage, new byte[150_000]); // ~293 sectors, well under 2047
 
             var mbrBackup = new FakeMbrBackup { MbrToReturn = BuildMbrWithFirstPartitionAt(2048) };
-            var service = new BootStagingService(new FakeEspLocator(), new FakeGrubAssets(), mbrBackup, new FakeBootConfiguration(), IsoBootEntryBuilders);
+            var service = new BootStagingService(new FakeEspLocator(), new FakeGrubAssets(), mbrBackup, new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator());
 
             service.EnsurePostMbrGapFitsCoreImage(diskIndex: 0, coreImage);
 
@@ -73,7 +78,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             // Alinhamento pré-Vista: partição em LBA 63 (~31KB de gap, insuficiente).
             var mbrBackup = new FakeMbrBackup { MbrToReturn = BuildMbrWithFirstPartitionAt(63) };
-            var service = new BootStagingService(new FakeEspLocator(), new FakeGrubAssets(), mbrBackup, new FakeBootConfiguration(), IsoBootEntryBuilders);
+            var service = new BootStagingService(new FakeEspLocator(), new FakeGrubAssets(), mbrBackup, new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator());
 
             Assert.Throws<InvalidOperationException>(() => service.EnsurePostMbrGapFitsCoreImage(diskIndex: 0, coreImage));
 
@@ -92,7 +97,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void InstallStagingBootloader_AcceptsAGrubPathThatIsNotFullyQualified()
         {
             var service = new BootStagingService(
-                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders);
+                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator());
 
             var request = new BootStagingRequest(
                 DistroName: "Ubuntu",
@@ -113,7 +118,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void InstallStagingBootloader_DualBoot_StillRequiresTheOriginalIsoToExist()
         {
             var service = new BootStagingService(
-                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders);
+                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator());
 
             string missingPath = Path.Combine(Path.GetTempPath(), $"linuxhub-missing-{Guid.NewGuid():N}.iso");
             var request = new BootStagingRequest(

@@ -10,14 +10,17 @@ namespace LinuxHub.Features.InstallWizard.Services
         private readonly IMbrBackupService _mbrBackup;
         private readonly IBootConfigurationService _bootConfiguration;
         private readonly IIsoBootEntryBuilderRegistry _isoBootEntryBuilders;
+        private readonly IIsoHostPartitionLocator _isoHostPartitions;
 
         public BootStagingService(
             IEspLocatorService espLocator,
             IGrubAssetProvider grubAssets,
             IMbrBackupService mbrBackup,
             IBootConfigurationService bootConfiguration,
-            IIsoBootEntryBuilderRegistry isoBootEntryBuilders)
+            IIsoBootEntryBuilderRegistry isoBootEntryBuilders,
+            IIsoHostPartitionLocator isoHostPartitions)
         {
+            _isoHostPartitions = isoHostPartitions ?? throw new ArgumentNullException(nameof(isoHostPartitions));
             _espLocator = espLocator ?? throw new ArgumentNullException(nameof(espLocator));
             _grubAssets = grubAssets ?? throw new ArgumentNullException(nameof(grubAssets));
             _mbrBackup = mbrBackup ?? throw new ArgumentNullException(nameof(mbrBackup));
@@ -47,17 +50,38 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "ou apagada depois de selecionada no wizard.");
             }
 
+            IIsoBootEntryBuilder isoEntryBuilder = _isoBootEntryBuilders.Resolve(request.LiveSession);
+
             string grubCfg = GrubConfigBuilder.BuildConfig(
                 request.DistroName,
                 request.IsoPath,
                 includeWindowsChainload: !request.IsUefi,
                 unattended: request.Unattended,
-                isoEntryBuilder: _isoBootEntryBuilders.Resolve(request.LiveSession));
+                isoEntryBuilder: isoEntryBuilder,
+                isoHostPartitionUuid: ResolveIsoHostPartitionUuid(request, isoEntryBuilder));
 
             if (request.IsUefi)
                 InstallUefi(request, grubCfg);
             else
                 InstallBios(request, grubCfg);
+        }
+
+        /// <summary>
+        /// Só as receitas que declaram precisar pagam o custo de descobrir isto — o casper acha
+        /// a ISO sozinho e não precisa de nada. No modo substituir quem sabe é o chamador (a
+        /// ISO está na staging, e o caminho dela não é consultável no Windows); no dual-boot a
+        /// ISO está num volume real e o identificador sai dele.
+        /// </summary>
+        private string ResolveIsoHostPartitionUuid(
+            BootStagingRequest request, IIsoBootEntryBuilder isoEntryBuilder)
+        {
+            if (!isoEntryBuilder.RequiresIsoHostPartitionUuid)
+                return string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(request.IsoHostPartitionUuid))
+                return request.IsoHostPartitionUuid;
+
+            return _isoHostPartitions.GetPartitionUuid(request.IsoPath);
         }
 
         private void InstallUefi(BootStagingRequest request, string grubCfg)

@@ -39,6 +39,10 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         public LiveSessionFamily Family => LiveSessionFamily.Casper;
 
+        /// <summary>O casper acha a ISO sozinho: <c>iso-scan/filename</c> faz o initrd varrer os
+        /// discos procurando o arquivo naquele caminho.</summary>
+        public bool RequiresIsoHostPartitionUuid => false;
+
         /// <summary>
         /// A linha do kernel segue o <c>/boot/grub/loopback.cfg</c> que a própria ISO do
         /// Ubuntu 24.04 traz — é a receita do fornecedor para exatamente este caso (bootar a

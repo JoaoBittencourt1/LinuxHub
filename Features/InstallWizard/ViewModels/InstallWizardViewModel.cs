@@ -450,7 +450,11 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,
                 Unattended: unattended,
-                LiveSession: distro.LiveSession));
+                LiveSession: distro.LiveSession,
+                // Só o substituir precisa informar: lá a ISO foi copiada para a staging, e o
+                // caminho dela já não é consultável no Windows. No dual-boot ela continua num
+                // volume real e quem resolve é o boot-staging.
+                IsoHostPartitionUuid: staging?.PartitionUuid));
         }
     }
 }

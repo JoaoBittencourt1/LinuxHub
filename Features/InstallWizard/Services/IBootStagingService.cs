@@ -11,6 +11,11 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// continua no volume do Windows (ex.: <c>/Users/.../ubuntu.iso</c>), porque esse volume
     /// já é preservado pelo curtin.
     ///
+    /// <paramref name="IsoHostPartitionUuid"/> só precisa vir preenchido no modo substituir,
+    /// onde a ISO mora na partição de staging e <paramref name="IsoPath"/> já não é um caminho
+    /// do Windows que se possa consultar. No dual-boot fica <c>null</c> e o serviço resolve a
+    /// partir do caminho da ISO — e só quando a receita de boot em uso declara precisar dele.
+    ///
     /// <paramref name="Unattended"/> é o que a instalação desatendida acrescenta à entrada de
     /// boot, já resolvido pelo preparer do mecanismo em uso — só faz sentido depois que a
     /// configuração correspondente foi gravada, porque sem ela presente o instalador para
@@ -24,7 +29,8 @@ namespace LinuxHub.Features.InstallWizard.Services
         bool IsUefi,
         int TargetDiskIndex,
         UnattendedBootParameters? Unattended = null,
-        LiveSessionFamily LiveSession = LiveSessionFamily.Casper);
+        LiveSessionFamily LiveSession = LiveSessionFamily.Casper,
+        string? IsoHostPartitionUuid = null);
 
     /// <summary>
     /// Instala o bootloader de staging (GRUB2 chainloaded) que permite bootar a ISO já

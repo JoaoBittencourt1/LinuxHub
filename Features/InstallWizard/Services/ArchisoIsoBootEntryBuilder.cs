@@ -29,22 +29,34 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         public LiveSessionFamily Family => LiveSessionFamily.Archiso;
 
+        public bool RequiresIsoHostPartitionUuid => true;
+
         /// <summary>
-        /// O volume que hospeda a ISO é identificado pelo UUID que o próprio GRUB lê dele em
-        /// tempo de boot (<c>probe --fs-uuid</c>), e não por um valor calculado do lado do
-        /// Windows. Isso é deliberado e é a parte que mais importa aqui: o <c>search --file</c>
-        /// acima já encontrou o volume **pelo conteúdo**, então perguntar o UUID a esse mesmo
-        /// volume garante que o initramfs vai montar exatamente o que o GRUB achou. Um
-        /// identificador que o app associasse por conta própria poderia apontar para outro
-        /// disco — e um <c>/dev/...</c> que exista e seja o disco errado é aceito sem
-        /// questionar por qualquer instalador.
+        /// O volume que hospeda a ISO é nomeado pelo PARTUUID que o app descobriu do lado do
+        /// Windows (<see cref="IsoHostPartitionLocator"/>), e o hook <c>archiso_loop_mnt</c>
+        /// repassa a tag <c>PARTUUID=</c> direto para o <c>mount</c>.
         ///
-        /// É a mesma doutrina que o resto do gerador já segue: nunca um índice fixo, sempre
-        /// uma busca real (design.md, D3).
+        /// A primeira versão disto perguntava o UUID ao próprio GRUB em tempo de boot
+        /// (<c>probe --fs-uuid</c>), o que seria melhor por não depender de nada calculado no
+        /// Windows. Um boot real derrubou a ideia: o GRUB embutido do app é gerado com uma
+        /// lista fixa de módulos, sem <c>probe</c> e sem diretório de módulos para
+        /// <c>insmod</c> — a entrada morria em "can't find command `probe`" e seguia com um
+        /// <c>img_dev=</c> vazio.
         /// </summary>
         public string Build(IsoBootEntryRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
+
+            if (string.IsNullOrWhiteSpace(request.IsoHostPartitionUuid))
+            {
+                // Sem o identificador não há entrada de boot possível: o initramfs do archiso
+                // não sai procurando a ISO por conta própria como o casper faz. Estourar aqui
+                // é o resultado bom — a alternativa é um GRUB que cai num prompt interativo
+                // depois do reboot.
+                throw new InvalidOperationException(
+                    "A entrada de boot do Arch precisa do identificador da partição onde a ISO " +
+                    "está, e ele não foi informado.");
+            }
 
             var boot = request.Unattended;
 
@@ -58,6 +70,8 @@ namespace LinuxHub.Features.InstallWizard.Services
                 ? string.Empty
                 : " " + boot.ExtraInitrdGrubPath;
 
+            string partuuid = NormalizePartitionUuid(request.IsoHostPartitionUuid);
+
             return $@"menuentry ""Instalar {request.DistroName} (staging LinuxHub)"" {{
     insmod part_gpt
     insmod part_msdos
@@ -67,12 +81,17 @@ namespace LinuxHub.Features.InstallWizard.Services
     set gfxpayload=keep
     set isofile=""{request.IsoGrubPath}""
     search --no-floppy --file --set=root $isofile
-    probe --set=isodevuuid --fs-uuid $root
     loopback loop $isofile
-    linux (loop)/{InstallDirectory}/boot/x86_64/vmlinuz-linux archisobasedir={InstallDirectory} img_dev=UUID=$isodevuuid img_loop=$isofile{installerParameters}
+    linux (loop)/{InstallDirectory}/boot/x86_64/vmlinuz-linux archisobasedir={InstallDirectory} img_dev=PARTUUID={partuuid} img_loop=$isofile{installerParameters}
     initrd (loop)/{InstallDirectory}/boot/x86_64/initramfs-linux.img{extraInitrd}
 }}
 ";
         }
+
+        /// <summary>O Windows reporta o GUID entre chaves e em maiúsculas; o <c>mount</c> do
+        /// Linux resolve <c>PARTUUID=</c> por <c>/dev/disk/by-partuuid</c>, onde os nomes são
+        /// minúsculos e sem chaves.</summary>
+        private static string NormalizePartitionUuid(string partitionUuid) =>
+            partitionUuid.Trim().Trim('{', '}').ToLowerInvariant();
     }
 }

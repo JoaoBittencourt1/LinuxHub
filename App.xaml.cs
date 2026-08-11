@@ -56,9 +56,10 @@ namespace LinuxHub
                     CasperIsoBootEntryBuilder.Instance,
                     ArchisoIsoBootEntryBuilder.Instance,
                 ]);
+            IIsoHostPartitionLocator isoHostPartitionLocator = new IsoHostPartitionLocator();
             IBootStagingService bootStagingService = new BootStagingService(
                 espLocatorService, grubAssetProvider, mbrBackupService, bootConfigurationService,
-                isoBootEntryBuilderRegistry);
+                isoBootEntryBuilderRegistry, isoHostPartitionLocator);
             IBootSecurityService bootSecurityService = new BootSecurityService();
             IIsoFileInfoProvider isoFileInfoProvider = new IsoFileInfoProvider();
             IStagingPartitionService stagingPartitionService = new StagingPartitionService(isoFileInfoProvider);

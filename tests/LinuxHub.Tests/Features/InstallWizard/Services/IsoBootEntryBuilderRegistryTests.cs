@@ -11,6 +11,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             public LiveSessionFamily Family { get; } = family;
 
+            public bool RequiresIsoHostPartitionUuid => false;
+
             public string Build(IsoBootEntryRequest request) => string.Empty;
         }
 

@@ -12,9 +12,16 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
     /// </summary>
     public class ArchisoIsoBootEntryBuilderTests
     {
-        private static string Build(UnattendedBootParameters? unattended = null) =>
+        private const string HostPartitionUuid = "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}";
+
+        private static string Build(
+            UnattendedBootParameters? unattended = null,
+            string hostPartitionUuid = HostPartitionUuid) =>
             ArchisoIsoBootEntryBuilder.Instance.Build(new IsoBootEntryRequest(
-                "Arch Linux", "/ISOs/archlinux.iso", unattended ?? UnattendedBootParameters.Interactive));
+                "Arch Linux",
+                "/ISOs/archlinux.iso",
+                unattended ?? UnattendedBootParameters.Interactive,
+                hostPartitionUuid));
 
         /// <summary>
         /// O kernel e o initramfs do archiso não moram em <c>/casper</c>, e não existe
@@ -44,33 +51,30 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         {
             string entry = Build();
 
-            Assert.Contains("img_dev=UUID=$isodevuuid", entry);
+            Assert.Contains("img_dev=PARTUUID=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", entry);
             Assert.Contains("img_loop=$isofile", entry);
         }
 
         /// <summary>
-        /// O UUID do volume é lido pelo próprio GRUB, do volume que ele acabou de localizar
-        /// pelo conteúdo — nunca um valor calculado do lado do Windows. É o que garante que o
-        /// initramfs monta exatamente o volume onde a ISO foi achada; um identificador
-        /// associado por fora poderia apontar para outro disco, e um caminho que existe e é o
-        /// disco errado é aceito sem questionar (§6.1).
+        /// O GRUB embutido do app não tem o comando <c>probe</c> — a imagem é gerada com uma
+        /// lista fixa de módulos e não acompanha diretório de módulos para <c>insmod</c>. Um
+        /// boot real morreu exatamente aí ("can't find command `probe`") e seguiu com um
+        /// <c>img_dev=</c> vazio, caindo no prompt interativo do initramfs.
         /// </summary>
         [Fact]
-        public void ProbesTheHostVolumeUuidFromTheVolumeItJustFound()
-        {
-            string entry = Build();
-            string[] lines = entry.Split('\n').Select(line => line.Trim('\r').Trim()).ToArray();
+        public void UsesNoGrubCommandOutsideTheEmbeddedModuleSet() =>
+            Assert.DoesNotContain("probe", Build());
 
-            int search = Array.FindIndex(lines, line => line.StartsWith("search "));
-            int probe = Array.FindIndex(lines, line => line.StartsWith("probe "));
+        /// <summary>Sem o identificador não há entrada possível: o initramfs do archiso não sai
+        /// procurando a ISO por conta própria como o casper faz. Estourar aqui é melhor que um
+        /// GRUB que cai num prompt depois do reboot.</summary>
+        [Fact]
+        public void WithoutTheHostPartitionUuid_Refuses() =>
+            Assert.Throws<InvalidOperationException>(() => Build(hostPartitionUuid: "  "));
 
-            Assert.Contains("--file --set=root $isofile", lines[search]);
-            Assert.Equal("probe --set=isodevuuid --fs-uuid $root", lines[probe]);
-
-            // O probe pergunta ao volume que o search encontrou: inverter a ordem
-            // consultaria uma variável ainda vazia.
-            Assert.True(probe > search);
-        }
+        [Fact]
+        public void DeclaresThatItNeedsTheHostPartitionNamed() =>
+            Assert.True(ArchisoIsoBootEntryBuilder.Instance.RequiresIsoHostPartitionUuid);
 
         /// <summary>O separador <c>---</c> é convenção do debian-installer. No archiso tudo na
         /// linha é lido pelo initramfs e pela sessão live; um <c>---</c> aqui viraria um

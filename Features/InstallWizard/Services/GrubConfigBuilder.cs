@@ -25,7 +25,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             string isoWindowsPath,
             bool includeWindowsChainload,
             UnattendedBootParameters? unattended = null,
-            IIsoBootEntryBuilder? isoEntryBuilder = null)
+            IIsoBootEntryBuilder? isoEntryBuilder = null,
+            string isoHostPartitionUuid = "")
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(distroName);
             ArgumentException.ThrowIfNullOrWhiteSpace(isoWindowsPath);
@@ -39,7 +40,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             sb.Append(entryBuilder.Build(new IsoBootEntryRequest(
                 distroName,
                 ToGrubPath(isoWindowsPath),
-                unattended ?? UnattendedBootParameters.Interactive)));
+                unattended ?? UnattendedBootParameters.Interactive,
+                isoHostPartitionUuid)));
 
             if (includeWindowsChainload)
             {
