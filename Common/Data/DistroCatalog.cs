@@ -192,6 +192,11 @@ namespace LinuxHub.Common.Data
                 Version = "2026.08.01",
                 CreatedYear = "2002",
                 BeginnerRating = 1,
+                // A ISO do Arch não é casper: kernel e initramfs ficam em /arch/boot/x86_64, e
+                // quem monta o laço da ISO é o initramfs (img_dev/img_loop), não o GRUB. Sem
+                // esta declaração a entrada gerada seria a do casper, e a máquina reiniciaria
+                // num GRUB que não acha o kernel.
+                LiveSession = LiveSessionFamily.Archiso,
                 ImagePath = "pack://application:,,,/Assets/Images/arch.png",
                 DownloadLink = "https://archlinux.org/download/",
                 DirectDownloadLink = "https://mirror.adectra.com/archlinux/iso/2026.08.01/archlinux-2026.08.01-x86_64.iso",

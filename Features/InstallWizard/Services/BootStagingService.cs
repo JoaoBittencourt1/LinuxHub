@@ -9,17 +9,20 @@ namespace LinuxHub.Features.InstallWizard.Services
         private readonly IGrubAssetProvider _grubAssets;
         private readonly IMbrBackupService _mbrBackup;
         private readonly IBootConfigurationService _bootConfiguration;
+        private readonly IIsoBootEntryBuilderRegistry _isoBootEntryBuilders;
 
         public BootStagingService(
             IEspLocatorService espLocator,
             IGrubAssetProvider grubAssets,
             IMbrBackupService mbrBackup,
-            IBootConfigurationService bootConfiguration)
+            IBootConfigurationService bootConfiguration,
+            IIsoBootEntryBuilderRegistry isoBootEntryBuilders)
         {
             _espLocator = espLocator ?? throw new ArgumentNullException(nameof(espLocator));
             _grubAssets = grubAssets ?? throw new ArgumentNullException(nameof(grubAssets));
             _mbrBackup = mbrBackup ?? throw new ArgumentNullException(nameof(mbrBackup));
             _bootConfiguration = bootConfiguration ?? throw new ArgumentNullException(nameof(bootConfiguration));
+            _isoBootEntryBuilders = isoBootEntryBuilders ?? throw new ArgumentNullException(nameof(isoBootEntryBuilders));
         }
 
         public void InstallStagingBootloader(BootStagingRequest request)
@@ -48,7 +51,8 @@ namespace LinuxHub.Features.InstallWizard.Services
                 request.DistroName,
                 request.IsoPath,
                 includeWindowsChainload: !request.IsUefi,
-                unattended: request.Unattended);
+                unattended: request.Unattended,
+                isoEntryBuilder: _isoBootEntryBuilders.Resolve(request.LiveSession));
 
             if (request.IsUefi)
                 InstallUefi(request, grubCfg);

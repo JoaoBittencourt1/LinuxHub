@@ -35,6 +35,12 @@ namespace LinuxHub.Common.Models
         /// <summary>Atalho de leitura para "esta build tem algum mecanismo validado".</summary>
         public bool SupportsUnattendedInstall => UnattendedInstall != UnattendedInstallMechanism.None;
 
+        /// <summary>Como esta build monta a sessão live, o que decide a entrada de boot usada
+        /// para iniciá-la a partir de um arquivo. O padrão é <see cref="LiveSessionFamily.Casper"/>
+        /// porque era a única forma que o app sabia gerar até aqui — declarar errado não é um
+        /// erro visível no Windows, é uma máquina que reinicia e não acha o kernel.</summary>
+        public LiveSessionFamily LiveSession { get; set; }
+
         // Texto de Description/Maintainer nunca é hardcoded aqui — são chaves de recurso
         // (ver constitution.md, "Nenhuma string hardcoded"), resolvidas via
         // LocalizationManager para poderem ser traduzidas e trocar de idioma em runtime.

@@ -1,3 +1,4 @@
+using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Models;
 
 namespace LinuxHub.Features.InstallWizard.Services
@@ -22,7 +23,8 @@ namespace LinuxHub.Features.InstallWizard.Services
         string IsoPath,
         bool IsUefi,
         int TargetDiskIndex,
-        UnattendedBootParameters? Unattended = null);
+        UnattendedBootParameters? Unattended = null,
+        LiveSessionFamily LiveSession = LiveSessionFamily.Casper);
 
     /// <summary>
     /// Instala o bootloader de staging (GRUB2 chainloaded) que permite bootar a ISO já

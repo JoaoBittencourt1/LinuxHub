@@ -37,19 +37,28 @@ namespace LinuxHub
             ICloudInitSeedWriter cloudInitSeedWriter = new CloudInitSeedWriter();
             IDiskLayoutProvider diskLayoutProvider = new DiskLayoutProvider();
             IUnattendedInitrdWriter unattendedInitrdWriter = new UnattendedInitrdWriter();
+            IArchinstallScriptWriter archinstallScriptWriter = new ArchinstallScriptWriter();
             IUnattendedInstallPreparerRegistry unattendedPreparerRegistry =
                 new UnattendedInstallPreparerRegistry(
                 [
                     new SubiquityInstallPreparer(cloudInitSeedWriter, diskLayoutProvider),
                     new UbiquityInstallPreparer(
                         cloudInitSeedWriter, diskLayoutProvider, unattendedInitrdWriter),
+                    new ArchinstallInstallPreparer(diskLayoutProvider, archinstallScriptWriter),
                 ]);
 
             IGrubAssetProvider grubAssetProvider = new GrubAssetProvider();
             IMbrBackupService mbrBackupService = new MbrBackupService();
             IBootConfigurationService bootConfigurationService = new BootConfigurationService();
+            IIsoBootEntryBuilderRegistry isoBootEntryBuilderRegistry =
+                new IsoBootEntryBuilderRegistry(
+                [
+                    CasperIsoBootEntryBuilder.Instance,
+                    ArchisoIsoBootEntryBuilder.Instance,
+                ]);
             IBootStagingService bootStagingService = new BootStagingService(
-                espLocatorService, grubAssetProvider, mbrBackupService, bootConfigurationService);
+                espLocatorService, grubAssetProvider, mbrBackupService, bootConfigurationService,
+                isoBootEntryBuilderRegistry);
             IBootSecurityService bootSecurityService = new BootSecurityService();
             IIsoFileInfoProvider isoFileInfoProvider = new IsoFileInfoProvider();
             IStagingPartitionService stagingPartitionService = new StagingPartitionService(isoFileInfoProvider);

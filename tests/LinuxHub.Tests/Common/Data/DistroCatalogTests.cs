@@ -83,6 +83,30 @@ namespace LinuxHub.Tests.Common.Data
         [Fact]
         public void IsTested_DefaultsToFalse() => Assert.False(new DistroInfo().IsTested);
 
+        /// <summary>Declarar a família errada não é erro visível no Windows — é uma máquina que
+        /// reinicia e não acha o kernel. O teste fixa quem diverge do padrão; hoje só o Arch,
+        /// cuja ISO é archiso e não casper.</summary>
+        [Fact]
+        public void LiveSession_IsDeclaredOnlyWhereTheIsoIsNotCasper()
+        {
+            var declared = DistroCatalog.All
+                .Where(distro => distro.LiveSession != LiveSessionFamily.Casper)
+                .ToDictionary(distro => distro.Id, distro => distro.LiveSession);
+
+            Assert.Equal(
+                new Dictionary<string, LiveSessionFamily>
+                {
+                    ["arch"] = LiveSessionFamily.Archiso,
+                },
+                declared);
+        }
+
+        /// <summary>O padrão é casper porque era a única receita que o app sabia gerar — toda
+        /// entrada existente continua bootando como antes sem precisar declarar nada.</summary>
+        [Fact]
+        public void LiveSession_DefaultsToCasper() =>
+            Assert.Equal(LiveSessionFamily.Casper, new DistroInfo().LiveSession);
+
         /// <summary>Testar o boot é pré-requisito de declarar mecanismo de instalação
         /// desatendida, nunca o contrário — o inverso significaria automatizar uma distro em
         /// que o app nunca chegou nem ao instalador.</summary>
