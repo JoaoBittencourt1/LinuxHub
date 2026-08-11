@@ -54,6 +54,18 @@ When run, the project should start normally.
 
 - Support for downloading and installing Linux distros
 
+## Release checklist
+
+- **Check the Arch Linux catalog entry before every release.** The Arch mirrors
+  keep only the last ~3 monthly ISOs, so `DistroCatalog`'s pinned Arch build
+  stops existing after a few months and the direct download turns into a 404 —
+  something the catalog cannot detect on its own. Ubuntu and Mint keep their
+  images online for years and do not need this.
+- Confirm the pinned Arch build is still published, and if it is not, bump both
+  `Version` and `DirectDownloadLink` to a build that is. The generic
+  `iso/latest/` address is deliberately not used: see the comment on the Arch
+  entry in `Common/Data/DistroCatalog.cs`.
+
 ## Contribution
 
 - The project is open for contributions!

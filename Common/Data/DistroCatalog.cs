@@ -178,12 +178,23 @@ namespace LinuxHub.Common.Data
                 Id = "arch",
                 Name = "Arch Linux",
                 Family = "Arch",
-                Version = "2026.01.01",
+                // ESTA ENTRADA EXPIRA. O mirror do Arch guarda só as ~3 releases mensais mais
+                // recentes, ao contrário de Ubuntu e Mint, cujas ISOs ficam anos no ar. A
+                // 2026.01.01 declarada aqui antes já tinha saído do ar: era um 404 em produção,
+                // e o catálogo não tem como perceber isso sozinho. A revisão desta entrada faz
+                // parte do processo de release (ver README.md).
+                //
+                // O endereço estável `iso/latest/archlinux-x86_64.iso` resolveria o 404 e foi
+                // descartado de propósito: no dia em que o Arch declarar mecanismo de instalação
+                // desatendida, a versão validada e a versão entregue precisam ser a mesma, e o
+                // schema do JSON do archinstall muda entre releases. `latest` trocaria uma falha
+                // ruidosa (404) por uma silenciosa (config incompatível na máquina do usuário).
+                Version = "2026.08.01",
                 CreatedYear = "2002",
                 BeginnerRating = 1,
                 ImagePath = "pack://application:,,,/Assets/Images/arch.png",
                 DownloadLink = "https://archlinux.org/download/",
-                DirectDownloadLink = "https://mirror.adectra.com/archlinux/iso/2026.01.01/archlinux-2026.01.01-x86_64.iso",
+                DirectDownloadLink = "https://mirror.adectra.com/archlinux/iso/2026.08.01/archlinux-2026.08.01-x86_64.iso",
                 CarouselImages = new[]
                 {
                     "pack://application:,,,/Assets/Images/Arch/arch1.png",
