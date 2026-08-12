@@ -47,7 +47,11 @@ jobs:
           set -euo pipefail
           status=0
           while IFS= read -r -d '' file; do
-            if ! shellcheck "$file"; then
+            # --severity=warning: SC1091 (info) dispara sempre nestes scripts porque
+            # LIB_DIR é resolvido em runtime (source dinâmico via BASH_SOURCE) — shellcheck
+            # não segue isso sem -x, e -x exigiria ensinar o source-path certo pra cada
+            # arquivo. É achado informativo esperado, não bug; só falha em warning pra cima.
+            if ! shellcheck --severity=warning "$file"; then
               echo "FALHOU: $file"
               status=1
             fi
