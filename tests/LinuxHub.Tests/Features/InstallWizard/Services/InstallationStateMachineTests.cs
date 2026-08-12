@@ -65,22 +65,27 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// own-linux-installer task 9.2/D12: com os cinco passos live/target armados, o prefixo
-        /// Windows sozinho não basta mais para MarkSucceeded — "instalado" deixou de significar
-        /// "os comandos do lado Windows rodaram". Só depois de completar até
-        /// target.installation-verified (que só acontece depois do reboot, no instalador live)
-        /// é que a transação pode ser marcada como sucedida.
+        /// Bug real encontrado testando dual-boot desatendido do Ubuntu (Subiquity) em VM:
+        /// MarkSucceeded passou a exigir os passos live/target (armados pela task 9.1) mesmo
+        /// para mecanismos que nunca os iniciam — Subiquity, UbiquityPreseed, Archinstall,
+        /// dual-boot manual, modo substituir terminam o que o Windows acompanha em
+        /// windows.temporary-boot-prepared; o resto acontece dentro do instalador nativo da
+        /// distro, depois do reboot, fora do nosso registro. Travava TODA instalação por esses
+        /// mecanismos, não só a nova.
+        ///
+        /// MarkSucceeded só é chamado de <c>InstallationFlowRunner.Run</c>, e nunca para o
+        /// mecanismo <c>OwnLiveInstaller</c> (esse pula a chamada — ver
+        /// InstallationFlowRunnerTests/InstallationFlowRunner.cs); quem marca sucesso pra ele é
+        /// o instalador live, escrevendo direto no registro espelhado depois do reboot. Por
+        /// isso a checagem aqui é só da fase windows — os passos live/target continuam
+        /// Required/Armed no catálogo (D12), só não bloqueiam ESTE método.
         /// </summary>
         [Fact]
-        public void MarkSucceeded_RequiresLiveAndTargetStepsNowThatTheyAreArmed()
+        public void MarkSucceeded_OnlyRequiresTheWindowsPhase_LiveAndTargetStepsDontBlockIt()
         {
             var machine = InstallationStateMachine.Create(PlanId);
             CompleteArmedWindowsPrefix(machine);
 
-            var error = Assert.Throws<InvalidOperationException>(() => machine.MarkSucceeded());
-            Assert.Contains(InstallationStepIds.LiveIsoMounted, error.Message);
-
-            CompleteArmedLiveAndTargetSuffix(machine);
             machine.MarkSucceeded();
 
             Assert.Equal(InstallationStatus.Succeeded, machine.State.Status);
@@ -154,9 +159,11 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             machine.StartStep(InstallationStepIds.WindowsTemporaryBootPrepared);
             machine.CompleteStep(InstallationStepIds.WindowsTemporaryBootPrepared);
 
+            // O próximo passo armado pendente é live.iso-mounted (só o instalador live
+            // completa, pós-reboot) — mas isso não impede MarkSucceeded para este mecanismo,
+            // que termina o que acompanha aqui mesmo.
             Assert.Equal(InstallationStepIds.LiveIsoMounted, machine.GetNextPendingArmedStepId());
 
-            CompleteArmedLiveAndTargetSuffix(machine);
             machine.MarkSucceeded();
 
             Assert.Equal(InstallationStatus.Succeeded, machine.State.Status);
@@ -207,11 +214,18 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// own-linux-installer task 9.1/9.2: os cinco passos que só o instalador live completa,
-        /// depois do reboot — o que MarkSucceeded agora exige além do prefixo Windows.
+        /// own-linux-installer task 9.1/9.2: os cinco passos live/target, na ordem que o
+        /// instalador live (bash, pós-reboot) os completa. Não passa por MarkSucceeded — esse
+        /// mecanismo (OwnLiveInstaller) nunca chama esse método em C# (ver
+        /// InstallationFlowRunner.Run); é o próprio bash quem escreve o estado terminal no
+        /// registro espelhado, depois de completar esta sequência.
         /// </summary>
-        private static void CompleteArmedLiveAndTargetSuffix(InstallationStateMachine machine)
+        [Fact]
+        public void StartAndCompleteStep_WalksTheFullLiveAndTargetChainInOrder()
         {
+            var machine = InstallationStateMachine.Create(PlanId);
+            CompleteArmedWindowsPrefix(machine);
+
             machine.StartStep(InstallationStepIds.LiveIsoMounted);
             machine.CompleteStep(InstallationStepIds.LiveIsoMounted);
             machine.StartStep(InstallationStepIds.LiveDistributionExtracted);
@@ -222,6 +236,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             machine.CompleteStep(InstallationStepIds.TargetBootloaderInstalled);
             machine.StartStep(InstallationStepIds.TargetInstallationVerified);
             machine.CompleteStep(InstallationStepIds.TargetInstallationVerified);
+
+            Assert.Contains(InstallationStepIds.TargetInstallationVerified, machine.State.CompletedSteps);
+            Assert.Null(machine.State.ActiveStep);
         }
 
         private static string FindSchema(string fileName)
