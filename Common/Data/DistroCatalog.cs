@@ -42,7 +42,13 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2004",
                 BeginnerRating = 5,
                 IsTested = true,
-                UnattendedInstall = UnattendedInstallMechanism.Subiquity,
+                // ATENÇÃO — MUDANÇA LOCAL DE TESTE, NÃO COMMITAR.
+                // O gate §7.1 (own-linux-installer, task 11.11) manda declarar o mecanismo
+                // próprio só DEPOIS de uma instalação completa validada em VM com snapshot.
+                // Está assim aqui apenas para tornar esse teste possível — sem declarar, o
+                // caminho é inalcançável e não há como exercitá-lo nem em VM.
+                // Reverter para Subiquity antes de qualquer commit/release.
+                UnattendedInstall = UnattendedInstallMechanism.OwnLiveInstaller,
                 // De releases.ubuntu.com/24.04/SHA256SUMS, obtido em 2026-08-11.
                 Sha256 = "3a4c9877b483ab46d7c3fbe165a0db275e1ae3cfe56a5657e5a47c2f99a99d1e",
                 SizeBytes = 6655619072,

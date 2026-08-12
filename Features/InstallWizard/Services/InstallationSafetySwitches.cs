@@ -29,6 +29,6 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// Reverter para <c>false</c> antes de qualquer build que não seja exclusivamente para
         /// testar dentro de uma VM.
         /// </summary>
-        public const bool AllowVirtualDiskForVmValidation = false;
+        public const bool AllowVirtualDiskForVmValidation = true;
     }
 }
