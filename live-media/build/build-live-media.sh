@@ -27,6 +27,24 @@ OUT_DIR="$(cd "$(mkdir -p "${1:-${LIVE_MEDIA_DIR}/out}" && echo "${1:-${LIVE_MED
 # facilmente de 2 GB — o build morre sem espaço no meio, com bind mounts vivos.
 # LINUXHUB_BUILD_WORK_ROOT permite apontar para outro lugar; o padrão
 # (/var/tmp) é disco em qualquer distro, por definição do FHS.
+# Checa AGORA que dá para gravar a saída, não depois de ~6 minutos de
+# debootstrap + mksquashfs. Bug real: a ISO anterior estava anexada como DVD
+# virtual numa VM, o Windows a mantinha aberta, e o build inteiro era descartado
+# no último passo com um "Permission denied" que não dizia a causa.
+ISO_OUT_PATH="${OUT_DIR}/linuxhub-live.iso"
+if [[ -e "${ISO_OUT_PATH}" ]] && ! rm -f "${ISO_OUT_PATH}" 2>/dev/null; then
+  echo "erro: não foi possível remover a ISO anterior em ${ISO_OUT_PATH}." >&2
+  echo "      O arquivo está em uso. A causa mais comum é ele estar anexado como" >&2
+  echo "      DVD virtual numa VM ligada — desanexe (ou desligue a VM) e rode de novo." >&2
+  echo "      Alternativa: passe outro diretório de saída como primeiro argumento." >&2
+  exit 1
+fi
+if ! touch "${ISO_OUT_PATH}.probe" 2>/dev/null; then
+  echo "erro: ${OUT_DIR} não é gravável." >&2
+  exit 1
+fi
+rm -f "${ISO_OUT_PATH}.probe"
+
 BUILD_WORK_ROOT="${LINUXHUB_BUILD_WORK_ROOT:-/var/tmp}"
 mkdir -p "${BUILD_WORK_ROOT}"
 WORK_DIR="$(mktemp -d "${BUILD_WORK_ROOT}/linuxhub-live-build.XXXXXX")"
@@ -91,7 +109,17 @@ chroot "${ROOTFS_DIR}" apt-get clean
 
 echo "==> aplicando rootfs-overlay/"
 cp -a "${LIVE_MEDIA_DIR}/rootfs-overlay/." "${ROOTFS_DIR}/"
+
+# Permissões explícitas, nunca as herdadas da origem: quando as fontes vêm de um
+# filesystem Windows (WSL/9p) todo arquivo chega 0777, e o systemd recusa — ou,
+# nas versões que só avisam, registra "marked world-writable ... Proceeding
+# anyway" a cada boot. Executável só o que é executado.
+find "${ROOTFS_DIR}/opt/linuxhub" -type d -exec chmod 0755 {} +
+find "${ROOTFS_DIR}/opt/linuxhub" -type f -exec chmod 0644 {} +
 chmod 0755 "${ROOTFS_DIR}/opt/linuxhub/bin/"*.sh "${ROOTFS_DIR}/opt/linuxhub/lib/"*.sh
+chmod 0755 "${ROOTFS_DIR}/opt/linuxhub/bin/progress-ui.py"
+chmod 0644 "${ROOTFS_DIR}/etc/systemd/system/linuxhub-installer.service"
+chown -R root:root "${ROOTFS_DIR}/opt/linuxhub" "${ROOTFS_DIR}/etc/systemd/system/linuxhub-installer.service"
 
 # Task 1.6: getty@tty1 e serial-getty@ttyS0 desviados para /dev/null — mask
 # systemd padrão, não uma unidade sobrescrita, para não deixar nenhum prompt
@@ -119,16 +147,45 @@ cp "${ROOTFS_DIR}/boot/initrd.img-${KERNEL_VERSION}" "${ISO_TREE_DIR}/live/initr
 cp "${LIVE_MEDIA_DIR}/boot/grub/grub.cfg" "${ISO_TREE_DIR}/boot/grub/grub.cfg"
 
 echo "==> montando ISO UEFI-apenas (D16 — sem plataforma i386-pc)"
+# A ISO é montada no work dir (filesystem nativo) e só depois copiada para o
+# destino. Escrever direto no destino quebra quando ele é um filesystem montado
+# do Windows (WSL/9p): o xorriso reabre a saída como "pseudo-drive" e, se o
+# arquivo já existe de um build anterior, morre com
+# "libburn : SORRY : Failed to open device (a pseudo-drive) : Permission denied"
+# — ou seja, o primeiro build passava e todo rebuild falhava. Bug real.
+#
 # Só -d aponta módulos x86_64-efi: sem grub-pc-bin instalado, grub-mkrescue
 # não tem como emitir catálogo El Torito BIOS mesmo se pedíssemos.
-grub-mkrescue -o "${OUT_DIR}/linuxhub-live.iso" "${ISO_TREE_DIR}" \
+ISO_BUILD_PATH="${WORK_DIR}/linuxhub-live.iso"
+grub-mkrescue -o "${ISO_BUILD_PATH}" "${ISO_TREE_DIR}" \
   -d /usr/lib/grub/x86_64-efi \
   -- -volid LINUXHUB_LIVE
 
 echo "==> hash e manifesto"
-( cd "${OUT_DIR}" && sha256sum linuxhub-live.iso > linuxhub-live.iso.sha256 )
-ISO_SHA256="$(cut -d' ' -f1 "${OUT_DIR}/linuxhub-live.iso.sha256")"
-ISO_SIZE_BYTES="$(stat -c%s "${OUT_DIR}/linuxhub-live.iso")"
+ISO_SHA256="$(sha256sum "${ISO_BUILD_PATH}" | cut -d' ' -f1)"
+ISO_SIZE_BYTES="$(stat -c%s "${ISO_BUILD_PATH}")"
+
+# Remover antes de copiar, pela mesma razão: sobrescrever no lugar através do
+# 9p é o que falha. A cópia cria o arquivo do zero. A checagem lá no início já
+# provou que isto é possível — se falhar aqui mesmo assim, a ISO construída é
+# preservada e o caminho dela é informado, em vez de sumir com o work dir.
+if ! rm -f "${ISO_OUT_PATH}" || ! cp "${ISO_BUILD_PATH}" "${ISO_OUT_PATH}"; then
+  PRESERVED="/var/tmp/linuxhub-live.$(date +%Y%m%d%H%M%S).iso"
+  cp "${ISO_BUILD_PATH}" "${PRESERVED}" 2>/dev/null || true
+  echo "erro: falha ao gravar ${ISO_OUT_PATH} (arquivo em uso?)." >&2
+  echo "      A ISO construída foi preservada em ${PRESERVED} — não precisa reconstruir." >&2
+  exit 1
+fi
+
+# Confere a cópia: um arquivo truncado aqui viraria uma mídia que o firmware
+# recusa depois do reboot, sem log e sem como avisar.
+COPIED_SHA256="$(sha256sum "${OUT_DIR}/linuxhub-live.iso" | cut -d' ' -f1)"
+if [[ "${COPIED_SHA256}" != "${ISO_SHA256}" ]]; then
+  echo "erro: a cópia da ISO para ${OUT_DIR} não confere com a construída (${COPIED_SHA256} != ${ISO_SHA256})" >&2
+  exit 1
+fi
+
+printf '%s  linuxhub-live.iso\n' "${ISO_SHA256}" > "${OUT_DIR}/linuxhub-live.iso.sha256"
 cat > "${OUT_DIR}/linuxhub-live.manifest.json" <<EOF
 {
   "sha256": "${ISO_SHA256}",

@@ -130,14 +130,31 @@ chroot_exec() {
 LINUXHUB_PRESENTATION_CATALOG="/opt/linuxhub/catalog/presentation-catalog.json"
 LINUXHUB_PROGRESS_FIFO="/run/linuxhub-progress.fifo"
 
+# Abre o FIFO de progresso em LEITURA-ESCRITA e mantém o descritor aberto.
+#
+# Abrir um FIFO só para escrita BLOQUEIA até alguém abrir para leitura. Se a
+# tela de progresso não subiu (ou morreu), não há leitor — e o primeiro
+# emit_progress travaria a instalação inteira, para sempre, sem mensagem
+# nenhuma. Bug real no primeiro boot da mídia: o Tk morreu por falta de
+# $DISPLAY e o instalador ficou pendurado no emit_progress seguinte.
+#
+# Com O_RDWR sempre existe um leitor (nós mesmos), então a escrita nunca
+# bloqueia e nunca falha. É a tradução direta de D14 para código: a
+# apresentação não tem autoridade nenhuma sobre a instalação — nem para
+# atrasá-la.
+progress_open_channel() {
+  [[ -p "$LINUXHUB_PROGRESS_FIFO" ]] || return 0
+  exec 9<>"$LINUXHUB_PROGRESS_FIFO" 2>/dev/null || true
+}
+
 emit_progress() {
   local marker="$1" detail_percent="${2:-}"
   if ! jq -e --arg m "$marker" '.markers[$m]' "$LINUXHUB_PRESENTATION_CATALOG" >/dev/null 2>&1; then
     die "marcador de progresso desconhecido no catálogo de apresentação: $marker"
   fi
-  if [[ -p "$LINUXHUB_PROGRESS_FIFO" ]]; then
-    printf '%s\t%s\n' "$marker" "$detail_percent" > "$LINUXHUB_PROGRESS_FIFO" || true
-  fi
+  # `>&9` só existe se progress_open_channel rodou; o redirecionamento falha
+  # silenciosamente quando não, e a instalação segue igual.
+  printf '%s\t%s\n' "$marker" "$detail_percent" >&9 2>/dev/null || true
   log "progresso: $marker ${detail_percent:+(${detail_percent}%)}"
 }
 
