@@ -11,9 +11,13 @@ namespace LinuxHub.Features.InstallWizard.Services
         bool Armed);
 
     /// <summary>
-    /// Ordered catalog of installation steps. Disarmed live/target steps are reserved for
-    /// the next change (D13.2) and cannot be started while <see cref="InstallationStepDefinition.Armed"/>
-    /// is false.
+    /// Ordered catalog of installation steps. own-linux-installer task 9.1: os quatro passos
+    /// live/target reservados pelo change anterior (D13.2) agora Armed=true — é esta mudança
+    /// que os liga. Task 9.2 acrescenta <c>target.installation-verified</c> (D12). O mecanismo
+    /// em si continua indisponível ao usuário até a fase 11 (validação em VM) passar — não por
+    /// <see cref="InstallationStepDefinition.Armed"/>, mas por nenhuma distro declarar
+    /// <see cref="LinuxHub.Common.Models.UnattendedInstallMechanism.OwnLiveInstaller"/> no
+    /// catálogo ainda (§7.1).
     /// </summary>
     public static class InstallationStepCatalog
     {
@@ -24,10 +28,14 @@ namespace LinuxHub.Features.InstallWizard.Services
             new(Models.InstallationStepIds.WindowsStagingPrepared, Required: false, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.WindowsInstallerConfigWritten, Required: false, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.WindowsTemporaryBootPrepared, Required: true, Compensatable: true, Armed: true),
-            new(Models.InstallationStepIds.LiveIsoMounted, Required: true, Compensatable: true, Armed: false),
-            new(Models.InstallationStepIds.LiveDistributionExtracted, Required: true, Compensatable: true, Armed: false),
-            new(Models.InstallationStepIds.TargetSystemConfigured, Required: true, Compensatable: true, Armed: false),
-            new(Models.InstallationStepIds.TargetBootloaderInstalled, Required: true, Compensatable: false, Armed: false),
+            // Task 9.4 (D5): extração e configuração compensáveis por reformatar a partição
+            // alvo (ela pertence só a esta transação); só o bootloader toca algo preexistente
+            // (a ESP do Windows) e por isso não é compensável.
+            new(Models.InstallationStepIds.LiveIsoMounted, Required: true, Compensatable: true, Armed: true),
+            new(Models.InstallationStepIds.LiveDistributionExtracted, Required: true, Compensatable: true, Armed: true),
+            new(Models.InstallationStepIds.TargetSystemConfigured, Required: true, Compensatable: true, Armed: true),
+            new(Models.InstallationStepIds.TargetBootloaderInstalled, Required: true, Compensatable: false, Armed: true),
+            new(Models.InstallationStepIds.TargetInstallationVerified, Required: true, Compensatable: false, Armed: true),
         ];
 
         public static InstallationStepDefinition Get(string stepId) =>

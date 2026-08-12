@@ -97,10 +97,16 @@ namespace LinuxHub.Features.InstallWizard.Models
         public const string WindowsInstallerConfigWritten = "windows.installer-config-written";
         public const string WindowsTemporaryBootPrepared = "windows.temporary-boot-prepared";
 
-        // Reserved for the own-installer change (D13.2). Declared now, Armed=false.
+        // own-linux-installer task 9.1: os quatro reservados pelo D13.2 do change anterior
+        // agora Armed=true (InstallationStepCatalog).
         public const string LiveIsoMounted = "live.iso-mounted";
         public const string LiveDistributionExtracted = "live.distribution-extracted";
         public const string TargetSystemConfigured = "target.system-configured";
         public const string TargetBootloaderInstalled = "target.bootloader-installed";
+
+        // own-linux-installer task 9.2 (design.md D12): sem este passo, "instalado" significa
+        // só "os comandos rodaram". Required, não compensável — verifica o resultado antes de
+        // a instalação ser declarada concluída.
+        public const string TargetInstallationVerified = "target.installation-verified";
     }
 }

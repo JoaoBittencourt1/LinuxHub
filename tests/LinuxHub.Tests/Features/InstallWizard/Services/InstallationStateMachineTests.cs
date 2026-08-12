@@ -35,16 +35,22 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains("out of order", error.Message, StringComparison.OrdinalIgnoreCase);
         }
 
+        /// <summary>
+        /// own-linux-installer task 9.1: os quatro passos live/target que este teste travava
+        /// como inalcançáveis agora estão Armed=true — é esta mudança que os liga. A cobertura
+        /// do CÓDIGO de rejeição de passo desarmado (InstallationStateMachine.StartStep)
+        /// continua existindo (nenhum passo do catálogo hoje está desarmado para exercitá-la
+        /// de ponta a ponta com dado real; a asserção equivalente vive agora em
+        /// InstallationStepCatalogParityTests, que prova que os cinco estão Armed).
+        /// </summary>
         [Fact]
-        public void StartStep_RejectsDisarmedStep()
+        public void StartStep_AllowsLiveAndTargetStepsNowThatTheyAreArmed()
         {
             var machine = InstallationStateMachine.Create(PlanId);
             CompleteArmedWindowsPrefix(machine);
 
-            var error = Assert.Throws<InvalidOperationException>(
-                () => machine.StartStep(InstallationStepIds.LiveIsoMounted));
-
-            Assert.Contains("disarmed", error.Message, StringComparison.OrdinalIgnoreCase);
+            machine.StartStep(InstallationStepIds.LiveIsoMounted);
+            Assert.Equal(InstallationStepIds.LiveIsoMounted, machine.State.ActiveStep);
         }
 
         [Fact]
@@ -58,11 +64,23 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains(InstallationStepIds.WindowsDiskPrepared, error.Message);
         }
 
+        /// <summary>
+        /// own-linux-installer task 9.2/D12: com os cinco passos live/target armados, o prefixo
+        /// Windows sozinho não basta mais para MarkSucceeded — "instalado" deixou de significar
+        /// "os comandos do lado Windows rodaram". Só depois de completar até
+        /// target.installation-verified (que só acontece depois do reboot, no instalador live)
+        /// é que a transação pode ser marcada como sucedida.
+        /// </summary>
         [Fact]
-        public void MarkSucceeded_IgnoresDisarmedRequiredSteps()
+        public void MarkSucceeded_RequiresLiveAndTargetStepsNowThatTheyAreArmed()
         {
             var machine = InstallationStateMachine.Create(PlanId);
             CompleteArmedWindowsPrefix(machine);
+
+            var error = Assert.Throws<InvalidOperationException>(() => machine.MarkSucceeded());
+            Assert.Contains(InstallationStepIds.LiveIsoMounted, error.Message);
+
+            CompleteArmedLiveAndTargetSuffix(machine);
             machine.MarkSucceeded();
 
             Assert.Equal(InstallationStatus.Succeeded, machine.State.Status);
@@ -135,6 +153,10 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             machine.SkipOptionalStep(InstallationStepIds.WindowsInstallerConfigWritten);
             machine.StartStep(InstallationStepIds.WindowsTemporaryBootPrepared);
             machine.CompleteStep(InstallationStepIds.WindowsTemporaryBootPrepared);
+
+            Assert.Equal(InstallationStepIds.LiveIsoMounted, machine.GetNextPendingArmedStepId());
+
+            CompleteArmedLiveAndTargetSuffix(machine);
             machine.MarkSucceeded();
 
             Assert.Equal(InstallationStatus.Succeeded, machine.State.Status);
@@ -184,6 +206,24 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             machine.CompleteStep(InstallationStepIds.WindowsTemporaryBootPrepared);
         }
 
+        /// <summary>
+        /// own-linux-installer task 9.1/9.2: os cinco passos que só o instalador live completa,
+        /// depois do reboot — o que MarkSucceeded agora exige além do prefixo Windows.
+        /// </summary>
+        private static void CompleteArmedLiveAndTargetSuffix(InstallationStateMachine machine)
+        {
+            machine.StartStep(InstallationStepIds.LiveIsoMounted);
+            machine.CompleteStep(InstallationStepIds.LiveIsoMounted);
+            machine.StartStep(InstallationStepIds.LiveDistributionExtracted);
+            machine.CompleteStep(InstallationStepIds.LiveDistributionExtracted);
+            machine.StartStep(InstallationStepIds.TargetSystemConfigured);
+            machine.CompleteStep(InstallationStepIds.TargetSystemConfigured);
+            machine.StartStep(InstallationStepIds.TargetBootloaderInstalled);
+            machine.CompleteStep(InstallationStepIds.TargetBootloaderInstalled);
+            machine.StartStep(InstallationStepIds.TargetInstallationVerified);
+            machine.CompleteStep(InstallationStepIds.TargetInstallationVerified);
+        }
+
         private static string FindSchema(string fileName)
         {
             string candidate = Path.GetFullPath(Path.Combine(
@@ -197,16 +237,32 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
     public class InstallationStepCatalogTests
     {
+        /// <summary>
+        /// own-linux-installer task 9.1/9.5 (design.md D0-D12): o teste que provava estes
+        /// quatro passos inalcançáveis (D13.2 do change anterior) precisa provar o oposto
+        /// agora — é esta mudança que os liga. Segue a mesma regra do tasks.md: "o teste que
+        /// provava a inalcançabilidade dos quatro precisa passar a provar outra coisa, não ser
+        /// apagado".
+        /// </summary>
         [Fact]
-        public void DisarmedSteps_ArePresentAndUnreachableThroughCatalogArmedFlag()
+        public void LiveAndTargetSteps_AreArmedAndReachableInOrder()
         {
             InstallationStepDefinition live = InstallationStepCatalog.Get(InstallationStepIds.LiveIsoMounted);
-            Assert.False(live.Armed);
+            Assert.True(live.Armed);
             Assert.True(live.Required);
 
             var machine = InstallationStateMachine.Create(new string('f', 32));
-            Assert.Throws<InvalidOperationException>(
-                () => machine.StartStep(InstallationStepIds.LiveIsoMounted));
+            machine.StartStep(InstallationStepIds.WindowsPlanPublished);
+            machine.CompleteStep(InstallationStepIds.WindowsPlanPublished);
+            machine.StartStep(InstallationStepIds.WindowsDiskPrepared);
+            machine.CompleteStep(InstallationStepIds.WindowsDiskPrepared);
+            machine.SkipOptionalStep(InstallationStepIds.WindowsStagingPrepared);
+            machine.SkipOptionalStep(InstallationStepIds.WindowsInstallerConfigWritten);
+            machine.StartStep(InstallationStepIds.WindowsTemporaryBootPrepared);
+            machine.CompleteStep(InstallationStepIds.WindowsTemporaryBootPrepared);
+
+            machine.StartStep(InstallationStepIds.LiveIsoMounted);
+            Assert.Equal(InstallationStepIds.LiveIsoMounted, machine.State.ActiveStep);
         }
 
         [Fact]
@@ -216,7 +272,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 InstallationStepIds.WindowsPlanPublished,
                 InstallationStepCatalog.All[0].Id);
             Assert.Equal(
-                InstallationStepIds.TargetBootloaderInstalled,
+                InstallationStepIds.TargetInstallationVerified,
                 InstallationStepCatalog.All[^1].Id);
         }
     }

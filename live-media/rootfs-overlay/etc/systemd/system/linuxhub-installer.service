@@ -1,0 +1,27 @@
+# Task 1.1/1.6/1.8: unidade que executa o instalador. Único ponto de entrada
+# desta mídia (design.md D0) — não depende de nenhum gancho de família de
+# live (casper/live-config script=), é a mesma unidade sempre.
+#
+# after=live-config garante que a sessão live terminou de se configurar
+# (hostname, etc.) antes do instalador assumir o console. Não depende de
+# rede: a instalação é totalmente offline (Non-Goal do design.md).
+[Unit]
+Description=LinuxHub - instalador desatendido
+After=live-config.service getty@tty1.service
+Conflicts=getty@tty1.service
+Wants=live-config.service
+
+[Service]
+Type=simple
+ExecStart=/opt/linuxhub/bin/run-installer.sh
+StandardInput=tty
+StandardOutput=journal+console
+StandardError=journal+console
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

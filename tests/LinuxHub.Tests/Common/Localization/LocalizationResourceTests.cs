@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Globalization;
+using System.IO;
 using System.Resources;
+using System.Text.Json;
 using LinuxHub.Common.Localization;
 using Xunit;
 
@@ -62,6 +64,66 @@ namespace LinuxHub.Tests.Common.Localization
                     missing.Length == 0,
                     $"{culture.Name} não traduz: {string.Join(", ", missing)}");
             }
+        }
+
+        /// <summary>
+        /// own-linux-installer task 10.6 (D14): a tela de progresso do instalador live não lê
+        /// .resx — os textos viajam em <c>strings.linux.json</c>, dentro da mídia live. Esse
+        /// arquivo não é uma segunda tradução mantida à mão (§3): este teste garante que toda
+        /// chave nele existe nos dois <c>.resx</c> com o MESMO texto, então uma mudança de
+        /// wording num lado sem o outro quebra o CI em vez de divergir silenciosamente.
+        /// </summary>
+        [Fact]
+        public void LiveInstallerStrings_MatchTheResxTheyAreSourcedFrom()
+        {
+            string repoRoot = FindRepoRoot();
+            string linuxStringsPath = Path.Combine(
+                repoRoot, "live-media", "rootfs-overlay", "opt", "linuxhub", "catalog", "strings.linux.json");
+            Assert.True(File.Exists(linuxStringsPath), $"Arquivo esperado não existe: {linuxStringsPath}");
+
+            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(linuxStringsPath));
+
+            var cultureByLocaleTag = new Dictionary<string, CultureInfo>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["pt-BR"] = CultureInfo.InvariantCulture, // Strings.resx (padrão) é pt-BR
+                ["en-US"] = new CultureInfo("en-US"),
+            };
+
+            foreach (JsonProperty entry in document.RootElement.EnumerateObject())
+            {
+                if (entry.Name.StartsWith('_'))
+                    continue; // "_comment" etc — metadado do arquivo, não uma chave de texto.
+
+                foreach ((string localeTag, CultureInfo culture) in cultureByLocaleTag)
+                {
+                    Assert.True(
+                        entry.Value.TryGetProperty(localeTag, out JsonElement translationElement),
+                        $"strings.linux.json: chave '{entry.Name}' não tem tradução '{localeTag}'");
+
+                    string linuxText = translationElement.GetString() ?? string.Empty;
+                    string? resxText = Resources.GetString(entry.Name, culture);
+
+                    Assert.False(
+                        string.IsNullOrWhiteSpace(resxText),
+                        $"chave '{entry.Name}' citada em strings.linux.json não existe em Strings{(culture.Equals(CultureInfo.InvariantCulture) ? "" : "." + culture.Name)}.resx");
+                    Assert.Equal(resxText, linuxText);
+                }
+            }
+        }
+
+        private static string FindRepoRoot()
+        {
+            string? cursor = AppContext.BaseDirectory;
+            for (int i = 0; i < 8 && cursor is not null; i++)
+            {
+                if (File.Exists(Path.Combine(cursor, "LinuxHub.csproj")))
+                    return cursor;
+
+                cursor = Directory.GetParent(cursor)?.FullName;
+            }
+
+            throw new InvalidOperationException(
+                "Could not locate the repository root (LinuxHub.csproj) from " + AppContext.BaseDirectory);
         }
 
         /// <summary>

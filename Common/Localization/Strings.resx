@@ -348,6 +348,33 @@ Libere espaço no disco, escolha um alvo maior ou reduza o tamanho reservado par
   <data name="Wizard_InstallStepStagingBoot" xml:space="preserve">
     <value>Preparando a inicialização do Linux…</value>
   </data>
+  <!-- own-linux-installer task 10.6: textos da tela de progresso do instalador live (D14).
+       Fonte de live-media/rootfs-overlay/opt/linuxhub/catalog/strings.linux.json — teste de
+       paridade em tests/LinuxHub.Tests garante que as duas cópias não divergem. -->
+  <data name="Install_DiscoveringPlan" xml:space="preserve">
+    <value>Localizando o plano de instalação…</value>
+  </data>
+  <data name="Install_Revalidating" xml:space="preserve">
+    <value>Revalidando o disco…</value>
+  </data>
+  <data name="Install_PreparingDisk" xml:space="preserve">
+    <value>Preparando o disco…</value>
+  </data>
+  <data name="Install_Extracting" xml:space="preserve">
+    <value>Extraindo o sistema…</value>
+  </data>
+  <data name="Install_Configuring" xml:space="preserve">
+    <value>Configurando o sistema…</value>
+  </data>
+  <data name="Install_InstallingBootloader" xml:space="preserve">
+    <value>Instalando o carregador de boot…</value>
+  </data>
+  <data name="Install_Verifying" xml:space="preserve">
+    <value>Verificando a instalação…</value>
+  </data>
+  <data name="Install_Complete" xml:space="preserve">
+    <value>Instalação concluída. Reinicie o computador.</value>
+  </data>
   <data name="Wizard_RollbackEncryptionDivergence" xml:space="preserve">
     <value>A proteção do volume (BitLocker ou equivalente) não voltou ao estado anterior à instalação. Reative a proteção manualmente nas configurações do Windows.</value>
   </data>

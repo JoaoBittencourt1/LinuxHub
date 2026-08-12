@@ -1,0 +1,11 @@
+{
+  "_comment": "Task 10.6/D14: gerado a partir de Common/Localization/Strings*.resx (tools/generate-linux-strings, task pendente) ou verificado contra eles por teste de paridade (tests/LinuxHub.Tests) — nunca uma segunda tradução mantida à mão (§3). Chaves espelham as adicionadas aos .resx para a tela de progresso.",
+  "Install_DiscoveringPlan": { "pt-BR": "Localizando o plano de instalação…", "en-US": "Locating the installation plan…" },
+  "Install_Revalidating": { "pt-BR": "Revalidando o disco…", "en-US": "Revalidating the disk…" },
+  "Install_PreparingDisk": { "pt-BR": "Preparando o disco…", "en-US": "Preparing the disk…" },
+  "Install_Extracting": { "pt-BR": "Extraindo o sistema…", "en-US": "Extracting the system…" },
+  "Install_Configuring": { "pt-BR": "Configurando o sistema…", "en-US": "Configuring the system…" },
+  "Install_InstallingBootloader": { "pt-BR": "Instalando o carregador de boot…", "en-US": "Installing the boot loader…" },
+  "Install_Verifying": { "pt-BR": "Verificando a instalação…", "en-US": "Verifying the installation…" },
+  "Install_Complete": { "pt-BR": "Instalação concluída. Reinicie o computador.", "en-US": "Installation complete. Restart your computer." }
+}

@@ -24,7 +24,8 @@ namespace LinuxHub.Features.InstallWizard.Services
         string Locale,
         string Keymap,
         string Timezone,
-        string DesktopEnvironment);
+        string DesktopEnvironment,
+        string? OwnLiveMediaWindowsPath = null);
 
     public interface IInstallationFlowRunner
     {
@@ -167,16 +168,37 @@ namespace LinuxHub.Features.InstallWizard.Services
                     TargetDiskIndex: request.TargetDiskIndex,
                     Unattended: unattended,
                     LiveSession: request.LiveSession,
-                    IsoHostPartitionUuid: staging?.PartitionUuid));
+                    IsoHostPartitionUuid: staging?.PartitionUuid,
+                    Mode: request.IsReplaceMode ? InstallMode.Replace : InstallMode.DualBoot,
+                    Mechanism: request.ActiveMechanism,
+                    OwnLiveMediaWindowsPath: request.OwnLiveMediaWindowsPath));
             });
 
             // A senha em claro só existe para atravessar o lado Windows: quem a consome é o
             // InstallerConfigFromPlan, e o que chega ao Linux é o hash já dentro do preseed /
             // autoinstall. Passado esse ponto ela é resíduo — e mora sob ProgramData, que é
             // legível por qualquer usuário da máquina. Some assim que deixa de ser necessária.
-            DeleteAccountSecret(plan);
+            //
+            // Exceto para o mecanismo próprio (own-linux-installer, D1/task 7.1): ali o
+            // segredo só é consumido DEPOIS do reboot, pelo instalador live que lê
+            // InstallationTransactionPaths — apagar aqui apagaria antes de alguém ler.
+            bool ownsLiveMediaTransaction = request.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller;
+            if (!ownsLiveMediaTransaction)
+            {
+                DeleteAccountSecret(plan);
+            }
 
-            ledger.MarkSucceeded();
+            // own-linux-installer task 9.2/D12: com os passos live/target armados, a fase
+            // Windows terminar não é mais a instalação terminar para este mecanismo — falta
+            // tudo que só roda depois do reboot, até target.installation-verified. Marcar
+            // sucesso aqui seria "rodamos os comandos", exatamente o que D12 existe para
+            // impedir. Quem marca sucesso é o instalador live (run-installer.sh), espelhando
+            // para o mesmo registro. Os dois caminhos preservados continuam terminando aqui,
+            // como sempre.
+            if (!ownsLiveMediaTransaction)
+            {
+                ledger.MarkSucceeded();
+            }
         }
 
         /// <summary>

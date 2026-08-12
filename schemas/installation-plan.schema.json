@@ -101,6 +101,10 @@
         },
         "isoSizeBytes": {
           "$ref": "#/$defs/positiveInteger"
+        },
+        "expectedIdentity": {
+          "type": "string",
+          "description": "own-linux-installer task 2.6 (D6): ID= esperado em /etc/os-release dentro do squashfs. Só preenchido para o mecanismo OwnLiveInstaller."
         }
       }
     },
@@ -257,6 +261,10 @@
         "stagingSizeBytes": {
           "type": "integer",
           "minimum": 0
+        },
+        "stagingEspDirectory": {
+          "type": "string",
+          "description": "own-linux-installer task 2.6 (D5): caminho relativo dentro da ESP do espaço temporário de boot para a mídia live própria. Ausente nos caminhos preservados."
         }
       }
     },

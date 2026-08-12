@@ -1,0 +1,13 @@
+{
+  "_comment": "Catálogo de apresentação (design.md D14) — marcador -> chave de texto -> percentual. Sem autoridade sobre InstallationStepCatalog/InstallationExecutionLedger; só apresentação. Extração tem percentStart/percentEnd para interpolar dentro do passo longo.",
+  "markers": {
+    "install.discovering-plan": { "textKey": "Install_DiscoveringPlan", "percent": 5 },
+    "install.revalidating": { "textKey": "Install_Revalidating", "percent": 10 },
+    "install.preparing-disk": { "textKey": "Install_PreparingDisk", "percent": 15 },
+    "install.extracting": { "textKey": "Install_Extracting", "percentStart": 20, "percentEnd": 70 },
+    "install.configuring": { "textKey": "Install_Configuring", "percent": 80 },
+    "install.installing-bootloader": { "textKey": "Install_InstallingBootloader", "percent": 90 },
+    "install.verifying": { "textKey": "Install_Verifying", "percent": 95 },
+    "install.complete": { "textKey": "Install_Complete", "percent": 100 }
+  }
+}

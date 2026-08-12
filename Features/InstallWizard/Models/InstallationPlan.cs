@@ -88,6 +88,18 @@ namespace LinuxHub.Features.InstallWizard.Models
 
         [JsonPropertyName("isoSizeBytes")]
         public long IsoSizeBytes { get; set; }
+
+        /// <summary>
+        /// own-linux-installer task 2.6 (design.md D6): identidade de distribuição esperada
+        /// DENTRO do artefato — o valor de <c>ID=</c> em <c>/etc/os-release</c> no squashfs. Só
+        /// preenchido para o mecanismo <see cref="LinuxHub.Common.Models.UnattendedInstallMechanism.OwnLiveInstaller"/>;
+        /// os caminhos preservados não extraem nada e não precisam desta verificação. O nome da
+        /// distro nunca seleciona caminho de código (§2) — este campo só alimenta uma
+        /// comparação de igualdade do lado live, nunca um <c>if</c> por identidade.
+        /// </summary>
+        [JsonPropertyName("expectedIdentity")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public string ExpectedIdentity { get; set; } = string.Empty;
     }
 
     public sealed class InstallationPlanLocale
@@ -188,6 +200,18 @@ namespace LinuxHub.Features.InstallWizard.Models
 
         [JsonPropertyName("stagingSizeBytes")]
         public long StagingSizeBytes { get; set; }
+
+        /// <summary>
+        /// own-linux-installer task 2.6 (design.md D5): caminho relativo, dentro da ESP, do
+        /// espaço temporário que o boot staging cria só para chegar até a mídia live própria.
+        /// A instalação live remove este diretório no fim — mas só depois de provar, pelo
+        /// marcador de posse (o próprio <see cref="InstallationPlan.PlanId"/>), que ele
+        /// pertence à transação corrente (D5). Vazio nos caminhos preservados, que não usam a
+        /// mídia live e não criam este espaço.
+        /// </summary>
+        [JsonPropertyName("stagingEspDirectory")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? StagingEspDirectory { get; set; }
     }
 
     public sealed class InstallationPlanRuntime

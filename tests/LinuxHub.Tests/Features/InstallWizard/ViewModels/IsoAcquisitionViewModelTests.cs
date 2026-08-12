@@ -129,7 +129,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         [InlineData("ubuntu", true)]
         [InlineData("mint", false)]
         [InlineData("xubuntu", false)]
-        [InlineData("arch", true)]
+        [InlineData("arch", false)]
         public void AutoinstallToggle_IsVisibleOnlyForDistrosWithAMechanism(
             string distroId, bool expected)
         {
@@ -146,7 +146,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         [Theory]
         [InlineData("ubuntu", UnattendedInstallMechanism.Subiquity)]
         [InlineData("mint", UnattendedInstallMechanism.None)]
-        [InlineData("arch", UnattendedInstallMechanism.Archinstall)]
+        [InlineData("arch", UnattendedInstallMechanism.None)]
         public void ActiveMechanism_FollowsTheSelectedDistro(
             string distroId, UnattendedInstallMechanism expected)
         {

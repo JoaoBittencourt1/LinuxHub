@@ -63,6 +63,7 @@ namespace LinuxHub
                     new UbiquityInstallPreparer(
                         cloudInitSeedWriter, diskLayoutProvider, unattendedInitrdWriter),
                     new ArchinstallInstallPreparer(diskLayoutProvider, archinstallScriptWriter),
+                    new OwnLiveInstallerPreparer(),
                 ]);
 
             IGrubAssetProvider grubAssetProvider = new GrubAssetProvider();
@@ -118,7 +119,8 @@ namespace LinuxHub
                 bootSecurityService,
                 stagingPartitionService,
                 isoFileInfoProvider,
-                installationFlowRunner);
+                installationFlowRunner,
+                liveMediaProvider: new LiveMediaProvider());
             installWizardViewModel.CatalogOutcome = catalogOutcome;
 
             IUpdateCheckService updateCheckService = new GitHubUpdateCheckService();

@@ -16,9 +16,9 @@ namespace LinuxHub.Tests.Features.Catalog.ViewModels
         /// naquela distro.</summary>
         [Theory]
         [InlineData("ubuntu", false)]
-        [InlineData("mint", false)]
+        [InlineData("mint", true)]
         [InlineData("fedora", true)]
-        [InlineData("arch", false)]
+        [InlineData("arch", true)]
         public void IsUntested_MirrorsTheCatalog(string distroId, bool expected) =>
             Assert.Equal(expected, new DistroDetailViewModel(Distro(distroId)).IsUntested);
     }

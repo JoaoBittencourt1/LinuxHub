@@ -1,0 +1,59 @@
+# Lista fixa de pacotes do rootfs da mídia live (task 1.2, design.md D0/D6).
+#
+# Cada linha existe porque uma operação desta mudança chama o binário que ela
+# traz — nada aqui por precaução. Formato: um pacote por linha, comentário
+# obrigatório apontando a task/decisão que o justifica. `build-live-media.sh`
+# lê este arquivo linha a linha (ignorando comentários e linhas em branco) e
+# passa a `apt-get install --no-install-recommends`.
+#
+# Base debootstrap (variant=minbase) já traz: dpkg, apt, coreutils, bash,
+# util-linux (findmnt, lsblk, blkid, wipefs, mount, umount — D11/D13),
+# systemd. Não repetidos aqui.
+
+# --- Boot da própria mídia (D0) ---
+linux-image-amd64          # kernel que a mídia boota
+live-boot                  # monta a squashfs como raiz ao iniciar (initramfs hook)
+live-boot-initramfs-tools  # gera o initramfs com os hooks do live-boot acima
+live-config                # aplica a configuração de sessão live (hostname, usuário live)
+live-config-systemd        # unidades systemd do live-config
+systemd-sysv                # /sbin/init -> systemd
+
+# --- Secure Boot (D8, task 1.4/1.9) — a MÍDIA precisa bootar com Secure Boot
+# ativo; o alvo instalado usa sua PRÓPRIA cadeia (copiada do squashfs, não
+# desta lista). shim-signed encadeia para a chave da Microsoft já confiada
+# pelo firmware de fábrica.
+shim-signed
+grub-efi-amd64-signed
+grub-efi-amd64-bin         # grub-mkrescue e módulos x86_64-efi para montar a ISO (build-side)
+
+# --- Descoberta e revalidação do plano (fase 4, D13/D15) ---
+jq                          # validar/ler o plano e o registro JSON sem parser ad-hoc em bash
+
+# --- Preparar o disco alvo (fase 5, D11) ---
+parted                      # ler/comparar geometria de partição (releitura byte a byte)
+gdisk                       # inspecionar tabela GPT do disco alvo
+psmisc                      # fuser/killall para diagnóstico de holders na falha (task 5.6; nunca fuser -m, ver research §H)
+
+# --- Verificar o artefato e extrair (fase 6, D6) ---
+squashfs-tools               # unsquashfs: ler identidade/capacidades dentro do squashfs sem extrair, e extrair
+rsync                        # extração para a partição alvo com progresso (--info=progress2)
+
+# --- Configurar o alvo (fase 7, D9) ---
+e2fsprogs                    # mkfs.ext4/e2fsck na partição alvo formatada por esta transação
+locales                      # locale-gen dentro do chroot alvo
+console-setup                # aplica layout de teclado persistente dentro do chroot alvo
+kbd                          # loadkeys/setupcon usados por console-setup
+
+# --- Bootloader assinado e Windows no menu (fase 8, D8/D10) ---
+ntfs-3g                      # montar a partição de boot do Windows em RO para prová-la (D10) e o volume Windows p/ D3
+dosfstools                   # fsck.vfat ao montar a ESP antes de escrever nela (D5)
+efibootmgr                   # registrar a entrada de boot e reordenar (task 8.5)
+
+# --- Estado espelhado no volume do Windows (D3) ---
+# ntfs-3g já listado acima cobre também esta operação.
+
+# --- Apresentação de progresso (fase 9/10, D14, task 1.8) ---
+xserver-xorg                 # servidor gráfico para a tela de progresso — sem gerenciador de janelas: app roda fullscreen
+xinit                        # inicia o Xorg a partir da unidade systemd do instalador
+python3                      # runtime da tela de progresso
+python3-tk                   # toolkit gráfico mínimo usado pela tela de progresso

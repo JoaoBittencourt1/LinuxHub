@@ -46,6 +46,14 @@ namespace LinuxHub.Features.InstallWizard.Services
                 if (state.Status is InstallationStatus.Succeeded or InstallationStatus.RolledBack)
                     continue;
 
+                // own-linux-installer task 10.3 (design.md D3): o nome do diretório é, na
+                // prática, um marcador — e marcador sozinho nunca é prova. Sem esta checagem,
+                // um diretório renomeado ou copiado por engano faria o estado de OUTRA
+                // transação ser lido como se fosse a que o nome do diretório promete.
+                string directoryPlanId = Path.GetFileName(dir);
+                if (!string.Equals(directoryPlanId, state.PlanId, StringComparison.Ordinal))
+                    continue;
+
                 return new InterruptedTransactionInfo(
                     state.PlanId,
                     statePath,

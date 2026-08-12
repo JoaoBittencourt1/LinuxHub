@@ -31,17 +31,50 @@ jobs:
           }
           Write-Output "PSScriptAnalyzer: no error-severity findings."
 
-      # Task 7.3: o instalador Linux-side (installer/) é bash gerado/versionado — checagem de
-      # sintaxe pura (bash -n), sem executar nada.
-      - name: Validar sintaxe do bash em installer/
+      # own-linux-installer task 3.4: o instalador Linux-side agora vive em live-media/
+      # (bash fixo, versionado, D1) — o installer/ órfão foi removido (D2). shellcheck
+      # cobre estilo/armadilhas comuns; bash -n permanece como checagem de sintaxe pura.
+      - name: shellcheck sobre live-media/
         shell: bash
         run: |
           set -euo pipefail
           status=0
           while IFS= read -r -d '' file; do
-            if ! bash -n "$file"; then
+            if ! shellcheck "$file"; then
               echo "FALHOU: $file"
               status=1
             fi
-          done < <(find installer -name '*.sh' -print0)
+            if ! bash -n "$file"; then
+              echo "FALHOU (sintaxe): $file"
+              status=1
+            fi
+          done < <(find live-media -name '*.sh' -print0)
           exit $status
+
+  # own-linux-installer tasks 1.3/10.7: a mídia live reconstrói no CI a partir das fontes
+  # versionadas — prova que o pipeline é reprodutível, não só que existe. Job Linux
+  # separado do build-and-test (Windows) porque debootstrap/mksquashfs/grub-mkrescue só
+  # existem nesse lado. Não valida boot nem Secure Boot (fase 1.4) — isso é VM, fora do CI.
+  build-live-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar ferramentas de build da mídia live
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap squashfs-tools xorriso grub-efi-amd64-bin grub-common mtools
+
+      - name: Construir a mídia live
+        run: sudo live-media/build/build-live-media.sh "${{ github.workspace }}/live-media-out"
+
+      - name: Publicar o artefato da mídia live
+        uses: actions/upload-artifact@v4
+        with:
+          name: linuxhub-live-media
+          path: |
+            live-media-out/linuxhub-live.iso
+            live-media-out/linuxhub-live.iso.sha256
+            live-media-out/linuxhub-live.manifest.json
+          retention-days: 7

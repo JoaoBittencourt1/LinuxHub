@@ -22,6 +22,15 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// pedindo os dados que os parâmetros prometeram que existiriam. <c>null</c> (ou
     /// <see cref="UnattendedBootParameters.Interactive"/>) prepara o boot até o instalador
     /// nativo interativo.
+    ///
+    /// <paramref name="Mode"/> e <paramref name="Mechanism"/> (own-linux-installer task 2.2,
+    /// design.md D16) só existem para decidir SE o boot aponta para a mídia live própria — não
+    /// afetam nenhum outro campo. Só quando o par é (<see cref="InstallMode.DualBoot"/>,
+    /// <see cref="UnattendedInstallMechanism.OwnLiveInstaller"/>) o serviço desvia do caminho
+    /// de sempre; qualquer outro par (os dois caminhos preservados) segue exatamente como
+    /// antes desta mudança, usando <paramref name="IsoPath"/>/<paramref name="LiveSession"/>.
+    /// <paramref name="OwnLiveMediaWindowsPath"/> só é lido nesse caso — é o caminho da
+    /// mídia live própria (não da ISO da distro), entregue pelo preparer novo (task 10.1/10.2).
     /// </summary>
     public sealed record BootStagingRequest(
         string DistroName,
@@ -30,7 +39,10 @@ namespace LinuxHub.Features.InstallWizard.Services
         int TargetDiskIndex,
         UnattendedBootParameters? Unattended = null,
         LiveSessionFamily LiveSession = LiveSessionFamily.Casper,
-        string? IsoHostPartitionUuid = null);
+        string? IsoHostPartitionUuid = null,
+        InstallMode Mode = InstallMode.DualBoot,
+        UnattendedInstallMechanism Mechanism = UnattendedInstallMechanism.None,
+        string? OwnLiveMediaWindowsPath = null);
 
     /// <summary>
     /// Instala o bootloader de staging (GRUB2 chainloaded) que permite bootar a ISO já

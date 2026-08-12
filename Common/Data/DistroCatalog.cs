@@ -13,7 +13,7 @@ namespace LinuxHub.Common.Data
     /// e Distro_{Id}_Maintainer (ver DistroInfo.DescriptionKey/MaintainerKey e
     /// constitution.md, "Nenhuma string hardcoded").
     ///
-    /// Desde adopt-redacted-safety-model (D9/D14): esta lista literal é o <b>fallback
+    /// Desde a mudança do modelo transacional de segurança (D9/D14): esta lista literal é o <b>fallback
     /// embarcado</b>, não necessariamente o que a UI exibe. <see cref="All"/> começa
     /// igual a <see cref="Fallback"/> e pode ser substituída, uma vez, por
     /// <c>CatalogProvider</c> em <c>App.xaml.cs</c> — antes de qualquer ViewModel ser
@@ -63,9 +63,11 @@ namespace LinuxHub.Common.Data
                 Version = "22.3",
                 CreatedYear = "2006",
                 BeginnerRating = 5,
-                // Boot pela staging testado de verdade (foi ele que expôs o initrd.lz).
-                // A instalação desatendida é outra história — ver abaixo.
-                IsTested = true,
+                // O boot pela staging foi exercitado (foi ele que expôs o initrd.lz), mas a
+                // instalação em si nunca foi validada de ponta a ponta aqui. "Testado" para o
+                // usuário significa que instalar funciona, não que a ISO inicia — e o Mint é
+                // justamente a distro onde essa diferença custou a ESP de alguém.
+                IsTested = false,
                 // Mint fica SEM instalação desatendida, e não por falta de tentativa: o teste
                 // em VM de 2026-08-10 exercitou o caminho completo e mostrou que ele não tem
                 // como ser fechado com segurança. O ubiquity consulta `partman-auto/method`
@@ -172,7 +174,7 @@ namespace LinuxHub.Common.Data
                 // correto para declarar aqui — declarar o hash do Pop!_OS sob o Id do Kubuntu
                 // legitimaria a troca como se fosse a distro certa.
                 //
-                // IsEnabled = false (adopt-redacted-safety-model, 2026-08-11): oculta do
+                // IsEnabled = false (2026-08-11): oculta do
                 // catálogo e do seletor de download até o link real ser corrigido. Reabilitar
                 // exige trocar DirectDownloadLink pelo instalador certo do Kubuntu e preencher
                 // Sha256/SizeBytes a partir da fonte oficial dele.
@@ -249,20 +251,17 @@ namespace LinuxHub.Common.Data
                 // esta declaração a entrada gerada seria a do casper, e a máquina reiniciaria
                 // num GRUB que não acha o kernel.
                 LiveSession = LiveSessionFamily.Archiso,
-                // Boot pela staging exercitado em VM (2026-08-11): a sessão live sobe e
-                // /run/archiso/img_dev está montado, o que também prova o ntfs3 no initramfs.
-                IsTested = true,
-                // ATENÇÃO — esta linha está adiantada em relação ao gate do change
-                // regional-settings-and-arch-autoinstall: as tasks 8.2 a 8.6 (dry-run com a
-                // configuração real, instalação completa em VM com a ESP do Windows intacta,
-                // ambiente gráfico subindo sozinho) NÃO passaram ainda.
-                //
-                // Ela está aqui porque o toggle de instalação automática é o que torna essas
-                // provas possíveis — sem declarar o mecanismo, não há como exercitá-lo nem em
-                // VM. Enquanto elas não passarem, NÃO gerar release a partir deste estado:
-                // §7.1 é sobre código não validado chegar à máquina do usuário, e é a
-                // publicação que faz isso acontecer.
-                UnattendedInstall = UnattendedInstallMechanism.Archinstall,
+                // O boot pela staging chegou à sessão live em VM (2026-08-11), o que também
+                // provou o ntfs3 no initramfs. Ainda assim fica FALSE: as tasks 8.2 a 8.6 do
+                // change regional-settings-and-arch-autoinstall (dry-run com a configuração
+                // real, instalação completa em VM com a ESP do Windows intacta, ambiente
+                // gráfico subindo sozinho) não passaram. Bootar o live e instalar com
+                // segurança são coisas diferentes, e é a segunda que o usuário vê.
+                IsTested = false,
+                // Sem mecanismo declarado até 8.2–8.6 passarem (§7.1). O gerador do script,
+                // o preparer e os testes continuam no código, prontos — é a declaração aqui
+                // que decide se o caminho é alcançável, e ela é a última coisa a mudar.
+                UnattendedInstall = UnattendedInstallMechanism.None,
                 // De mirror.adectra.com/archlinux/iso/2026.08.01/sha256sums.txt, obtido em
                 // 2026-08-11. Esta entrada expira (ver comentário acima) — revalidar hash e
                 // tamanho junto de Version/DirectDownloadLink a cada release do checklist.
@@ -293,7 +292,7 @@ namespace LinuxHub.Common.Data
                 // só consistência consigo mesmo, não que o arquivo é o que deveria ser — a
                 // mesma razão pela qual a task 1.10 proíbe hash calculado localmente.
                 //
-                // IsEnabled = false (adopt-redacted-safety-model, 2026-08-11): oculta até a
+                // IsEnabled = false (2026-08-11): oculta até a
                 // distro publicar SHA-256, ou até este catálogo suportar SHA-512 como
                 // alternativa (fora de escopo desta mudança).
                 IsEnabled = false,
@@ -316,7 +315,7 @@ namespace LinuxHub.Common.Data
                 // levantado em 2026-08-11 — mesma classe de bug documentada no comentário do
                 // Arch acima: o mirror do Kali também não guarda releases antigas
                 // indefinidamente. Bump para a última disponível na origem no momento da
-                // verificação de artefato (change adopt-redacted-safety-model, task 1.10).
+                // verificação de artefato (mudança do modelo transacional de segurança, task 1.10).
                 Version = "2026.2",
                 CreatedYear = "2013",
                 BeginnerRating = 1,
