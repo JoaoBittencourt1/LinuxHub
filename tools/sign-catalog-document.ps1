@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Roda SÓ no pipeline de release (CI) — nunca numa máquina de desenvolvedor. A chave privada
-    tem que existir apenas como secret do pipeline (adopt-redacted-safety-model, D8/task 2.2);
-    passá-la como arquivo em disco de dev anularia a garantia inteira da assinatura.
+    tem que existir apenas como secret do pipeline (D8/task 2.2); passá-la como arquivo em
+    disco de dev anularia a garantia inteira da assinatura.
 
     Produz a assinatura destacada, em base64, no mesmo esquema que
     Common/Data/CatalogSignatureVerifier.cs verifica: RSASSA-PKCS1-v1_5 sobre SHA-256.

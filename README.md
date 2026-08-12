@@ -84,12 +84,3 @@ When run, the project should start normally.
 
 This project is distributed under the GNU General Public License v3.0. See
 [`LICENSE`](LICENSE).
-
-## Acknowledgments
-
-The transactional safety model adopted in `adopt-redacted-safety-model`
-(installation plan, state machine, verified rollback, recovery agent,
-compatibility preflight, signed catalog) is modeled after
-[REDACTED](https://github.com/ekimiateam/redacted) by Félix and Ekimia,
-also GNU GPL-3.0. See that change's `design.md` for the specific decisions
-adapted and why.

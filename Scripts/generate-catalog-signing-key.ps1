@@ -8,7 +8,7 @@
     on a developer workstation that also holds the source tree. The private key file this
     produces must go straight into the signing pipeline's secret store and nowhere else:
     committing it, emailing it, or leaving it on disk after the signing service picks it up
-    defeats the entire point of the catalog signature (adopt-redacted-safety-model, D8).
+    defeats the entire point of the catalog signature (D8).
 
     Requires PowerShell 7+: RSA.ExportSubjectPublicKeyInfoPem()/ExportPkcs8PrivateKeyPem() are
     not available on Windows PowerShell 5.1's older .NET Framework runtime.

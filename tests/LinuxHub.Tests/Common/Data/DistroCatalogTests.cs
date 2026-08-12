@@ -54,8 +54,12 @@ namespace LinuxHub.Tests.Common.Data
             Assert.Equal(
                 new Dictionary<string, UnattendedInstallMechanism>
                 {
+                    // Só o Ubuntu. O Arch tem gerador, preparer e testes prontos, mas as tasks
+                    // 8.2–8.6 do change regional-settings-and-arch-autoinstall (dry-run com a
+                    // configuração real, instalação completa em VM com a ESP intacta) não
+                    // passaram — e é esta declaração, não a existência do código, que decide
+                    // se o caminho é alcançável pelo usuário (§7.1).
                     ["ubuntu"] = UnattendedInstallMechanism.Subiquity,
-                    ["arch"] = UnattendedInstallMechanism.Archinstall,
                 },
                 declared);
         }
@@ -76,7 +80,10 @@ namespace LinuxHub.Tests.Common.Data
                 .Select(distro => distro.Id)
                 .ToArray();
 
-            Assert.Equal(new[] { "ubuntu", "mint", "arch" }, tested);
+            // Só o Ubuntu foi exercitado da preparação até o sistema instalado subindo. Mint e
+            // Arch chegaram à sessão live pela staging, o que é outra coisa: o que "testado"
+            // promete ao usuário é que INSTALAR funciona, e é a instalação que apaga partição.
+            Assert.Equal(new[] { "ubuntu" }, tested);
         }
 
         /// <summary>O padrão de uma entrada nova é "não testada": esquecer de declarar deixa
@@ -149,9 +156,9 @@ namespace LinuxHub.Tests.Common.Data
                 distro => Assert.True(distro.IsTested, $"'{distro.Id}' declara mecanismo sem estar testada"));
 
         /// <summary>Quem verifica hash/tamanho é a fonte oficial da distro, nunca um cálculo
-        /// feito a partir de um arquivo já baixado localmente (adopt-redacted-safety-model,
-        /// task 1.10) — o teste em si não valida a procedência, mas fixa a invariante estrutural
-        /// que a torna possível de auditar: os dois campos vêm juntos ou nenhum dos dois vem.</summary>
+        /// feito a partir de um arquivo já baixado localmente (task 1.10) — o teste em si não
+        /// valida a procedência, mas fixa a invariante estrutural que a torna possível de
+        /// auditar: os dois campos vêm juntos ou nenhum dos dois vem.</summary>
         [Fact]
         public void ArtifactIdentity_Sha256AndSizeBytesAreDeclaredTogether() =>
             Assert.All(DistroCatalog.All, distro =>

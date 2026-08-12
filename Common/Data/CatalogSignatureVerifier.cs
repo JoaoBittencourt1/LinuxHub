@@ -21,8 +21,8 @@ namespace LinuxHub.Common.Data
             ArgumentNullException.ThrowIfNull(documentBytes);
             ArgumentNullException.ThrowIfNull(signatureBytes);
 
-            // RSASSA-PKCS1-v1_5, o mesmo esquema do REDACTED — verificação síncrona e sem
-            // segredo nenhum do lado de quem verifica: só a chave pública embarcada é usada.
+            // RSASSA-PKCS1-v1_5 — verificação síncrona e sem segredo nenhum do lado de quem
+            // verifica: só a chave pública embarcada é usada.
             return _publicKey.VerifyData(documentBytes, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         }
 

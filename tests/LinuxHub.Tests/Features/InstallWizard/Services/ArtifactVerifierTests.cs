@@ -7,7 +7,7 @@ using Xunit;
 namespace LinuxHub.Tests.Features.InstallWizard.Services
 {
     /// <summary>
-    /// Cobre o gate da mudança adopt-redacted-safety-model: nenhum artefato local é aceito só
+    /// Cobre o gate do modelo transacional de segurança: nenhum artefato local é aceito só
     /// porque o nome bate — o conteúdo precisa corresponder ao hash e ao tamanho publicados pela
     /// fonte oficial (specs/artifact-integrity).
     /// </summary>

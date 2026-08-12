@@ -5,7 +5,7 @@ namespace LinuxHub.Features.InstallWizard.Services
 {
     /// <summary>
     /// Applies legal state transitions. Pure regarding I/O — callers persist after each
-    /// successful mutation. Adapted from REDACTED under GPL-3.0.
+    /// successful mutation.
     /// </summary>
     public sealed class InstallationStateMachine
     {

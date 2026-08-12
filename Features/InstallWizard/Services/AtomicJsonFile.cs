@@ -6,7 +6,6 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// <summary>
     /// Publishes UTF-8 JSON with a same-directory atomic rename so readers either see the
     /// previous complete document or the new complete document (installation-plan spec).
-    /// Adapted from REDACTED <c>AtomicJsonFile</c> under GPL-3.0.
     /// </summary>
     internal static class AtomicJsonFile
     {

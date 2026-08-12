@@ -9,10 +9,10 @@ namespace LinuxHub.Features.InstallWizard.Services
     ///
     /// Location (task 3.2 / design Open Question):
     /// <c>{systemDrive}\ProgramData\LinuxHub\Transactions\{planId}</c>.
-    /// Same arrangement REDACTED validated: survives reboot, writable by a SYSTEM AtStartup
-    /// recovery agent, and reachable once BitLocker has unlocked the Windows volume at boot.
-    /// A hidden directory at the volume root was considered; ProgramData is preferred because
-    /// it is the proven path and does not fight Explorer / folder-redirection heuristics.
+    /// Survives reboot, writable by a SYSTEM AtStartup recovery agent, and reachable once
+    /// BitLocker has unlocked the Windows volume at boot. A hidden directory at the volume
+    /// root was considered; ProgramData is preferred because it does not fight Explorer /
+    /// folder-redirection heuristics.
     /// </summary>
     public static class InstallationTransactionPaths
     {
