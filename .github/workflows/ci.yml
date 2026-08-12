@@ -31,9 +31,16 @@ jobs:
           }
           Write-Output "PSScriptAnalyzer: no error-severity findings."
 
-      # own-linux-installer task 3.4: o instalador Linux-side agora vive em live-media/
-      # (bash fixo, versionado, D1) — o installer/ órfão foi removido (D2). shellcheck
-      # cobre estilo/armadilhas comuns; bash -n permanece como checagem de sintaxe pura.
+  # own-linux-installer task 3.4: o instalador Linux-side agora vive em live-media/
+  # (bash fixo, versionado, D1) — o installer/ órfão foi removido (D2). shellcheck
+  # cobre estilo/armadilhas comuns; bash -n permanece como checagem de sintaxe pura.
+  # Job Linux (não windows-latest, que não traz shellcheck pré-instalado) — bug real
+  # encontrado num run de CI: "shellcheck: command not found" no runner Windows.
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
       - name: shellcheck sobre live-media/
         shell: bash
         run: |
@@ -66,8 +73,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             debootstrap squashfs-tools xorriso grub-efi-amd64-bin grub-common mtools
 
+      # `bash script.sh` em vez de `./script.sh`: não depende do bit executável
+      # sobrevivendo ao checkout no runner (bug real: "sudo: ...: command not found"
+      # quando o arquivo foi commitado sem +x, comum ao editar em ambiente Windows).
       - name: Construir a mídia live
-        run: sudo live-media/build/build-live-media.sh "${{ github.workspace }}/live-media-out"
+        run: sudo bash live-media/build/build-live-media.sh "${{ github.workspace }}/live-media-out"
 
       - name: Publicar o artefato da mídia live
         uses: actions/upload-artifact@v4

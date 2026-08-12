@@ -10,6 +10,17 @@ LinuxHub-win-x64*/
 *.iso
 *_wpftmp.csproj
 
+# "bin/" above is unanchored (matches any dir named bin/ at any depth, on purpose —
+# it also needs to catch tools/CatalogPublisher/bin/ etc.), but that also swallows
+# live-media's own opt/linuxhub/bin/ (the live installer's real entrypoint dir on the
+# target filesystem, not a build artifact). Un-ignore it explicitly.
+!live-media/**/bin/
+!live-media/**/bin/**
+
+# Python bytecode cache (progress-ui.py gets analyzed by editors/tooling)
+__pycache__/
+*.pyc
+
 # Temporary files
 *.user
 *.suo
