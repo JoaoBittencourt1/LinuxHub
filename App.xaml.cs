@@ -94,7 +94,8 @@ namespace LinuxHub
                 installerConfigBuilder,
                 installerConfigWriter,
                 unattendedPreparerRegistry,
-                bootStagingService);
+                bootStagingService,
+                new LinuxRootPartitionService(installationPlanMutationGuard));
 
             // Phase 5: recovery/compensation exist but stay unreachable until phase 8 (§7.1).
             // Not injected into InstallationFlowRunner — task 5.9.

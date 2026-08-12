@@ -49,6 +49,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         private readonly IInstallerConfigWriter _configWriter;
         private readonly IUnattendedInstallPreparerRegistry _unattendedPreparers;
         private readonly IBootStagingService _bootStaging;
+        private readonly ILinuxRootPartitionService _linuxRootPartition;
 
         public InstallationFlowRunner(
             IDiskLayoutProvider diskLayoutProvider,
@@ -60,7 +61,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             InstallerConfigBuilder configBuilder,
             IInstallerConfigWriter configWriter,
             IUnattendedInstallPreparerRegistry unattendedPreparers,
-            IBootStagingService bootStaging)
+            IBootStagingService bootStaging,
+            ILinuxRootPartitionService linuxRootPartition)
         {
             _diskLayoutProvider = diskLayoutProvider ?? throw new ArgumentNullException(nameof(diskLayoutProvider));
             _planPublisher = planPublisher ?? throw new ArgumentNullException(nameof(planPublisher));
@@ -72,6 +74,10 @@ namespace LinuxHub.Features.InstallWizard.Services
             _configWriter = configWriter ?? throw new ArgumentNullException(nameof(configWriter));
             _unattendedPreparers = unattendedPreparers ?? throw new ArgumentNullException(nameof(unattendedPreparers));
             _bootStaging = bootStaging ?? throw new ArgumentNullException(nameof(bootStaging));
+            // Explícito de propósito, sem default concreto: este service ELEVA (cria partição
+            // no disco). Um default silencioso faria qualquer chamador que esquecesse de
+            // injetá-lo disparar elevação real — inclusive testes, que foi como isto apareceu.
+            _linuxRootPartition = linuxRootPartition ?? throw new ArgumentNullException(nameof(linuxRootPartition));
         }
 
         public void Run(InstallationFlowRequest request, IProgress<string> progress)
@@ -117,6 +123,20 @@ namespace LinuxHub.Features.InstallWizard.Services
                         request.TargetDiskIndex, overheadBytes, newPartitions);
                 }
             });
+
+            // own-linux-installer: no caminho próprio ninguém depois do reboot cria a partição
+            // raiz — é o app que cria, aqui, e registra a identidade no plano. É essa
+            // identidade que o instalador live lê para saber onde escrever; sem ela ele
+            // pararia antes de qualquer escrita, em vez de escolher um alvo sozinho.
+            //
+            // Nos demais mecanismos este bloco não roda: quem cria a raiz é o instalador
+            // nativo da distro, a partir do espaço livre que o encolhimento acabou de abrir.
+            if (request.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller)
+            {
+                LinuxRootPartition root = _linuxRootPartition.Create(request.TargetDiskIndex);
+                _planPublisher.UpdateStagingIdentity(
+                    root.PartitionNumber, root.OffsetBytes, root.PartitionUuid);
+            }
 
             StagingPartition? staging = null;
             string isoPathForGrub = request.IsoPath;
@@ -264,7 +284,13 @@ namespace LinuxHub.Features.InstallWizard.Services
                 Locale: request.Locale,
                 Keymap: request.Keymap,
                 Timezone: request.Timezone,
-                DesktopEnvironment: request.DesktopEnvironment));
+                DesktopEnvironment: request.DesktopEnvironment,
+                // own-linux-installer: o mecanismo entra no plano porque o validador precisa
+                // dele para decidir se disk.installer pode carregar identidade, e o instalador
+                // live o usa para confirmar que o plano encontrado é dele.
+                Mechanism: request.IsAutoinstallActive
+                    ? request.ActiveMechanism
+                    : UnattendedInstallMechanism.None));
         }
 
         private long PreparationOverheadBytes(InstallationFlowRequest request, long isoSize)

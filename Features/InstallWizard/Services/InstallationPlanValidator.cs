@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Models;
 
 namespace LinuxHub.Features.InstallWizard.Services
@@ -55,7 +56,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             ValidateDistribution(plan.Distribution, errors);
             ValidateLocale(plan.Locale, errors);
             ValidateAccount(plan.Account, errors);
-            ValidateDisk(plan.Firmware, plan.InstallMode, plan.Disk, errors);
+            ValidateDisk(plan.Firmware, plan.InstallMode, plan.UnattendedMechanism, plan.Disk, errors);
             ValidateRuntime(plan.Runtime, errors);
             ValidateWindowsPathDrives(plan, errors);
 
@@ -130,6 +131,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         private static void ValidateDisk(
             string firmware,
             string installMode,
+            string unattendedMechanism,
             InstallationPlanDisk? disk,
             ICollection<string> errors)
         {
@@ -204,13 +206,14 @@ namespace LinuxHub.Features.InstallWizard.Services
                     disk.Recovery, "disk.recovery", disk.LogicalSectorSizeBytes, disk.SizeBytes, errors);
             }
 
-            ValidateInstaller(disk, installMode, errors);
+            ValidateInstaller(disk, installMode, unattendedMechanism, errors);
             ValidateGeometry(disk, errors);
         }
 
         private static void ValidateInstaller(
             InstallationPlanDisk disk,
             string installMode,
+            string unattendedMechanism,
             ICollection<string> errors)
         {
             InstallationPlanInstallerPartition? installer = disk.Installer;
@@ -258,10 +261,37 @@ namespace LinuxHub.Features.InstallWizard.Services
                     installer.StagingSizeBytes == 0,
                     errors,
                     "disk.installer.stagingSizeBytes must be 0 for dual-boot (no staging partition).");
-                Require(
-                    !installer.Number.HasValue,
-                    errors,
-                    "disk.installer identity must remain unset for dual-boot.");
+
+                // own-linux-installer: dois planos de dual-boot são legítimos e a identidade da
+                // partição raiz é obrigatória em um e proibida no outro.
+                //
+                // Instalador nativo (Subiquity/Ubiquity): quem cria a partição raiz a partir do
+                // espaço livre é o instalador da distro, DEPOIS do reboot — não há o que
+                // registrar antes, e uma identidade preenchida aqui seria invenção.
+                //
+                // Instalador próprio: o app cria a partição antes do reboot, e a identidade é o
+                // ÚNICO jeito de o instalador live saber onde escrever. Sem ela ele teria de
+                // deduzir qual partição é o alvo — exatamente o que a memória do projeto
+                // ("ler, nunca deduzir o disco") proíbe, e como o incidente de 2026-08-05
+                // começou.
+                bool usesOwnLiveInstaller = string.Equals(
+                    unattendedMechanism,
+                    nameof(UnattendedInstallMechanism.OwnLiveInstaller),
+                    StringComparison.Ordinal);
+
+                // No caminho próprio a identidade é PERMITIDA, não exigida aqui: o plano é
+                // publicado e validado no primeiro passo, antes de a partição existir, e só
+                // depois de criá-la é que a identidade é registrada (mesma mecânica que o
+                // modo substituir já usa para a staging). Quem exige a presença dela é o
+                // consumidor — o instalador live para antes de qualquer escrita se o plano
+                // chegar sem identidade.
+                if (!usesOwnLiveInstaller)
+                {
+                    Require(
+                        !installer.Number.HasValue,
+                        errors,
+                        "disk.installer identity must remain unset for dual-boot.");
+                }
             }
             else if (isReplace)
             {

@@ -26,6 +26,21 @@ namespace LinuxHub.Features.InstallWizard.Models
         [JsonPropertyName("installMode")]
         public string InstallMode { get; set; } = string.Empty;
 
+        /// <summary>
+        /// own-linux-installer: qual mecanismo desatendido esta transação usa, como string
+        /// (o nome do valor de <see cref="LinuxHub.Common.Models.UnattendedInstallMechanism"/>).
+        ///
+        /// Existe porque o validador precisa distinguir dois planos de dual-boot que são
+        /// legítimos e mutuamente exclusivos: no caminho do instalador nativo, quem cria a
+        /// partição raiz é o instalador da distro, então <c>disk.installer</c> NÃO pode ter
+        /// identidade; no caminho do instalador próprio, o app cria a partição antes do reboot
+        /// e a identidade é obrigatória — é ela que o instalador live lê para saber onde
+        /// escrever (memória do projeto: "ler, nunca deduzir o disco").
+        /// </summary>
+        [JsonPropertyName("unattendedMechanism")]
+        public string UnattendedMechanism { get; set; } =
+            nameof(LinuxHub.Common.Models.UnattendedInstallMechanism.None);
+
         [JsonPropertyName("distribution")]
         public InstallationPlanDistribution Distribution { get; set; } = new();
 

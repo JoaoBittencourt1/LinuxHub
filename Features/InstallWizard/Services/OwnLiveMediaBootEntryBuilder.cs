@@ -18,23 +18,42 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public static class OwnLiveMediaBootEntryBuilder
     {
-        public static string Build(string liveMediaIsoGrubPath)
+        /// <param name="liveMediaIsoWindowsPath">
+        /// Caminho da mídia live COMO O WINDOWS o conhece (ex.:
+        /// <c>C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso</c>). A conversão para o
+        /// caminho que o GRUB entende é feita aqui, por
+        /// <see cref="GrubConfigBuilder.ToGrubPath"/> — o GRUB não conhece letra de unidade e
+        /// localiza o arquivo com <c>search --file</c>, relativo à raiz de cada volume.
+        /// Emitir o caminho do Windows cru produziria
+        /// <c>set isofile="C:\ProgramData\..."</c>, que o GRUB não resolve: a máquina
+        /// reiniciaria num GRUB incapaz de achar a própria mídia.
+        /// </param>
+        public static string Build(string liveMediaIsoWindowsPath)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(liveMediaIsoGrubPath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(liveMediaIsoWindowsPath);
 
-            return $@"menuentry ""LinuxHub - instalar"" {{
+            string isoGrubPath = GrubConfigBuilder.ToGrubPath(liveMediaIsoWindowsPath);
+
+            string config = $@"menuentry ""LinuxHub - instalar"" {{
     insmod part_gpt
     insmod part_msdos
     insmod ntfs
     insmod loopback
     insmod iso9660
-    set isofile=""{liveMediaIsoGrubPath}""
+    set isofile=""{isoGrubPath}""
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
     linux (loop)/live/vmlinuz boot=live quiet nosplash
     initrd (loop)/live/initrd.img
 }}
 ";
+
+            // Mesma razão que GrubConfigBuilder documenta: literais verbatim num .cs salvo em
+            // Windows carregam CRLF, e o GRUB é um parser de herança Unix — um '\r' fantasma
+            // no fim do valor de $isofile faz o search --file procurar um arquivo que não
+            // existe. Normalizar aqui também, senão a correção do outro builder não vale
+            // para este caminho.
+            return config.Replace("\r\n", "\n");
         }
     }
 }

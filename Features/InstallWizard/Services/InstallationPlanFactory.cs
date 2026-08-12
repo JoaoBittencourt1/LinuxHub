@@ -27,7 +27,8 @@ namespace LinuxHub.Features.InstallWizard.Services
         string Locale,
         string Keymap,
         string Timezone,
-        string DesktopEnvironment = "");
+        string DesktopEnvironment = "",
+        UnattendedInstallMechanism Mechanism = UnattendedInstallMechanism.None);
 
     /// <summary>
     /// Builds a plan from wizard + disk snapshot inputs. Pure except for <c>Guid</c>/clock —
@@ -60,6 +61,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                 CreatedAtUtc = createdAtUtc ?? DateTimeOffset.UtcNow,
                 Firmware = firmware,
                 InstallMode = installMode,
+                UnattendedMechanism = request.Mechanism.ToString(),
                 Distribution = new InstallationPlanDistribution
                 {
                     Id = request.Distro.Id,
@@ -73,6 +75,12 @@ namespace LinuxHub.Features.InstallWizard.Services
                     IsoWindowsPath = Path.GetFullPath(request.IsoWindowsPath),
                     IsoSha256 = (request.IsoSha256 ?? string.Empty).ToLowerInvariant(),
                     IsoSizeBytes = request.IsoSizeBytes,
+                    // D6: identidade esperada DENTRO do squashfs (o ID= de /etc/os-release).
+                    // Só o instalador próprio consome isto; para os demais mecanismos fica
+                    // vazio e o campo é omitido do JSON publicado.
+                    ExpectedIdentity = request.Mechanism == UnattendedInstallMechanism.OwnLiveInstaller
+                        ? request.Distro.Id
+                        : string.Empty,
                 },
                 Locale = new InstallationPlanLocale
                 {

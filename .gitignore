@@ -21,6 +21,12 @@ LinuxHub-win-x64*/
 __pycache__/
 *.pyc
 
+# Saída do build da mídia live: a ISO tem centenas de MB e é reconstruível a
+# partir de live-media/ (build-live-media.sh). O manifesto/hash acompanham a
+# ISO, não o repositório.
+live-media-out/
+live-media/out/
+
 # Temporary files
 *.user
 *.suo

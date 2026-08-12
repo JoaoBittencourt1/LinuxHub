@@ -95,6 +95,57 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             InstallationPlanValidator.Validate(ValidUefiPlan());
         }
 
+        /// <summary>
+        /// own-linux-installer: no dual-boot pelo instalador NATIVO, quem cria a partição raiz
+        /// é o instalador da distro depois do reboot — preencher a identidade aqui seria
+        /// inventar um alvo que ainda não existe. Regra que já existia; este teste a fixa.
+        /// </summary>
+        [Fact]
+        public void Validate_DualBootWithNativeInstaller_RejectsInstallerIdentity()
+        {
+            InstallationPlan plan = ValidUefiPlan();
+            plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.Subiquity);
+            plan.Disk.Installer.Number = 6;
+            plan.Disk.Installer.OffsetBytes = 300L * 1024 * 1024 * 1024;
+            plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+            var error = Assert.Throws<InstallationPlanValidationException>(
+                () => InstallationPlanValidator.Validate(plan));
+
+            Assert.Contains(error.Errors, e => e.Contains("must remain unset", StringComparison.Ordinal));
+        }
+
+        /// <summary>
+        /// No instalador próprio a identidade é o único jeito de o instalador live saber onde
+        /// escrever — sem ela ele teria de deduzir o alvo, que é como o incidente de
+        /// 2026-08-05 começou. Aqui ela é permitida (a mesma regra que a recusa acima).
+        /// </summary>
+        [Fact]
+        public void Validate_DualBootWithOwnLiveInstaller_AcceptsInstallerIdentity()
+        {
+            InstallationPlan plan = ValidUefiPlan();
+            plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.OwnLiveInstaller);
+            plan.Disk.Installer.Number = 6;
+            plan.Disk.Installer.OffsetBytes = 300L * 1024 * 1024 * 1024;
+            plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+            InstallationPlanValidator.Validate(plan);
+        }
+
+        /// <summary>
+        /// O plano é publicado e validado ANTES de a partição existir (primeiro passo do
+        /// fluxo); a identidade só é registrada depois de criá-la. Exigir a identidade na
+        /// validação quebraria a publicação — este teste trava essa ordem.
+        /// </summary>
+        [Fact]
+        public void Validate_OwnLiveInstaller_AcceptsPlanPublishedBeforeThePartitionExists()
+        {
+            InstallationPlan plan = ValidUefiPlan();
+            plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.OwnLiveInstaller);
+
+            InstallationPlanValidator.Validate(plan);
+        }
+
         [Fact]
         public void Validate_RejectsFirmwareLayoutMismatch()
         {

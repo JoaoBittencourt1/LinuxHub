@@ -21,7 +21,15 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIVE_MEDIA_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 OUT_DIR="$(cd "$(mkdir -p "${1:-${LIVE_MEDIA_DIR}/out}" && echo "${1:-${LIVE_MEDIA_DIR}/out}")" && pwd)"
-WORK_DIR="$(mktemp -d /tmp/linuxhub-live-build.XXXXXX)"
+
+# O work dir NÃO usa /tmp por padrão: em WSL (e em qualquer sistema com /tmp em
+# tmpfs) /tmp é RAM, e o rootfs debootstrap + squashfs + árvore de ISO passa
+# facilmente de 2 GB — o build morre sem espaço no meio, com bind mounts vivos.
+# LINUXHUB_BUILD_WORK_ROOT permite apontar para outro lugar; o padrão
+# (/var/tmp) é disco em qualquer distro, por definição do FHS.
+BUILD_WORK_ROOT="${LINUXHUB_BUILD_WORK_ROOT:-/var/tmp}"
+mkdir -p "${BUILD_WORK_ROOT}"
+WORK_DIR="$(mktemp -d "${BUILD_WORK_ROOT}/linuxhub-live-build.XXXXXX")"
 ROOTFS_DIR="${WORK_DIR}/rootfs"
 ISO_TREE_DIR="${WORK_DIR}/iso-tree"
 DEBIAN_SUITE="bookworm"
@@ -29,17 +37,36 @@ DEBIAN_MIRROR="http://deb.debian.org/debian"
 
 cleanup() {
   local status=$?
-  # Desmontagem estrita, mesma regra que D11 exige do instalador em si:
-  # nunca -l aqui, senão o work dir some do disco com o bind mount ainda vivo.
+
+  # `mount --make-rprivate` ANTES de desmontar: /dev e /dev/pts do chroot são
+  # views propagadas das do host, e sem cortar a propagação o umount responde
+  # "target is busy" mesmo sem nenhum processo segurando (qualquer terminal
+  # aberto no host conta). Bug real: um build interrompido deixou /dev, /dev/pts,
+  # /proc e /sys montados sob o work dir.
   for mnt in dev/pts dev proc sys; do
-    if mountpoint -q "${ROOTFS_DIR}/${mnt}" 2>/dev/null; then
-      umount "${ROOTFS_DIR}/${mnt}" || umount -f "${ROOTFS_DIR}/${mnt}" || true
+    target="${ROOTFS_DIR}/${mnt}"
+    if mountpoint -q "${target}" 2>/dev/null; then
+      mount --make-rprivate "${target}" 2>/dev/null || true
+      # Desmontagem estrita, mesma regra que D11 exige do instalador: nunca -l.
+      umount -R "${target}" 2>/dev/null || umount "${target}" 2>/dev/null || true
     fi
   done
+
+  # NUNCA apagar o work dir com montagem viva sob ele: `rm -rf` atravessaria o
+  # bind mount e apagaria o /dev REAL do sistema. Falhar em limpar é aceitável;
+  # apagar o /dev da máquina de build não é.
+  if mount | grep -q -- "${WORK_DIR}"; then
+    echo "AVISO: montagens ainda ativas sob ${WORK_DIR}; NÃO removendo o diretório." >&2
+    mount | grep -- "${WORK_DIR}" >&2 || true
+    exit "$status"
+  fi
+
   rm -rf "${WORK_DIR}"
   exit "$status"
 }
-trap cleanup EXIT
+# EXIT sozinho NÃO cobre interrupção: bash não roda o trap de EXIT quando morre
+# por sinal não capturado, e foi assim que os bind mounts vazaram.
+trap cleanup EXIT INT TERM HUP
 
 echo "==> debootstrap ${DEBIAN_SUITE} (minbase) em ${ROOTFS_DIR}"
 debootstrap --arch=amd64 --variant=minbase "${DEBIAN_SUITE}" "${ROOTFS_DIR}" "${DEBIAN_MIRROR}"

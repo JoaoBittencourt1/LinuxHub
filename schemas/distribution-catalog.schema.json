@@ -48,7 +48,7 @@
         "isEnabled": { "type": "boolean" },
         "unattendedInstall": {
           "type": "string",
-          "enum": ["None", "Subiquity", "UbiquityPreseed", "Archinstall"]
+          "enum": ["None", "Subiquity", "UbiquityPreseed", "Archinstall", "OwnLiveInstaller"]
         },
         "liveSession": {
           "type": "string",

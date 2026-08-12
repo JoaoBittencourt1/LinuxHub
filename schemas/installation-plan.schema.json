@@ -35,6 +35,11 @@
     "installMode": {
       "enum": ["replace", "dualboot"]
     },
+    "unattendedMechanism": {
+      "type": "string",
+      "enum": ["None", "Subiquity", "UbiquityPreseed", "Archinstall", "OwnLiveInstaller"],
+      "description": "own-linux-installer: qual mecanismo desatendido esta transação usa. O validador o consome para decidir se disk.installer precisa (instalador próprio) ou não pode (instalador nativo da distro) carregar identidade em dual-boot."
+    },
     "distribution": {
       "$ref": "#/$defs/distribution"
     },
