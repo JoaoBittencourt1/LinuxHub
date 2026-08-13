@@ -124,11 +124,37 @@ try {{
     $isoLetter = ($image | Get-Volume).DriveLetter
     if (-not $isoLetter) {{ throw ""O Windows montou a mídia live mas não atribuiu letra de unidade a ela."" }}
 
-    Copy-Item -LiteralPath ""$isoLetter`:\live"" -Destination ""$letter`:\"" -Recurse -Force
+    # Copiar arquivo a arquivo, com o nome de DESTINO fixado, em vez de copiar a
+    # pasta inteira. O Windows lê a ISO por ISO9660 puro quando ela não traz
+    # Joliet, e aí expõe nomes 8.3 em maiúsculas — 'FILESYST.SQU' no lugar de
+    # 'filesystem.squashfs'. Copiar a pasta levaria esses nomes para a FAT, que
+    # preserva o que recebe, e o initramfs procura os nomes longos exatos: o
+    # resultado seria um boot que não acha o sistema, sem nada explicando por quê.
+    #
+    # A origem é casada por PREFIXO porque é o truncamento que varia (8.3 corta
+    # em tamanhos diferentes conforme o gerador); o conteúdo de live/ é nosso e
+    # tem exatamente estes três arquivos, então o casamento é determinístico.
+    $liveSource = Get-Item -LiteralPath ""$isoLetter`:\live"" -ErrorAction Stop
+    New-Item -ItemType Directory -Force -Path ""$letter`:\live"" | Out-Null
 
-    # O initramfs procura estes nomes exatos. O Windows expõe nomes ISO9660 em
-    # maiúsculas em alguns casos, e FAT preserva o que recebe — conferir aqui é
-    # a diferença entre falhar agora, com mensagem, e falhar no boot, mudo.
+    $wanted = @(
+        @{{ Prefix = 'vmlinuz';  Target = 'vmlinuz' }},
+        @{{ Prefix = 'initrd';   Target = 'initrd.img' }},
+        @{{ Prefix = 'filesys';  Target = 'filesystem.squashfs' }}
+    )
+    foreach ($item in $wanted) {{
+        $matches = @(
+            Get-ChildItem -LiteralPath $liveSource.FullName -File |
+                Where-Object {{ $_.Name -like ""$($item.Prefix)*"" }}
+        )
+        if ($matches.Count -ne 1) {{
+            throw ""Esperado exatamente um arquivo começando com '$($item.Prefix)' dentro de live/ na mídia; encontrados $($matches.Count).""
+        }}
+        Copy-Item -LiteralPath $matches[0].FullName -Destination ""$letter`:\live\$($item.Target)"" -Force
+    }}
+
+    # Confere depois de copiar: um arquivo faltando ou truncado aqui vira um boot
+    # mudo lá na frente, e esta é a última chance de falhar de forma legível.
     foreach ($required in @('live\vmlinuz', 'live\initrd.img', 'live\filesystem.squashfs')) {{
         $full = Join-Path ""$letter`:\"" $required
         if (-not (Test-Path -LiteralPath $full)) {{

@@ -157,9 +157,15 @@ echo "==> montando ISO UEFI-apenas (D16 — sem plataforma i386-pc)"
 # Só -d aponta módulos x86_64-efi: sem grub-pc-bin instalado, grub-mkrescue
 # não tem como emitir catálogo El Torito BIOS mesmo se pedíssemos.
 ISO_BUILD_PATH="${WORK_DIR}/linuxhub-live.iso"
+# -J (Joliet) porque o Windows precisa LER esta ISO para copiar live/ para a
+# partição de boot. Sem Joliet ele cai em ISO9660 puro e vê nomes 8.3 em
+# maiúsculas ('FILESYST.SQU' no lugar de 'filesystem.squashfs') — nomes que o
+# initramfs não procura. Bug real: a cópia produzia uma partição que o live-boot
+# não reconhecia. O lado Windows normaliza os nomes de qualquer forma, mas uma
+# ISO legível dos dois lados é o certo, não a compensação sozinha.
 grub-mkrescue -o "${ISO_BUILD_PATH}" "${ISO_TREE_DIR}" \
   -d /usr/lib/grub/x86_64-efi \
-  -- -volid LINUXHUB_LIVE
+  -- -volid LINUXHUB_LIVE -J -joliet-long
 
 echo "==> hash e manifesto"
 ISO_SHA256="$(sha256sum "${ISO_BUILD_PATH}" | cut -d' ' -f1)"
