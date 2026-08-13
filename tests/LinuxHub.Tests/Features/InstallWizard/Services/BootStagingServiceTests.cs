@@ -251,10 +251,17 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.Contains("UEFI apenas", error.Message);
         }
 
-        /// <summary>own-linux-installer task 2.2: o par certo entra no caminho novo — a prova é
-        /// a mensagem específica do preparer ausente, não a do caminho antigo.</summary>
+        /// <summary>
+        /// own-linux-installer task 2.2: o par certo entra no caminho novo — a prova é a
+        /// mensagem da ESP (o passo seguinte desse caminho), não a da ISO ausente do caminho
+        /// preservado.
+        ///
+        /// A entrada de boot não interpola caminho nenhum: o kernel é carregado de uma partição
+        /// FAT32 que o GRUB localiza por <c>search --file</c>. Quem exige e usa o caminho da
+        /// mídia é <c>InstallationFlowRunner</c>, antes disto, na hora de copiar os arquivos.
+        /// </summary>
         [Fact]
-        public void InstallStagingBootloader_OwnLiveInstaller_RequiresLiveMediaPath()
+        public void InstallStagingBootloader_OwnLiveInstaller_TakesTheOwnMediaPath()
         {
             var service = new BootStagingService(
                 new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator(), new PermissiveInstallationPlanMutationGuard());
@@ -265,11 +272,12 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 IsUefi: true,
                 TargetDiskIndex: 0,
                 Mode: InstallMode.DualBoot,
-                Mechanism: UnattendedInstallMechanism.OwnLiveInstaller,
-                OwnLiveMediaWindowsPath: null);
+                Mechanism: UnattendedInstallMechanism.OwnLiveInstaller);
 
+            // FakeEspLocator devolve null de propósito: chegar na mensagem da ESP prova que o
+            // despacho entrou em InstallUefiOwnLiveMedia e não no caminho preservado.
             var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
-            Assert.Contains("mídia live própria não foi informado", error.Message);
+            Assert.Contains("EFI System Partition", error.Message);
         }
 
         [Fact]

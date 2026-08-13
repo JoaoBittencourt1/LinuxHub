@@ -156,6 +156,27 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                         IsUnattended: true, KernelParameters: string.Empty, ExtraInitrdGrubPath: null));
         }
 
+        /// <summary>Como o de raiz, o service real ELEVA (cria partição, formata, monta a ISO).
+        /// Nenhum teste pode tocar o concreto.</summary>
+        private sealed class FakeLiveMediaStagingService : ILiveMediaStagingService
+        {
+            public int CreateCalls { get; private set; }
+            public string? CopiedFrom { get; private set; }
+
+            public long RequiredBytesFor(long liveMediaIsoSizeBytes) =>
+                liveMediaIsoSizeBytes + 512L * 1024 * 1024;
+
+            public LiveMediaStagingPartition Create(int diskIndex, long liveMediaIsoSizeBytes)
+            {
+                CreateCalls++;
+                return new(diskIndex, 5, "BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF",
+                    OffsetBytes: 290L * 1024 * 1024 * 1024, SizeBytes: 1024L * 1024 * 1024);
+            }
+
+            public void CopyLiveFiles(LiveMediaStagingPartition partition, string liveMediaIsoWindowsPath) =>
+                CopiedFrom = liveMediaIsoWindowsPath;
+        }
+
         /// <summary>own-linux-installer: o service real ELEVA para criar partição no disco —
         /// nenhum teste pode tocar o concreto.</summary>
         private sealed class FakeLinuxRootPartitionService : ILinuxRootPartitionService
@@ -390,7 +411,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 new UnattendedInstallPreparerRegistry(
                     [new FakeUnattendedInstallPreparer(), new FakeOwnLiveInstallerPreparer()]),
                 bootStaging,
-                new FakeLinuxRootPartitionService());
+                new FakeLinuxRootPartitionService(),
+                new FakeLiveMediaStagingService());
 
             var vm = new InstallWizardViewModel(
                 iso,

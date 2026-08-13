@@ -50,6 +50,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         private readonly IUnattendedInstallPreparerRegistry _unattendedPreparers;
         private readonly IBootStagingService _bootStaging;
         private readonly ILinuxRootPartitionService _linuxRootPartition;
+        private readonly ILiveMediaStagingService _liveMediaStaging;
 
         public InstallationFlowRunner(
             IDiskLayoutProvider diskLayoutProvider,
@@ -62,7 +63,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             IInstallerConfigWriter configWriter,
             IUnattendedInstallPreparerRegistry unattendedPreparers,
             IBootStagingService bootStaging,
-            ILinuxRootPartitionService linuxRootPartition)
+            ILinuxRootPartitionService linuxRootPartition,
+            ILiveMediaStagingService liveMediaStaging)
         {
             _diskLayoutProvider = diskLayoutProvider ?? throw new ArgumentNullException(nameof(diskLayoutProvider));
             _planPublisher = planPublisher ?? throw new ArgumentNullException(nameof(planPublisher));
@@ -78,6 +80,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // no disco). Um default silencioso faria qualquer chamador que esquecesse de
             // injetá-lo disparar elevação real — inclusive testes, que foi como isto apareceu.
             _linuxRootPartition = linuxRootPartition ?? throw new ArgumentNullException(nameof(linuxRootPartition));
+            _liveMediaStaging = liveMediaStaging ?? throw new ArgumentNullException(nameof(liveMediaStaging));
         }
 
         public void Run(InstallationFlowRequest request, IProgress<string> progress)
@@ -103,9 +106,12 @@ namespace LinuxHub.Features.InstallWizard.Services
             });
 
             long overheadBytes = PreparationOverheadBytes(request, isoSize);
-            int newPartitions = 1
-                + (request.IsReplaceMode ? 1 : 0)
-                + (request.IsAutoinstallActive ? 1 : 0);
+            // No caminho próprio são duas partições novas (mídia live + raiz) e nenhuma
+            // semente; nos demais, a raiz é criada pelo instalador da distro e a semente só
+            // existe quando há autoinstall.
+            int newPartitions = request.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller
+                ? 2 + (request.IsReplaceMode ? 1 : 0)
+                : 1 + (request.IsReplaceMode ? 1 : 0) + (request.IsAutoinstallActive ? 1 : 0);
 
             RunStep(ledger, InstallationStepIds.WindowsDiskPrepared, progress, loc, () =>
             {
@@ -124,15 +130,34 @@ namespace LinuxHub.Features.InstallWizard.Services
                 }
             });
 
-            // own-linux-installer: no caminho próprio ninguém depois do reboot cria a partição
-            // raiz — é o app que cria, aqui, e registra a identidade no plano. É essa
-            // identidade que o instalador live lê para saber onde escrever; sem ela ele
-            // pararia antes de qualquer escrita, em vez de escolher um alvo sozinho.
+            // own-linux-installer: no caminho próprio o app prepara as duas partições que o
+            // boot e a instalação precisam, nesta ordem — a da mídia live primeiro, com tamanho
+            // fixo, e a raiz depois, ocupando o que sobrar.
             //
-            // Nos demais mecanismos este bloco não roda: quem cria a raiz é o instalador
-            // nativo da distro, a partir do espaço livre que o encolhimento acabou de abrir.
+            // Nos demais mecanismos este bloco não roda: quem cria a raiz é o instalador nativo
+            // da distro, a partir do espaço livre que o encolhimento acabou de abrir.
             if (request.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller)
             {
+                // Os arquivos da mídia live vão para uma partição FAT32 e o GRUB carrega o
+                // kernel direto dela. Deixar a ISO como arquivo e mandar o GRUB montá-la em
+                // laço obrigava o live-boot a montar NTFS por FUSE dentro do initramfs, antes
+                // de existir sistema — uma cadeia inteira de pontos de falha entre o firmware e
+                // qualquer diagnóstico possível.
+                if (string.IsNullOrWhiteSpace(request.OwnLiveMediaWindowsPath))
+                {
+                    throw new InvalidOperationException(
+                        "O caminho da mídia live própria não foi informado — o preparer do " +
+                        "mecanismo novo precisa entregá-lo.");
+                }
+
+                long liveMediaSize = _isoFileInfo.GetSizeInBytes(request.OwnLiveMediaWindowsPath);
+                LiveMediaStagingPartition liveMedia =
+                    _liveMediaStaging.Create(request.TargetDiskIndex, liveMediaSize);
+                _liveMediaStaging.CopyLiveFiles(liveMedia, request.OwnLiveMediaWindowsPath);
+
+                // A raiz vem depois, com o espaço restante. É a identidade dela que o
+                // instalador live lê para saber onde escrever; sem ela ele pararia antes de
+                // qualquer escrita, em vez de escolher um alvo sozinho.
                 LinuxRootPartition root = _linuxRootPartition.Create(request.TargetDiskIndex);
                 _planPublisher.UpdateStagingIdentity(
                     root.PartitionNumber, root.OffsetBytes, root.PartitionUuid);
@@ -295,6 +320,22 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         private long PreparationOverheadBytes(InstallationFlowRequest request, long isoSize)
         {
+            // O instalador próprio não usa partição semente (não há configuração de terceiro
+            // para entregar — o plano publicado é o transporte, D1), mas precisa de espaço para
+            // a partição FAT32 da mídia live. Sem reservar isto no encolhimento, ela não caberia
+            // e a raiz ficaria menor do que o usuário pediu.
+            if (request.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller)
+            {
+                long liveMediaSize = string.IsNullOrWhiteSpace(request.OwnLiveMediaWindowsPath)
+                    ? 0
+                    : _liveMediaStaging.RequiredBytesFor(
+                        _isoFileInfo.GetSizeInBytes(request.OwnLiveMediaWindowsPath));
+
+                return request.IsReplaceMode
+                    ? liveMediaSize + _stagingPartition.RequiredBytesFor(isoSize)
+                    : liveMediaSize;
+            }
+
             long overhead = request.IsAutoinstallActive ? CloudInitSeedWriter.RequiredBytes : 0;
             if (!request.IsReplaceMode)
                 return overhead;

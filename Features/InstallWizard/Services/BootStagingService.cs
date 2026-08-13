@@ -142,25 +142,17 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         /// <summary>
         /// Task 2.2: mesmo mecanismo de staging de <see cref="InstallUefi"/> (ESP de sistema +
-        /// BCD), mas a entrada de boot aponta para a mídia live própria
-        /// (<see cref="OwnLiveMediaBootEntryBuilder"/>), não para a ISO da distro. A distro
-        /// segue sendo lida do <see cref="BootStagingRequest.IsoPath"/> original, mas só como
-        /// dado — quem a monta e extrai é o instalador live (fase 6), nunca esta função.
+        /// BCD), mas a entrada de boot carrega o kernel da partição FAT32 da mídia live
+        /// (<see cref="LiveMediaStagingService"/>), não a ISO da distro. A distro segue sendo
+        /// lida do <see cref="BootStagingRequest.IsoPath"/> original, mas só como dado — quem a
+        /// monta e extrai é o instalador live (fase 6), nunca esta função.
+        ///
+        /// A partição da mídia live já foi criada e preenchida antes deste ponto, no fluxo; o
+        /// GRUB a localiza por <c>search --file</c>, então nenhum caminho precisa ser
+        /// interpolado aqui.
         /// </summary>
         private void InstallUefiOwnLiveMedia(BootStagingRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.OwnLiveMediaWindowsPath))
-            {
-                throw new InvalidOperationException(
-                    "O caminho da mídia live própria não foi informado — o preparer do " +
-                    "mecanismo novo precisa entregá-lo (task 10.2).");
-            }
-            if (!File.Exists(request.OwnLiveMediaWindowsPath))
-            {
-                throw new InvalidOperationException(
-                    $"A mídia live própria não foi encontrada em '{request.OwnLiveMediaWindowsPath}'.");
-            }
-
             EfiSystemPartitionLocation? esp = _espLocator.FindSystemEfiSystemPartition();
             if (esp is null)
             {
@@ -169,7 +161,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "necessária para registrar a entrada de boot da instalação.");
             }
 
-            string grubCfg = OwnLiveMediaBootEntryBuilder.Build(request.OwnLiveMediaWindowsPath);
+            string grubCfg = OwnLiveMediaBootEntryBuilder.Build();
 
             char driveLetter = PickFreeDriveLetter();
             string grubEfiSource = _grubAssets.GetUefiBootloaderPath();

@@ -7,13 +7,13 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
     public class OwnLiveMediaBootEntryBuilderTests
     {
         [Fact]
-        public void Build_LoopsBackTheLiveMediaIso_AndBootsOwnKernel()
+        public void Build_LoadsTheKernelDirectlyFromTheLiveMediaPartition()
         {
-            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
+            string cfg = OwnLiveMediaBootEntryBuilder.Build();
 
-            Assert.Contains("loopback loop $isofile", cfg);
-            Assert.Contains("(loop)/live/vmlinuz", cfg);
-            Assert.Contains("(loop)/live/initrd.img", cfg);
+            Assert.Contains("/live/vmlinuz", cfg);
+            Assert.Contains("/live/initrd.img", cfg);
+
             // D1: nenhum parâmetro de instalação desatendida na linha de boot — o instalador
             // live descobre tudo a partir do plano publicado no disco (D13), não da linha de kernel.
             Assert.DoesNotContain("autoinstall", cfg);
@@ -21,87 +21,95 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// Bug real, encontrado em VM: sem "set timeout"/"set default", o GRUB define a
-        /// entrada mas não boota nela sozinho — fica parado no próprio menu esperando Enter
-        /// pra sempre, porque o padrão do GRUB quando timeout nunca foi definido é esperar
-        /// entrada do usuário indefinidamente. Instalação desatendida não tem ninguém ali pra
-        /// apertar tecla. Sintoma visto: "tela preta por minutos" depois do reboot.
+        /// A regressão mais cara desta mudança, encontrada só em boot real: deixar a ISO como
+        /// arquivo e mandar o GRUB montá-la em laço obriga o live-boot a percorrer, dentro do
+        /// initramfs, uma cadeia inteira (varrer dispositivos → montar NTFS por FUSE →
+        /// localizar o arquivo → criar dispositivo de laço → montar iso9660) antes de existir
+        /// sistema nenhum. Cada elo é uma forma de o boot morrer sem diagnóstico possível.
+        /// O kernel agora vem direto de uma partição FAT32.
+        /// </summary>
+        [Fact]
+        public void Build_NeverLoopMountsAnIsoNorScansForOne()
+        {
+            string cfg = OwnLiveMediaBootEntryBuilder.Build();
+
+            Assert.DoesNotContain("loopback", cfg);
+            Assert.DoesNotContain("(loop)", cfg);
+            Assert.DoesNotContain("findiso", cfg);
+            Assert.DoesNotContain("fromiso", cfg);
+            Assert.DoesNotContain("iso9660", cfg);
+        }
+
+        /// <summary>
+        /// <c>toram</c> copia a mídia para a RAM e solta o dispositivo de origem. É o mesmo
+        /// problema que D0 existe para eliminar — um ambiente live segurando a partição do
+        /// disco em que se vai escrever — e sem isto a mídia própria o reintroduziria.
+        /// </summary>
+        [Fact]
+        public void Build_ReleasesTheSourceMediumWithToram()
+        {
+            Assert.Contains("toram", OwnLiveMediaBootEntryBuilder.Build());
+        }
+
+        /// <summary>
+        /// Enquanto o mecanismo não passar a fase 11, o boot precisa ser legível: `quiet`
+        /// suprime exatamente as mensagens do live-boot e do systemd que dizem onde um boot
+        /// parou, e vários ciclos de teste em VM se perderam por causa disso. `console=tty1`
+        /// garante que a saída vai para onde alguém está olhando.
+        /// </summary>
+        [Fact]
+        public void Build_KeepsTheBootReadable()
+        {
+            string cfg = OwnLiveMediaBootEntryBuilder.Build();
+
+            Assert.DoesNotContain("quiet", cfg);
+            Assert.Contains("console=tty1", cfg);
+            Assert.Contains("systemd.show_status=true", cfg);
+        }
+
+        /// <summary>
+        /// Bug real: sem "set timeout"/"set default" o GRUB define a entrada mas não boota nela
+        /// sozinho — fica parado no menu esperando Enter, para sempre. Instalação desatendida
+        /// não tem ninguém ali para apertar tecla.
         /// </summary>
         [Fact]
         public void Build_AutoBootsWithoutWaitingForAKeypress()
         {
-            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
+            string cfg = OwnLiveMediaBootEntryBuilder.Build();
 
             Assert.Contains("set timeout=0", cfg);
             Assert.Contains("set default=0", cfg);
 
-            // As duas diretivas precisam vir ANTES do menuentry — depois dele não têm efeito
-            // sobre a seleção automática (são lidas no escopo global do grub.cfg).
             int menuentryIndex = cfg.IndexOf("menuentry ", StringComparison.Ordinal);
             Assert.True(cfg.IndexOf("set timeout=0", StringComparison.Ordinal) < menuentryIndex);
             Assert.True(cfg.IndexOf("set default=0", StringComparison.Ordinal) < menuentryIndex);
         }
 
         /// <summary>
-        /// Bug real, encontrado em VM (dois turnos): o GRUB acha o arquivo na NTFS e dá
-        /// chainload no kernel (search --file + loopback), mas isso só entrega o KERNEL — o
-        /// live-boot, já rodando dentro do initramfs, tem sua PRÓPRIA busca pelo sistema live
-        /// (find_livefs em 9990-misc-helpers.sh), e por padrão só varre mídia óptica/USB.
-        ///
-        /// Primeira tentativa usou fromiso=, e ainda falhou — lendo o código-fonte do live-boot
-        /// 20230131+deb12u1 (bookworm): fromiso= espera o NOME DO DISPOSITIVO LINUX embutido no
-        /// caminho (/dev/sda3/...), que o GRUB não tem como produzir. findiso= é o parâmetro
-        /// certo — varre todo dispositivo, monta, testa se o caminho RELATIVO existe, mesma
-        /// semântica do search --file do GRUB e do iso-scan/filename= do Casper.
+        /// O GRUB pré-compilado embarca <c>search_fs_file</c>, e não <c>search_label</c> nem
+        /// <c>search_fs_uuid</c> (Assets/Grub/README.md) — localizar a partição por rótulo
+        /// falharia silenciosamente. E <c>fat</c> precisa estar carregado: a partição da mídia
+        /// live é FAT32, não NTFS.
         /// </summary>
         [Fact]
-        public void Build_TellsLiveBootWhereTheIsoFileIs()
+        public void Build_FindsThePartitionWithTheModulesTheBootloaderActuallyHas()
         {
-            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
+            string cfg = OwnLiveMediaBootEntryBuilder.Build();
 
-            Assert.Contains("findiso=$isofile", cfg);
-            Assert.DoesNotContain("fromiso=", cfg);
-
-            // findiso= precisa vir na linha "linux", antes de qualquer coisa depois de boot=live
-            // — é parâmetro de kernel, não de initrd.
-            int linuxLineIndex = cfg.IndexOf("linux (loop)/live/vmlinuz", StringComparison.Ordinal);
-            int findIsoIndex = cfg.IndexOf("findiso=", StringComparison.Ordinal);
-            int lineEnd = cfg.IndexOf('\n', linuxLineIndex);
-            Assert.InRange(findIsoIndex, linuxLineIndex, lineEnd);
+            Assert.Contains("search --no-floppy --file --set=root /live/vmlinuz", cfg);
+            Assert.Contains("insmod fat", cfg);
+            Assert.DoesNotContain("--label", cfg);
+            Assert.DoesNotContain("--fs-uuid", cfg);
         }
 
         /// <summary>
-        /// Bug real: o caminho chega do lado C# como caminho do Windows, mas o GRUB não conhece
-        /// letra de unidade nem barra invertida — emitir o caminho cru faria a máquina
-        /// reiniciar num GRUB incapaz de achar a própria mídia live.
-        /// </summary>
-        [Fact]
-        public void Build_ConvertsTheWindowsPathToAGrubPath()
-        {
-            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
-
-            Assert.Contains(@"set isofile=""/ProgramData/LinuxHub/LiveMedia/linuxhub-live.iso""", cfg);
-            Assert.DoesNotContain("C:", cfg);
-            Assert.DoesNotContain(@"\", cfg);
-        }
-
-        /// <summary>
-        /// GRUB é parser de herança Unix: um '\r' no fim do valor de $isofile faz o
-        /// <c>search --file</c> procurar um arquivo que não existe. Mesma proteção que
-        /// GrubConfigBuilder já tinha, e que faltava neste caminho.
+        /// GRUB é parser de herança Unix: um '\r' no fim de uma linha faz o parse falhar ou o
+        /// caminho procurado não existir.
         /// </summary>
         [Fact]
         public void Build_EmitsUnixLineEndingsOnly()
         {
-            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\linuxhub-live.iso");
-
-            Assert.DoesNotContain("\r", cfg);
-        }
-
-        [Fact]
-        public void Build_RejectsEmptyPath()
-        {
-            Assert.Throws<ArgumentException>(() => OwnLiveMediaBootEntryBuilder.Build(""));
+            Assert.DoesNotContain("\r", OwnLiveMediaBootEntryBuilder.Build());
         }
     }
 }
