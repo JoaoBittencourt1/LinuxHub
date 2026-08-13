@@ -174,9 +174,12 @@ ISO_BUILD_PATH="${WORK_DIR}/linuxhub-live.iso"
 # initramfs não procura. Bug real: a cópia produzia uma partição que o live-boot
 # não reconhecia. O lado Windows normaliza os nomes de qualquer forma, mas uma
 # ISO legível dos dois lados é o certo, não a compensação sozinha.
+# `-joliet on` é a forma NATIVA do xorriso. O equivalente do mkisofs (`-J`)
+# não vale aqui: o grub-mkrescue repassa o que vem depois de `--` para o
+# xorriso em modo de comando nativo, e ele responde "Not a known command: -J".
 grub-mkrescue -o "${ISO_BUILD_PATH}" "${ISO_TREE_DIR}" \
   -d /usr/lib/grub/x86_64-efi \
-  -- -volid LINUXHUB_LIVE -J -joliet-long
+  -- -volid LINUXHUB_LIVE -joliet on
 
 echo "==> hash e manifesto"
 ISO_SHA256="$(sha256sum "${ISO_BUILD_PATH}" | cut -d' ' -f1)"

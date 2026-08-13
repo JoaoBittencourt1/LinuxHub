@@ -85,7 +85,12 @@ try_candidate() {
   # que sabemos qual é o vencedor (loop principal, abaixo).
 }
 
-mapfile -t BLOCK_DEVICES < <(lsblk -ndo PATH,TYPE | awk '$2=="part"{print $1}')
+# `-l` (lista plana), NUNCA `-d`: `-d` é --nodeps e lista apenas discos
+# inteiros, omitindo as partições. Com ele o filtro por TYPE=="part" casava um
+# conjunto que nunca conteria partição alguma — a varredura devolvia zero em
+# qualquer máquina, e a instalação morria com "nenhum plano válido" tendo o
+# plano ali, intacto. Bug real, encontrado em boot com o console legível.
+mapfile -t BLOCK_DEVICES < <(lsblk -nlo PATH,TYPE | awk '$2=="part"{print $1}')
 step "procurando o plano em ${#BLOCK_DEVICES[@]} partições: ${BLOCK_DEVICES[*]}"
 
 # Uma linha por partição, ANTES de tentar montar: montar NTFS pode demorar ou

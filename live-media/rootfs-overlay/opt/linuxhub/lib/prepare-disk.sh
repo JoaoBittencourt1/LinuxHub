@@ -31,7 +31,13 @@ WINDOWS_PART="${TARGET_DISK}${WINDOWS_PART_NUMBER}"
 # catálogo C#).
 
 # --- 5.1: desmontagem estrita de TODAS as partições do disco alvo ---
-mapfile -t TARGET_DISK_PARTS < <(lsblk -ndo PATH "$TARGET_DISK" | grep -v "^${TARGET_DISK}$")
+# `-l` (lista plana), NUNCA `-d`: `-d` é --nodeps e omite as partições, deixando
+# só o disco. Aqui isso seria pior que na descoberta — esta lista alimenta a
+# desmontagem e as asserções do D11 ANTES de formatar. Vazia, o laço não
+# desmontaria nada, a asserção "nenhuma partição montada" passaria sem ter
+# verificado coisa alguma, e a formatação seguiria com o disco possivelmente em
+# uso. Uma verificação que não verifica é pior que nenhuma: ela autoriza.
+mapfile -t TARGET_DISK_PARTS < <(lsblk -nlo PATH "$TARGET_DISK" | grep -v "^${TARGET_DISK}$")
 for part in "${TARGET_DISK_PARTS[@]}"; do
   strict_umount "$part"
 done
