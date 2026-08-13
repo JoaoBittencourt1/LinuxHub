@@ -49,10 +49,15 @@ trap on_fatal_error ERR
 
 # A tela de progresso é apresentação (D14): não pode impedir, atrasar nem
 # derrubar a instalação. Toda falha aqui é aviso, nunca erro.
+#
+# Chamada DEPOIS da descoberta e da revalidação, de propósito: o Xorg troca o
+# VT ativo ao subir, e com isso qualquer mensagem das fases iniciais sai numa
+# tela que ninguém está vendo. Essas fases são as que mais falham e as que mais
+# precisam ser lidas (plano ausente, disco divergente, hash errado); a tela
+# existe para cobrir a extração, que é longa e silenciosa. Levantá-la antes
+# trocava diagnóstico por estética — e foi o que transformou várias falhas
+# distintas na mesma "tela preta" indistinguível.
 start_progress_ui() {
-  mkfifo -m 600 "$LINUXHUB_PROGRESS_FIFO" 2>/dev/null || true
-  progress_open_channel
-
   if ! command -v xinit >/dev/null 2>&1; then
     log "aviso: xinit ausente — instalação segue mostrando progresso só no console"
     return 0
@@ -80,7 +85,26 @@ start_progress_ui() {
 
 LINUXHUB_UI_LOG="/run/linuxhub-progress-ui.log"
 LINUXHUB_UI_PID=""
-start_progress_ui
+
+# Prova de vida, direto no /dev/tty1 — sem passar pelo `log`, pelo journal nem
+# pelo roteamento de console do systemd, que `quiet` na linha de kernel pode
+# silenciar. Se esta caixa não aparecer na tela, o problema é ANTES do
+# instalador: a unidade não subiu, ou o sistema nem chegou no multi-user.
+# Distinguir "não rodou" de "rodou e falhou calado" custava um boot inteiro de
+# adivinhação a cada tentativa.
+{
+  echo
+  echo "############################################################"
+  echo "#  LinuxHub - instalador live iniciado"
+  echo "#  $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "############################################################"
+  echo
+} > /dev/tty1 2>/dev/null || true
+
+# O canal de progresso precisa existir desde já (emit_progress escreve nele),
+# mas a TELA só sobe depois da revalidação — ver abaixo.
+mkfifo -m 600 "$LINUXHUB_PROGRESS_FIFO" 2>/dev/null || true
+progress_open_channel
 
 emit_progress "install.discovering-plan"
 
@@ -110,6 +134,11 @@ emit_progress "install.revalidating"
 mapfile -t REVALIDATION < <("${LIB_DIR}/revalidate.sh" "$PLAN_PATH")
 TARGET_DISK="${REVALIDATION[0]}"
 ARTIFACT_PATH="${REVALIDATION[1]}"
+
+# Só agora a tela sobe: daqui para a frente vem a parte longa e silenciosa
+# (formatar, extrair, configurar), que é onde uma tela ajuda. Tudo que podia
+# falhar de forma que exige LEITURA já passou, e passou visível no console.
+start_progress_ui
 
 emit_progress "install.preparing-disk"
 TARGET_PART="$("${LIB_DIR}/prepare-disk.sh" "$PLAN_PATH" "$TARGET_DISK")"
