@@ -12,7 +12,7 @@ LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${LIB_DIR}/common.sh"
 
 require_root
-require_cmd lsblk blkid sha256sum jq
+require_cmd lsblk blkid findmnt sha256sum jq
 
 PLAN_PATH="${1:?uso: revalidate.sh <plan.json>}"
 [[ -f "$PLAN_PATH" ]] || die "plano não encontrado: $PLAN_PATH"
@@ -98,15 +98,27 @@ ARTIFACT_WINDOWS_PATH="$(json_get "$PLAN_PATH" '.distribution.isoWindowsPath')"
 ARTIFACT_SHA256="$(json_get "$PLAN_PATH" '.distribution.isoSha256')"
 ARTIFACT_SIZE_BYTES="$(json_get "$PLAN_PATH" '.distribution.isoSizeBytes')"
 
-ARTIFACT_MOUNT="/run/linuxhub/windows-system-volume"
-mkdir -p "$ARTIFACT_MOUNT"
-if ! mountpoint -q "$ARTIFACT_MOUNT"; then
+# A descoberta (D13) já montou este volume e o deixou montado de propósito.
+# Montar o MESMO dispositivo num segundo ponto não funciona: o ntfs-3g recusa,
+# e a revalidação morria com "falha ao montar a partição do Windows" tendo o
+# volume montado e legível o tempo todo. Reusar o mount da descoberta também é
+# mais forte que remontar: amarra o artefato ao mesmo volume que foi validado,
+# em vez de a um que só por acaso tem o mesmo caminho.
+ARTIFACT_MOUNT="${LINUXHUB_WINDOWS_MOUNT:-}"
+if [[ -n "$ARTIFACT_MOUNT" ]] && mountpoint -q "$ARTIFACT_MOUNT"; then
+  MOUNTED_SOURCE="$(findmnt -no SOURCE --target "$ARTIFACT_MOUNT" 2>/dev/null || true)"
+  # O plano vive em ProgramData, que está na partição do Windows. Se o volume
+  # descoberto não for essa partição, o caminho "C:\..." do artefato seria
+  # resolvido contra o volume errado — divergência, não detalhe.
+  [[ "$MOUNTED_SOURCE" == "$WINDOWS_PART" ]] || \
+    die "o volume onde o plano foi encontrado ($MOUNTED_SOURCE) não é a partição do Windows do plano ($WINDOWS_PART) (4.4)"
+  step "reusando o volume do Windows já montado em $ARTIFACT_MOUNT"
+else
+  ARTIFACT_MOUNT="/run/linuxhub/windows-system-volume"
+  mkdir -p "$ARTIFACT_MOUNT"
   mount -t ntfs-3g -o ro "$WINDOWS_PART" "$ARTIFACT_MOUNT" || die "falha ao montar a partição do Windows para ler o artefato (4.4)"
 fi
-# Caminho do plano é Windows-style (C:\...); resolve para o ponto de montagem Linux.
-ARTIFACT_RELATIVE="${ARTIFACT_WINDOWS_PATH#?:}"
-ARTIFACT_RELATIVE="${ARTIFACT_RELATIVE//\\//}"
-ARTIFACT_LOCAL_PATH="${ARTIFACT_MOUNT}${ARTIFACT_RELATIVE}"
+ARTIFACT_LOCAL_PATH="$(windows_path_to_local "$ARTIFACT_MOUNT" "$ARTIFACT_WINDOWS_PATH")"
 [[ -f "$ARTIFACT_LOCAL_PATH" ]] || die "artefato de distribuição não encontrado: $ARTIFACT_LOCAL_PATH (4.4)"
 
 # Tamanho estável: a gravação do Windows pode não ter sido drenada.
@@ -129,4 +141,8 @@ ACTUAL_SHA256="$(sha256sum "$ARTIFACT_LOCAL_PATH" | cut -d' ' -f1)"
 step "hash do artefato confere"
 
 log "revalidação pós-reboot concluída: disco $TARGET_DISK, artefato $ARTIFACT_LOCAL_PATH"
-printf '%s\n%s\n' "$TARGET_DISK" "$ARTIFACT_LOCAL_PATH"
+# A terceira linha é a partição do Windows: o preparo do disco (5.1) desmonta
+# tudo neste disco, inclusive este volume, e a extração precisa remontá-lo para
+# ler o artefato. Sem devolver o dispositivo, o orquestrador teria que deduzi-lo
+# de novo do plano — e deduzir disco é exatamente o que este projeto não faz.
+printf '%s\n%s\n%s\n' "$TARGET_DISK" "$ARTIFACT_LOCAL_PATH" "$WINDOWS_PART"

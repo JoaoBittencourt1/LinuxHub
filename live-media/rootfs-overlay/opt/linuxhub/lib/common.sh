@@ -50,17 +50,41 @@ require_cmd() {
 # referências abertas e faz a formatação seguinte parecer segura com o
 # dispositivo ainda em uso — é o modo de falha direto do incidente de
 # 2026-08-05.
-strict_umount() {
-  local target="$1"
-  if mountpoint -q "$target"; then
-    umount "$target" || die "falha ao desmontar $target (umount estrito; -l é proibido)"
+#
+# Aceita um ponto de montagem OU um dispositivo de bloco. A distinção importa:
+# `mountpoint -q /dev/sda3` responde "não" mesmo com o /dev/sda3 montado em
+# outro lugar, porque /dev/sda3 não é um ponto de montagem — é um dispositivo.
+# Bug real: a fase 5 chamava strict_umount e assert_not_mounted com CAMINHOS DE
+# DISPOSITIVO, então o desmonte não desmontava nada e a asserção seguinte
+# passava sem ter verificado coisa alguma — autorizando a formatação com o disco
+# ainda montado. Uma verificação que não verifica é pior que nenhuma.
+#
+# Um dispositivo pode estar montado em vários pontos; todos são desmontados.
+mount_targets_of() {
+  local arg="$1"
+  if [[ -b "$arg" ]]; then
+    findmnt -rno TARGET --source "$arg" 2>/dev/null || true
+  elif mountpoint -q "$arg" 2>/dev/null; then
+    printf '%s\n' "$arg"
   fi
 }
 
+strict_umount() {
+  local target="$1" mnt
+  # Do mais profundo para o mais raso: desmontar um pai antes do filho falha com
+  # "target is busy", o que aqui viraria uma morte por ordenação e não por
+  # holder real.
+  while IFS= read -r mnt; do
+    [[ -n "$mnt" ]] || continue
+    umount "$mnt" || die "falha ao desmontar $mnt (de $target; umount estrito, -l é proibido)"
+  done < <(mount_targets_of "$target" | awk '{print gsub(/\//,"/"), $0}' | sort -rn | cut -d' ' -f2-)
+}
+
 assert_not_mounted() {
-  local target="$1"
-  if mountpoint -q "$target"; then
-    die "asserção falhou: $target ainda está montado"
+  local target="$1" remaining
+  remaining="$(mount_targets_of "$target")"
+  if [[ -n "$remaining" ]]; then
+    die "asserção falhou: $target ainda está montado em: $(echo "$remaining" | tr '\n' ' ')"
   fi
 }
 
@@ -106,6 +130,18 @@ json_validate_schema() {
   # esta fase precisa — exigido explicitamente por cada chamador via
   # json_get, que já falha (die) em campo ausente.
   jq -e . "$file" >/dev/null 2>&1 || die "$file não é JSON válido (contra $schema)"
+}
+
+# Traduz um caminho no formato do Windows ("C:\ProgramData\...") para o caminho
+# equivalente dentro de um ponto de montagem Linux. A letra de unidade é
+# descartada de propósito: o volume já foi escolhido pela descoberta (D13), e
+# reinterpretar a letra aqui abriria espaço para ler de um volume que não é o
+# que foi validado.
+windows_path_to_local() {
+  local mount="$1" windows_path="$2" relative
+  relative="${windows_path#?:}"
+  relative="${relative//\\//}"
+  printf '%s\n' "${mount}${relative}"
 }
 
 atomic_write() {

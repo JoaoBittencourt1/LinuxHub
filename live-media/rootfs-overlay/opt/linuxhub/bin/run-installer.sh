@@ -11,6 +11,7 @@ source "${LIB_DIR}/common.sh"
 source "${LIB_DIR}/mirror-state.sh"
 
 require_root
+require_cmd jq mount findmnt
 
 on_fatal_error() {
   local exit_code=$?
@@ -145,9 +146,12 @@ PLAN_ID="$(json_get "$PLAN_PATH" '.planId')"
 SECRET_FILE="$(dirname "$PLAN_PATH")/account-secret.env"
 
 emit_progress "install.revalidating"
-mapfile -t REVALIDATION < <("${LIB_DIR}/revalidate.sh" "$PLAN_PATH")
+if ! mapfile -t REVALIDATION < <("${LIB_DIR}/revalidate.sh" "$PLAN_PATH") || [[ "${#REVALIDATION[@]}" -lt 3 ]]; then
+  die "a revalidação pós-reboot não passou — nada foi escrito no disco"
+fi
 TARGET_DISK="${REVALIDATION[0]}"
 ARTIFACT_PATH="${REVALIDATION[1]}"
+WINDOWS_PART="${REVALIDATION[2]}"
 
 # Só agora a tela sobe: daqui para a frente vem a parte longa e silenciosa
 # (formatar, extrair, configurar), que é onde uma tela ajuda. Tudo que podia
@@ -157,7 +161,37 @@ start_progress_ui
 emit_progress "install.preparing-disk"
 TARGET_PART="$("${LIB_DIR}/prepare-disk.sh" "$PLAN_PATH" "$TARGET_DISK")"
 
+# O preparo do disco (D11, 5.1/5.4) desmonta TODAS as partições do disco alvo —
+# inclusive o volume do Windows, que é justamente de onde a ISO da distribuição
+# é lida. Isso não é um efeito colateral a contornar: é o gate que garante que
+# nada segura o disco na hora de formatar. Mas depois dele o $ARTIFACT_PATH que
+# a revalidação devolveu aponta para um caminho que não existe mais.
+#
+# Remonta em SOMENTE-LEITURA, e só o suficiente para a extração. Read-only por
+# decisão, não por conveniência: daqui para frente há escrita no disco (extração
+# e, depois, bootloader), e um NTFS montado rw no mesmo disco durante isso é
+# exatamente o tipo de holder que o D11 existe para eliminar.
+ARTIFACT_MOUNT="/run/linuxhub/windows-artifact"
+mkdir -p "$ARTIFACT_MOUNT"
+mount -t ntfs-3g -o ro "$WINDOWS_PART" "$ARTIFACT_MOUNT" \
+  || die "falha ao remontar a partição do Windows ($WINDOWS_PART) para ler o artefato"
+ARTIFACT_PATH="$(windows_path_to_local "$ARTIFACT_MOUNT" "$(json_get "$PLAN_PATH" '.distribution.isoWindowsPath')")"
+[[ -f "$ARTIFACT_PATH" ]] || die "artefato desapareceu após o preparo do disco: $ARTIFACT_PATH"
+step "artefato acessível de novo em $ARTIFACT_PATH (volume do Windows em somente-leitura)"
+
+# O espelhamento do registro (D3) acaba aqui, e isso é esperado: o volume que o
+# recebia está agora em ro. Falha em espelhar nunca é falha de instalação
+# (research §O) — mas ficar em silêncio sobre o motivo seria.
+LINUXHUB_WINDOWS_MOUNT="$ARTIFACT_MOUNT"
+LINUXHUB_WINDOWS_MOUNT_WRITABLE="no"
+log "registro deixa de ser espelhado no Windows a partir daqui: o volume foi remontado em somente-leitura para a fase de escrita em disco"
+
 TARGET_MOUNT="$("${LIB_DIR}/verify-and-extract.sh" "$PLAN_PATH" "$ARTIFACT_PATH" "$TARGET_PART")"
+
+# Solta o volume do Windows assim que a extração terminou: a instalação do
+# bootloader escreve na tabela/ESP do mesmo disco, e nada deste disco deve estar
+# montado nesse momento além da própria partição alvo.
+strict_umount "$ARTIFACT_MOUNT"
 
 emit_progress "install.configuring"
 "${LIB_DIR}/configure-target.sh" "$PLAN_PATH" "$SECRET_FILE" "$TARGET_MOUNT"

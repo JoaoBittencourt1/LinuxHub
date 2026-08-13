@@ -19,7 +19,7 @@ require_root
 # (Fast Startup) isso levaria a escrever num filesystem que o Windows ainda
 # considera seu, corrompendo-o na retomada. Exigi-lo aqui só criaria um motivo
 # a mais para a descoberta morrer sem necessidade.
-require_cmd lsblk jq mount
+require_cmd lsblk jq mount findmnt
 
 CANDIDATES_ROOT="/run/linuxhub/candidates"
 mkdir -p "$CANDIDATES_ROOT"
