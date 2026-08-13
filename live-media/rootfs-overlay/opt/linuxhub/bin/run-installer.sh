@@ -14,8 +14,36 @@ require_root
 
 on_fatal_error() {
   local exit_code=$?
+
+  # Volta o console para a tty1 ANTES de imprimir. Se a tela de progresso subiu,
+  # o Xorg trocou o VT ativo — e a mensagem de erro sairia num VT que ninguém
+  # está vendo. Bug real: uma falha aparecia como tela preta muda, sem uma
+  # palavra na tela, porque os gettys estão mascarados (task 1.6) e não há
+  # shell nenhuma para onde cair.
+  if [[ -n "${LINUXHUB_UI_PID:-}" ]]; then
+    kill "$LINUXHUB_UI_PID" 2>/dev/null || true
+  fi
+  command -v chvt >/dev/null 2>&1 && chvt 1 2>/dev/null || true
+
+  {
+    echo
+    echo "############################################################"
+    echo "#  A INSTALAÇÃO PAROU (código $exit_code)"
+    echo "#"
+    echo "#  Nada foi escrito no disco depois deste ponto."
+    echo "#  A mensagem da causa está logo acima desta caixa."
+    echo "#"
+    echo "#  Diagnóstico: journalctl -b  |  cat $LINUXHUB_UI_LOG"
+    echo "############################################################"
+    echo
+  } > /dev/tty1 2>/dev/null || true
+
   log "instalação interrompida (código $exit_code) — o registro mostra o passo que começou e não concluiu"
-  exit "$exit_code"
+
+  # Sem isto o systemd encerra a unidade e a tela volta a ficar preta e muda
+  # antes de alguém conseguir ler o erro. A instalação já parou; segurar o
+  # console é a única forma de a causa chegar a quem está olhando.
+  exec sleep infinity
 }
 trap on_fatal_error ERR
 
@@ -59,13 +87,17 @@ emit_progress "install.discovering-plan"
 # discover-plan.sh para (D13) quando não há exatamente um plano válido. Sem esta
 # checagem o `set -u` estouraria com "unbound variable" no índice do array — que
 # é verdade, mas não diz nada a quem está olhando a tela.
-if ! mapfile -t DISCOVERY < <("${LIB_DIR}/discover-plan.sh") || [[ "${#DISCOVERY[@]}" -lt 3 ]]; then
+if ! mapfile -t DISCOVERY < <("${LIB_DIR}/discover-plan.sh") || [[ "${#DISCOVERY[@]}" -lt 4 ]]; then
   die "nenhum plano de instalação utilizável foi encontrado — nada foi escrito no disco"
 fi
 PLAN_PATH="${DISCOVERY[0]}"
 STATE_PATH="${DISCOVERY[1]}"
 LINUXHUB_WINDOWS_MOUNT="${DISCOVERY[2]}"
 export LINUXHUB_WINDOWS_MOUNT
+# Se o volume só montou em ro (Fast Startup do Windows), o espelhamento do
+# registro (D3) vira no-op com aviso — nunca falha de instalação (research §O).
+LINUXHUB_WINDOWS_MOUNT_WRITABLE="${DISCOVERY[3]}"
+export LINUXHUB_WINDOWS_MOUNT_WRITABLE
 LINUXHUB_STATE_WINDOWS_PATH="$STATE_PATH"
 export LINUXHUB_STATE_WINDOWS_PATH
 

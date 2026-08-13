@@ -14,7 +14,12 @@ LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${LIB_DIR}/common.sh"
 
 require_root
-require_cmd lsblk jq mount ntfsfix
+# ntfsfix saiu daqui de propósito: ele existia para limpar o flag "dirty" e
+# forçar uma montagem rw que a descoberta não precisa — e num volume hibernado
+# (Fast Startup) isso levaria a escrever num filesystem que o Windows ainda
+# considera seu, corrompendo-o na retomada. Exigi-lo aqui só criaria um motivo
+# a mais para a descoberta morrer sem necessidade.
+require_cmd lsblk jq mount
 
 CANDIDATES_ROOT="/run/linuxhub/candidates"
 mkdir -p "$CANDIDATES_ROOT"
@@ -27,15 +32,24 @@ try_candidate() {
   mnt="$CANDIDATES_ROOT/$(basename "$device")"
   mkdir -p "$mnt"
 
-  # Montagem real de escrita (D3 revertida): tentamos rw direto porque o
-  # espelhamento do estado (4.5) vai precisar dela na mesma sessão de mount;
-  # falha aqui só descarta o candidato, não é fatal para a descoberta.
-  if ! mount -t ntfs-3g -o rw "$device" "$mnt" 2>/dev/null; then
-    ntfsfix -d "$device" >/dev/null 2>&1 || true
-    if ! mount -t ntfs-3g -o rw "$device" "$mnt" 2>/dev/null; then
-      rmdir "$mnt" 2>/dev/null || true
-      return
-    fi
+  # Tenta rw, mas ACEITA ro: descobrir o plano é leitura pura, e exigir escrita
+  # aqui descartava o volume inteiro quando o Windows estava com Fast Startup
+  # ligado (padrão no 11). Nesse estado o ntfs-3g recusa rw de propósito — o
+  # volume está hibernado, e escrever nele corrompe o filesystem quando o
+  # Windows retoma a sessão. Bug real: a instalação morria com "nenhum plano
+  # válido" e tela preta, com o plano ali, íntegro, montável em ro.
+  #
+  # Quem precisa de escrita é só o espelhamento do registro (D3), muito depois.
+  # Se não deu rw, isso é registrado e o espelhamento vira no-op com aviso —
+  # falha em espelhar nunca é falha de instalação (research §O).
+  local writable=no
+  if mount -t ntfs-3g -o rw "$device" "$mnt" 2>/dev/null; then
+    writable=yes
+  elif mount -t ntfs-3g -o ro "$device" "$mnt" 2>/dev/null; then
+    writable=no
+  else
+    rmdir "$mnt" 2>/dev/null || true
+    return
   fi
 
   local transactions_dir="$mnt/ProgramData/LinuxHub/Transactions"
@@ -63,7 +77,7 @@ try_candidate() {
     dir_name="$(basename "$plan_dir")"
     [[ "$dir_name" == "$plan_id" ]] || continue
 
-    VALID_CONTEXTS+=("${plan_path}|${state_path}|${mnt}|${device}")
+    VALID_CONTEXTS+=("${plan_path}|${state_path}|${mnt}|${device}|${writable}")
   done
 
   # Não desmontamos aqui: se este candidato acabar sendo o vencedor único,
@@ -86,7 +100,7 @@ if [[ "${#VALID_CONTEXTS[@]}" -gt 1 ]]; then
 fi
 
 WINNER="${VALID_CONTEXTS[0]}"
-IFS='|' read -r WINNER_PLAN WINNER_STATE WINNER_MOUNT WINNER_DEVICE <<< "$WINNER"
+IFS='|' read -r WINNER_PLAN WINNER_STATE WINNER_MOUNT WINNER_DEVICE WINNER_WRITABLE <<< "$WINNER"
 
 # Desmonta qualquer outro candidato que tenha sido montado sem ter plano
 # válido (limpeza; não afeta o resultado, que já está decidido).
@@ -97,5 +111,9 @@ for cand_mnt in "$CANDIDATES_ROOT"/*; do
   fi
 done
 
-log "plano encontrado: $WINNER_PLAN (dispositivo $WINNER_DEVICE)"
-printf '%s\n%s\n%s\n' "$WINNER_PLAN" "$WINNER_STATE" "$WINNER_MOUNT"
+log "plano encontrado: $WINNER_PLAN (dispositivo $WINNER_DEVICE, gravável: $WINNER_WRITABLE)"
+if [[ "$WINNER_WRITABLE" != "yes" ]]; then
+  log "aviso: o volume do Windows montou somente-leitura (típico de Fast Startup ligado)."
+  log "aviso: a instalação segue normal; só o espelhamento do registro fica indisponível."
+fi
+printf '%s\n%s\n%s\n%s\n' "$WINNER_PLAN" "$WINNER_STATE" "$WINNER_MOUNT" "$WINNER_WRITABLE"

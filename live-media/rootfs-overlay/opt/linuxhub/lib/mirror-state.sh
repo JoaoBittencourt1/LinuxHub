@@ -25,6 +25,17 @@ _mirror_write_test_done=0
 _ensure_mirror_mount_writable() {
   [[ -n "$LINUXHUB_WINDOWS_MOUNT" ]] || { log "mirror: LINUXHUB_WINDOWS_MOUNT não definido"; return 1; }
 
+  # A descoberta (D13) monta o volume do Windows em ro quando o ntfs-3g recusa
+  # rw — o que acontece sempre que o Windows desligou com Fast Startup, porque
+  # o volume fica hibernado. Nesse caso NÃO se força escrita: gravar num volume
+  # hibernado corrompe o filesystem quando o Windows retoma a sessão. O
+  # espelhamento simplesmente não acontece, e isso é aceitável por construção
+  # (research §O: log é evidência, nunca sinal de sucesso ou fracasso).
+  if [[ "${LINUXHUB_WINDOWS_MOUNT_WRITABLE:-no}" != "yes" ]]; then
+    log "mirror: volume do Windows montado somente-leitura; espelhamento indisponível nesta execução"
+    return 1
+  fi
+
   if ! mountpoint -q "$LINUXHUB_WINDOWS_MOUNT"; then
     log "mirror: volume do Windows não está montado em $LINUXHUB_WINDOWS_MOUNT"
     return 1
