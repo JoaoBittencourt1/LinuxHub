@@ -121,11 +121,22 @@ chmod 0755 "${ROOTFS_DIR}/opt/linuxhub/bin/progress-ui.py"
 chmod 0644 "${ROOTFS_DIR}/etc/systemd/system/linuxhub-installer.service"
 chown -R root:root "${ROOTFS_DIR}/opt/linuxhub" "${ROOTFS_DIR}/etc/systemd/system/linuxhub-installer.service"
 
-# Task 1.6: getty@tty1 e serial-getty@ttyS0 desviados para /dev/null — mask
-# systemd padrão, não uma unidade sobrescrita, para não deixar nenhum prompt
-# de login possível.
-ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/getty@tty1.service"
+# Task 1.6 manda desviar getty@tty1 para /dev/null, para nenhum prompt de login
+# aparecer durante a instalação. Isso fica para DEPOIS da fase 11.
+#
+# Enquanto o mecanismo não estiver validado, o getty é a única forma de
+# distinguir dois estados que hoje são idênticos na tela — pretos, os dois:
+#
+#   prompt de login  -> a unidade do instalador NÃO rodou
+#   tela sem prompt  -> a unidade rodou (e travou, ou está trabalhando calada)
+#
+# A unidade declara Conflicts=getty@tty1.service, então quando ela sobe o
+# systemd derruba o getty sozinho: o prompt sumir É o sinal de que o instalador
+# assumiu. E se algo der errado, sobra um shell para investigar de dentro, em
+# vez de um console mudo. Mesma lição do `quiet` e da tela gráfica — esconder
+# saída antes de o caminho estar provado custou vários ciclos de teste.
 ln -sf /dev/null "${ROOTFS_DIR}/etc/systemd/system/serial-getty@ttyS0.service"
+chroot "${ROOTFS_DIR}" systemctl set-default multi-user.target
 
 echo "==> habilitando linuxhub-installer.service"
 chroot "${ROOTFS_DIR}" systemctl enable linuxhub-installer.service

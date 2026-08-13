@@ -18,9 +18,21 @@ StandardInput=tty
 StandardOutput=journal+console
 StandardError=journal+console
 TTYPath=/dev/tty1
-TTYReset=yes
-TTYVHangup=yes
-TTYVTDisallocate=yes
+
+# TTYReset/TTYVHangup/TTYVTDisallocate ficam DESLIGADOS até a fase 11 passar.
+# Eles resetam e desalocam o console ao iniciar a unidade — ou seja, LIMPAM a
+# tela, apagando qualquer coisa impressa antes e logo depois. Durante o
+# diagnóstico isso é exatamente o efeito errado: foi provavelmente o que fez a
+# caixa de início "piscar e sumir" num teste real. São acabamento (console
+# limpo para o usuário final), e acabamento não pode competir com a informação
+# de onde a instalação parou.
+
+# Registra o desfecho DIRETO na tty1, aconteça o que acontecer com a saída
+# padrão. Sem isto, "a unidade não rodou" e "a unidade rodou e morreu" são
+# visualmente idênticos — os dois são uma tela preta — e essa ambiguidade
+# custou vários ciclos de teste em VM.
+ExecStopPost=/bin/sh -c 'echo "" > /dev/tty1; echo "[linuxhub-installer] unidade encerrou: result=$SERVICE_RESULT exit=$EXIT_CODE/$EXIT_STATUS" > /dev/tty1'
+
 Restart=no
 
 [Install]
