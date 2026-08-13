@@ -15,6 +15,18 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// não carrega nenhum parâmetro de kernel de instalação desatendida: o instalador live
     /// descobre tudo sozinho a partir do plano publicado no disco (D13) — não há autoinstall=
     /// nem preseed para injetar na linha de boot.
+    ///
+    /// UM parâmetro de kernel é necessário mesmo assim: <c>fromiso=</c>. O GRUB acha o arquivo
+    /// na NTFS sozinho (<c>search --file</c>) e dá chainload no kernel de dentro do loopback —
+    /// mas isso só entrega o KERNEL. O <c>live-boot</c>, já rodando como processo Linux dentro
+    /// do initramfs, tem sua própria busca pelo sistema live, e por padrão só varre mídia
+    /// óptica/USB — não sabe que existe um arquivo ISO específico numa partição NTFS. Sem
+    /// <c>fromiso=</c>, ele erra com "Unable to find a medium containing a live file system"
+    /// mesmo com o kernel já rodando (bug real, encontrado no primeiro teste em VM via reboot
+    /// completo: o boot direto pela ISO como DVD funcionava, porque aí existe mídia óptica de
+    /// verdade; o boot pela mídia real do produto — GRUB de staging → NTFS → loopback — não).
+    /// Mesmo papel que <c>iso-scan/filename=</c> cumpre para o Casper
+    /// (<see cref="CasperIsoBootEntryBuilder"/>), só que no vocabulário do live-boot.
     /// </summary>
     public static class OwnLiveMediaBootEntryBuilder
     {
@@ -43,7 +55,7 @@ namespace LinuxHub.Features.InstallWizard.Services
     set isofile=""{isoGrubPath}""
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
-    linux (loop)/live/vmlinuz boot=live quiet nosplash
+    linux (loop)/live/vmlinuz boot=live fromiso=$isofile quiet nosplash
     initrd (loop)/live/initrd.img
 }}
 ";

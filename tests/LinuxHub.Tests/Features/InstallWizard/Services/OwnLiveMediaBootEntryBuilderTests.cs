@@ -1,3 +1,4 @@
+using System;
 using LinuxHub.Features.InstallWizard.Services;
 using Xunit;
 
@@ -17,6 +18,29 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             // live descobre tudo a partir do plano publicado no disco (D13), não da linha de kernel.
             Assert.DoesNotContain("autoinstall", cfg);
             Assert.DoesNotContain("automatic-ubiquity", cfg);
+        }
+
+        /// <summary>
+        /// Bug real, encontrado em VM: o GRUB acha o arquivo na NTFS e dá chainload no kernel
+        /// (search --file + loopback), mas isso só entrega o KERNEL — o live-boot, já rodando
+        /// dentro do initramfs, tem sua PRÓPRIA busca pelo sistema live, e por padrão só varre
+        /// mídia óptica/USB. Sem fromiso= dizendo onde está o arquivo, ele morre com "Unable to
+        /// find a medium containing a live file system" mesmo com o kernel certo já carregado.
+        /// Mesmo papel que iso-scan/filename= cumpre para o Casper.
+        /// </summary>
+        [Fact]
+        public void Build_TellsLiveBootWhereTheIsoFileIs()
+        {
+            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
+
+            Assert.Contains("fromiso=$isofile", cfg);
+
+            // fromiso= precisa vir na linha "linux", antes de qualquer coisa depois de boot=live
+            // — é parâmetro de kernel, não de initrd.
+            int linuxLineIndex = cfg.IndexOf("linux (loop)/live/vmlinuz", StringComparison.Ordinal);
+            int fromIsoIndex = cfg.IndexOf("fromiso=", StringComparison.Ordinal);
+            int lineEnd = cfg.IndexOf('\n', linuxLineIndex);
+            Assert.InRange(fromIsoIndex, linuxLineIndex, lineEnd);
         }
 
         /// <summary>
