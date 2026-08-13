@@ -16,17 +16,27 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// descobre tudo sozinho a partir do plano publicado no disco (D13) — não há autoinstall=
     /// nem preseed para injetar na linha de boot.
     ///
-    /// UM parâmetro de kernel é necessário mesmo assim: <c>fromiso=</c>. O GRUB acha o arquivo
+    /// UM parâmetro de kernel é necessário mesmo assim: <c>findiso=</c>. O GRUB acha o arquivo
     /// na NTFS sozinho (<c>search --file</c>) e dá chainload no kernel de dentro do loopback —
     /// mas isso só entrega o KERNEL. O <c>live-boot</c>, já rodando como processo Linux dentro
-    /// do initramfs, tem sua própria busca pelo sistema live, e por padrão só varre mídia
-    /// óptica/USB — não sabe que existe um arquivo ISO específico numa partição NTFS. Sem
-    /// <c>fromiso=</c>, ele erra com "Unable to find a medium containing a live file system"
-    /// mesmo com o kernel já rodando (bug real, encontrado no primeiro teste em VM via reboot
-    /// completo: o boot direto pela ISO como DVD funcionava, porque aí existe mídia óptica de
-    /// verdade; o boot pela mídia real do produto — GRUB de staging → NTFS → loopback — não).
-    /// Mesmo papel que <c>iso-scan/filename=</c> cumpre para o Casper
-    /// (<see cref="CasperIsoBootEntryBuilder"/>), só que no vocabulário do live-boot.
+    /// do initramfs, tem sua própria busca pelo sistema live (função <c>find_livefs</c> em
+    /// <c>/lib/live/boot/9990-misc-helpers.sh</c>), e por padrão só varre mídia óptica/USB —
+    /// não sabe que existe um arquivo ISO específico numa partição NTFS. Sem isso, ele erra com
+    /// "Unable to find a medium containing a live file system" mesmo com o kernel já rodando
+    /// (bug real, encontrado no primeiro teste em VM via reboot completo: o boot direto pela
+    /// ISO como DVD funcionava, porque aí existe mídia óptica de verdade; o boot pela mídia
+    /// real do produto — GRUB de staging → NTFS → loopback — não).
+    ///
+    /// <c>findiso=</c>, não <c>fromiso=</c> — os dois existem no live-boot e fazem coisas
+    /// diferentes (confirmado lendo o código-fonte de <c>live-boot 20230131+deb12u1</c>, a
+    /// versão do bookworm): <c>fromiso=</c> espera o NOME DO DISPOSITIVO LINUX embutido no
+    /// caminho (ex. <c>/dev/sda3/ProgramData/...</c>), que o GRUB não tem como produzir — ele
+    /// não conhece nomenclatura de dispositivo Linux, só a própria (<c>(hd0,gpt3)</c>).
+    /// <c>findiso=</c> é o que varre TODO dispositivo, monta cada um, e testa se o caminho
+    /// RELATIVO existe nele — exatamente a mesma semântica do <c>search --file</c> do GRUB e
+    /// do <c>iso-scan/filename=</c> do Casper (<see cref="CasperIsoBootEntryBuilder"/>). NTFS
+    /// entra nessa varredura via <c>ntfs-3g</c> (userspace), não driver de kernel — por isso
+    /// <c>ntfs-3g</c> precisa estar no initramfs (está — ver <c>live-media/packages.list</c>).
     /// </summary>
     public static class OwnLiveMediaBootEntryBuilder
     {
@@ -55,7 +65,7 @@ namespace LinuxHub.Features.InstallWizard.Services
     set isofile=""{isoGrubPath}""
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
-    linux (loop)/live/vmlinuz boot=live fromiso=$isofile quiet nosplash
+    linux (loop)/live/vmlinuz boot=live findiso=$isofile quiet nosplash
     initrd (loop)/live/initrd.img
 }}
 ";

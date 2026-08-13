@@ -21,26 +21,31 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// Bug real, encontrado em VM: o GRUB acha o arquivo na NTFS e dá chainload no kernel
-        /// (search --file + loopback), mas isso só entrega o KERNEL — o live-boot, já rodando
-        /// dentro do initramfs, tem sua PRÓPRIA busca pelo sistema live, e por padrão só varre
-        /// mídia óptica/USB. Sem fromiso= dizendo onde está o arquivo, ele morre com "Unable to
-        /// find a medium containing a live file system" mesmo com o kernel certo já carregado.
-        /// Mesmo papel que iso-scan/filename= cumpre para o Casper.
+        /// Bug real, encontrado em VM (dois turnos): o GRUB acha o arquivo na NTFS e dá
+        /// chainload no kernel (search --file + loopback), mas isso só entrega o KERNEL — o
+        /// live-boot, já rodando dentro do initramfs, tem sua PRÓPRIA busca pelo sistema live
+        /// (find_livefs em 9990-misc-helpers.sh), e por padrão só varre mídia óptica/USB.
+        ///
+        /// Primeira tentativa usou fromiso=, e ainda falhou — lendo o código-fonte do live-boot
+        /// 20230131+deb12u1 (bookworm): fromiso= espera o NOME DO DISPOSITIVO LINUX embutido no
+        /// caminho (/dev/sda3/...), que o GRUB não tem como produzir. findiso= é o parâmetro
+        /// certo — varre todo dispositivo, monta, testa se o caminho RELATIVO existe, mesma
+        /// semântica do search --file do GRUB e do iso-scan/filename= do Casper.
         /// </summary>
         [Fact]
         public void Build_TellsLiveBootWhereTheIsoFileIs()
         {
             string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
 
-            Assert.Contains("fromiso=$isofile", cfg);
+            Assert.Contains("findiso=$isofile", cfg);
+            Assert.DoesNotContain("fromiso=", cfg);
 
-            // fromiso= precisa vir na linha "linux", antes de qualquer coisa depois de boot=live
+            // findiso= precisa vir na linha "linux", antes de qualquer coisa depois de boot=live
             // — é parâmetro de kernel, não de initrd.
             int linuxLineIndex = cfg.IndexOf("linux (loop)/live/vmlinuz", StringComparison.Ordinal);
-            int fromIsoIndex = cfg.IndexOf("fromiso=", StringComparison.Ordinal);
+            int findIsoIndex = cfg.IndexOf("findiso=", StringComparison.Ordinal);
             int lineEnd = cfg.IndexOf('\n', linuxLineIndex);
-            Assert.InRange(fromIsoIndex, linuxLineIndex, lineEnd);
+            Assert.InRange(findIsoIndex, linuxLineIndex, lineEnd);
         }
 
         /// <summary>
