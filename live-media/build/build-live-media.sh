@@ -20,7 +20,19 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIVE_MEDIA_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-OUT_DIR="$(cd "$(mkdir -p "${1:-${LIVE_MEDIA_DIR}/out}" && echo "${1:-${LIVE_MEDIA_DIR}/out}")" && pwd)"
+OUT_DIR_ARG="${1:-${LIVE_MEDIA_DIR}/out}"
+# O argumento é o DIRETÓRIO de saída; a ISO é criada dentro dele. Apontar para o
+# arquivo .iso é o engano óbvio, e sem esta checagem ele falhava com
+# "mkdir: Already exists" seguido de "cd: null directory" — duas mensagens que
+# não dizem nem o que se esperava nem o que se recebeu.
+if [[ -f "${OUT_DIR_ARG}" ]]; then
+  echo "erro: '${OUT_DIR_ARG}' é um arquivo; este script recebe o DIRETÓRIO de saída." >&2
+  echo "      A ISO é criada como <diretório>/linuxhub-live.iso." >&2
+  echo "      Você provavelmente quis: $(dirname "${OUT_DIR_ARG}")" >&2
+  exit 1
+fi
+mkdir -p "${OUT_DIR_ARG}" || { echo "erro: não foi possível criar o diretório de saída '${OUT_DIR_ARG}'." >&2; exit 1; }
+OUT_DIR="$(cd "${OUT_DIR_ARG}" && pwd)"
 
 # O work dir NÃO usa /tmp por padrão: em WSL (e em qualquer sistema com /tmp em
 # tmpfs) /tmp é RAM, e o rootfs debootstrap + squashfs + árvore de ISO passa
