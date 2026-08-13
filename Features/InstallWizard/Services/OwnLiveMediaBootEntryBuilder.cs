@@ -56,7 +56,17 @@ namespace LinuxHub.Features.InstallWizard.Services
 
             string isoGrubPath = GrubConfigBuilder.ToGrubPath(liveMediaIsoWindowsPath);
 
-            string config = $@"menuentry ""LinuxHub - instalar"" {{
+            // Bug real, encontrado em VM: sem isto, o GRUB define a entrada mas não boota nela
+            // sozinho — fica parado no próprio menu esperando Enter, para sempre, porque o
+            // padrão do GRUB quando "timeout" nunca foi definido é esperar entrada do usuário
+            // indefinidamente. Instalação desatendida não tem ninguém ali pra apertar tecla.
+            // GrubConfigBuilder (usado pelos outros mecanismos) já fazia isto; este builder,
+            // por ser novo, nunca teve. timeout=0 em vez de um valor com contagem: o usuário
+            // não deveria ver o menu do GRUB, só a tela de progresso do próprio app depois.
+            string config = $@"set default=0
+set timeout=0
+
+menuentry ""LinuxHub - instalar"" {{
     insmod part_gpt
     insmod part_msdos
     insmod ntfs

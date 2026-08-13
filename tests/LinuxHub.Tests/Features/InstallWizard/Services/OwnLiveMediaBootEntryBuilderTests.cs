@@ -21,6 +21,28 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         /// <summary>
+        /// Bug real, encontrado em VM: sem "set timeout"/"set default", o GRUB define a
+        /// entrada mas não boota nela sozinho — fica parado no próprio menu esperando Enter
+        /// pra sempre, porque o padrão do GRUB quando timeout nunca foi definido é esperar
+        /// entrada do usuário indefinidamente. Instalação desatendida não tem ninguém ali pra
+        /// apertar tecla. Sintoma visto: "tela preta por minutos" depois do reboot.
+        /// </summary>
+        [Fact]
+        public void Build_AutoBootsWithoutWaitingForAKeypress()
+        {
+            string cfg = OwnLiveMediaBootEntryBuilder.Build(@"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso");
+
+            Assert.Contains("set timeout=0", cfg);
+            Assert.Contains("set default=0", cfg);
+
+            // As duas diretivas precisam vir ANTES do menuentry — depois dele não têm efeito
+            // sobre a seleção automática (são lidas no escopo global do grub.cfg).
+            int menuentryIndex = cfg.IndexOf("menuentry ", StringComparison.Ordinal);
+            Assert.True(cfg.IndexOf("set timeout=0", StringComparison.Ordinal) < menuentryIndex);
+            Assert.True(cfg.IndexOf("set default=0", StringComparison.Ordinal) < menuentryIndex);
+        }
+
+        /// <summary>
         /// Bug real, encontrado em VM (dois turnos): o GRUB acha o arquivo na NTFS e dá
         /// chainload no kernel (search --file + loopback), mas isso só entrega o KERNEL — o
         /// live-boot, já rodando dentro do initramfs, tem sua PRÓPRIA busca pelo sistema live
