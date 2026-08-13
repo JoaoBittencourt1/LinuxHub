@@ -86,9 +86,16 @@ try_candidate() {
 }
 
 mapfile -t BLOCK_DEVICES < <(lsblk -ndo PATH,TYPE | awk '$2=="part"{print $1}')
+step "procurando o plano em ${#BLOCK_DEVICES[@]} partições: ${BLOCK_DEVICES[*]}"
+
+# Uma linha por partição, ANTES de tentar montar: montar NTFS pode demorar ou
+# pendurar, e sem isto um travamento aqui aparece como silêncio absoluto — sem
+# nem dizer qual dispositivo estava sendo tentado.
 for dev in "${BLOCK_DEVICES[@]}"; do
+  step "  tentando $dev"
   try_candidate "$dev"
 done
+step "varredura concluída: ${#VALID_CONTEXTS[@]} contexto(s) válido(s)"
 
 if [[ "${#VALID_CONTEXTS[@]}" -eq 0 ]]; then
   die "nenhum plano válido encontrado em nenhum dispositivo"

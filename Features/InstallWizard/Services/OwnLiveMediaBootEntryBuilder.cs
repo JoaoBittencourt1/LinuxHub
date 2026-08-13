@@ -63,6 +63,13 @@ namespace LinuxHub.Features.InstallWizard.Services
             // GrubConfigBuilder (usado pelos outros mecanismos) já fazia isto; este builder,
             // por ser novo, nunca teve. timeout=0 em vez de um valor com contagem: o usuário
             // não deveria ver o menu do GRUB, só a tela de progresso do próprio app depois.
+            //
+            // `quiet` NÃO entra na linha de kernel enquanto o mecanismo não passar a fase 11.
+            // Ele suprime justamente as mensagens do live-boot e do systemd, que são a única
+            // forma de saber onde um boot travou — e travou várias vezes, sempre aparecendo
+            // como a mesma tela preta indistinguível. `systemd.show_status=true` força o
+            // systemd a listar cada unidade. Silenciar o boot é decisão de acabamento; tomá-la
+            // antes de o caminho estar validado custou vários ciclos de teste em VM.
             string config = $@"set default=0
 set timeout=0
 
@@ -75,7 +82,7 @@ menuentry ""LinuxHub - instalar"" {{
     set isofile=""{isoGrubPath}""
     search --no-floppy --file --set=root $isofile
     loopback loop $isofile
-    linux (loop)/live/vmlinuz boot=live findiso=$isofile quiet nosplash
+    linux (loop)/live/vmlinuz boot=live findiso=$isofile nosplash systemd.show_status=true
     initrd (loop)/live/initrd.img
 }}
 ";

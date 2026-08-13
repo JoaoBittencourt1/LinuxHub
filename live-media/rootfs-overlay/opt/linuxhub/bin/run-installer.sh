@@ -58,6 +58,20 @@ trap on_fatal_error ERR
 # trocava diagnóstico por estética — e foi o que transformou várias falhas
 # distintas na mesma "tela preta" indistinguível.
 start_progress_ui() {
+  # DESLIGADA por padrão até a fase 11 passar. A tela já causou quatro modos de
+  # falha distintos (Tk sem $DISPLAY, deadlock de FIFO, esconder o console ao
+  # trocar de VT, e VT que o VMConnect do Hyper-V não deixa trocar de volta) —
+  # todos em cima de um recurso que o D14 define como acessório, que não pode
+  # "impedir, atrasar nem derrubar a instalação". Enquanto o caminho principal
+  # não estiver provado, ela atrapalha mais do que ajuda: o console é a única
+  # janela que temos para o que está acontecendo.
+  #
+  # Ligar com `linuxhub.gui=1` na linha de kernel quando quisermos exercitá-la.
+  if ! grep -qw 'linuxhub.gui=1' /proc/cmdline 2>/dev/null; then
+    log "tela gráfica desligada (passe linuxhub.gui=1 para habilitar); progresso segue no console"
+    return 0
+  fi
+
   if ! command -v xinit >/dev/null 2>&1; then
     log "aviso: xinit ausente — instalação segue mostrando progresso só no console"
     return 0

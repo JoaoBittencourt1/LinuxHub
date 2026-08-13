@@ -9,8 +9,20 @@ set -euo pipefail
 
 LINUXHUB_LOG_PREFIX="[linuxhub-installer]"
 
+# Escreve em stderr E direto na tty1. O stderr sozinho depende do roteamento de
+# console do systemd, que já se mostrou capaz de engolir tudo — e um instalador
+# sem tela é indistinguível de um instalador travado. A tty1 é a única
+# superfície que provou funcionar em todos os boots até agora.
 log() {
   echo "${LINUXHUB_LOG_PREFIX} $*" >&2
+  echo "${LINUXHUB_LOG_PREFIX} $*" > /dev/tty1 2>/dev/null || true
+}
+
+# Marca de passo, para o console mostrar o AVANÇO e não só o resultado. Sem
+# isto, um travamento no meio de uma fase longa (montar NTFS, conferir hash de
+# 6 GB) é visualmente idêntico a um travamento no início dela.
+step() {
+  log "==> $*"
 }
 
 die() {
