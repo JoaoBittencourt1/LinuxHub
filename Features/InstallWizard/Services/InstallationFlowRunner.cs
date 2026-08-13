@@ -113,6 +113,14 @@ namespace LinuxHub.Features.InstallWizard.Services
                 ? 2 + (request.IsReplaceMode ? 1 : 0)
                 : 1 + (request.IsReplaceMode ? 1 : 0) + (request.IsAutoinstallActive ? 1 : 0);
 
+            // Encolher e criar as partições são UM passo do registro, não dois: encolher sem
+            // criar deixa o disco num estado intermediário que só este fluxo sabe interpretar.
+            // Manter a criação fora do RunStep fazia uma falha aqui não ser registrada como
+            // falha — o estado ficava eternamente em `running`, o probe de transação
+            // interrompida bloqueava toda instalação seguinte, e o encolhimento já aplicado
+            // (que subtrai do tamanho ATUAL a cada execução) seria repetido na próxima
+            // tentativa, comendo o volume do Windows a cada ciclo. Bug real, encontrado ao
+            // falhar a cópia da mídia live.
             RunStep(ledger, InstallationStepIds.WindowsDiskPrepared, progress, loc, () =>
             {
                 if (request.IsDualBootMode && request.DualBootPartitionIndex is { } partitionIndex)
@@ -128,16 +136,16 @@ namespace LinuxHub.Features.InstallWizard.Services
                     _diskPartitioning.EnsureUnallocatedSpace(
                         request.TargetDiskIndex, overheadBytes, newPartitions);
                 }
-            });
 
-            // own-linux-installer: no caminho próprio o app prepara as duas partições que o
-            // boot e a instalação precisam, nesta ordem — a da mídia live primeiro, com tamanho
-            // fixo, e a raiz depois, ocupando o que sobrar.
-            //
-            // Nos demais mecanismos este bloco não roda: quem cria a raiz é o instalador nativo
-            // da distro, a partir do espaço livre que o encolhimento acabou de abrir.
-            if (request.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller)
-            {
+                // own-linux-installer: no caminho próprio o app prepara as duas partições que o
+                // boot e a instalação precisam, nesta ordem — a da mídia live primeiro, com
+                // tamanho fixo, e a raiz depois, ocupando o que sobrar.
+                //
+                // Nos demais mecanismos isto não roda: quem cria a raiz é o instalador nativo
+                // da distro, a partir do espaço livre que o encolhimento acabou de abrir.
+                if (request.ActiveMechanism != UnattendedInstallMechanism.OwnLiveInstaller)
+                    return;
+
                 // Os arquivos da mídia live vão para uma partição FAT32 e o GRUB carrega o
                 // kernel direto dela. Deixar a ISO como arquivo e mandar o GRUB montá-la em
                 // laço obrigava o live-boot a montar NTFS por FUSE dentro do initramfs, antes
@@ -161,7 +169,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                 LinuxRootPartition root = _linuxRootPartition.Create(request.TargetDiskIndex);
                 _planPublisher.UpdateStagingIdentity(
                     root.PartitionNumber, root.OffsetBytes, root.PartitionUuid);
-            }
+            });
 
             StagingPartition? staging = null;
             string isoPathForGrub = request.IsoPath;
