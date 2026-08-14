@@ -77,21 +77,38 @@ boot_part_path() { echo "${TARGET_DISK}${BOOT_PART_NUMBER}"; }
 
 # Windows e boot só têm o número no plano (não carregam GUID), e número não é
 # identificador: o Windows renumera partições por posição no disco. Sem conferir
-# a geometria, "existe uma partição com este número e ela é ntfs" seria aceito
-# como prova de que é A partição do plano — e não é. Offset e tamanho vêm do
-# plano e são fatos físicos: se batem, é ela.
-assert_matches_plan_geometry() {
-  local part="$1" name="$2" expected_offset="$3" expected_size="$4"
-  local sys_start actual_offset actual_size
+# nada além do número, "existe uma partição com este número e ela é ntfs" seria
+# aceito como prova de que é A partição do plano — e não é.
+#
+# O offset é a âncora certa: o encolhimento corta pelo FIM da partição, então o
+# início não se move. É fato físico e sobrevive a tudo que acontece entre a
+# publicação do plano e este momento.
+assert_plan_offset() {
+  local part="$1" name="$2" expected_offset="$3"
+  local sys_start actual_offset
   sys_start="$(cat "/sys/class/block/$(basename "$part")/start" 2>/dev/null || true)"
-  if [[ -n "$sys_start" ]]; then
-    actual_offset=$(( sys_start * 512 ))
-    [[ "$actual_offset" -eq "$expected_offset" ]] || \
-      die "offset da partição ${name} divergente: plano diz ${expected_offset}, ${part} está em ${actual_offset} (4.2)"
-  fi
+  [[ -n "$sys_start" ]] || return 0
+  actual_offset=$(( sys_start * 512 ))
+  [[ "$actual_offset" -eq "$expected_offset" ]] || \
+    die "offset da partição ${name} divergente: plano diz ${expected_offset}, ${part} está em ${actual_offset} (4.2)"
+}
+
+# O TAMANHO do Windows não pode ser comparado por igualdade: o plano é publicado
+# ANTES de qualquer mudança no disco, então ele guarda a geometria ORIGINAL — e
+# entre a publicação e este ponto o lado Windows encolheu exatamente essa
+# partição para abrir espaço. Exigir igualdade aqui era comparar o antes com o
+# depois e chamar a diferença de erro; a asserção não podia passar em instalação
+# nenhuma.
+#
+# O que continua sendo verdade e vale afirmar: a partição só pode ter encolhido.
+# Se ela está MAIOR do que o plano registrou, ou não é a partição do plano, ou
+# alguém mexeu no disco entre as duas metades da instalação.
+assert_windows_not_larger_than_plan() {
+  local part="$1" original_size="$2" actual_size
   actual_size="$(blockdev --getsize64 "$part")"
-  [[ "$actual_size" -eq "$expected_size" ]] || \
-    die "tamanho da partição ${name} divergente: plano diz ${expected_size}, ${part} tem ${actual_size} (4.2)"
+  [[ "$actual_size" -gt 0 ]] || die "partição do Windows com tamanho zero: $part (4.2)"
+  [[ "$actual_size" -le "$original_size" ]] || \
+    die "partição do Windows maior que o plano registrou: plano diz ${original_size} (antes do encolhimento), ${part} tem ${actual_size} (4.2)"
 }
 
 # --- 4.3: partição do Windows no filesystem esperado, ou causa é criptografia ---
@@ -105,17 +122,20 @@ if [[ "$WINDOWS_FSTYPE" != "ntfs" ]]; then
   die "partição do Windows não está no filesystem esperado (ntfs); encontrado: ${WINDOWS_FSTYPE:-desconhecido} (4.3)"
 fi
 
-assert_matches_plan_geometry "$WINDOWS_PART" "do Windows" \
-  "$(json_get "$PLAN_PATH" '.disk.windows.offsetBytes')" \
-  "$(json_get "$PLAN_PATH" '.disk.windows.sizeBytes')"
-step "partição do Windows confere ($WINDOWS_PART, ntfs, geometria bate com o plano)"
+assert_plan_offset "$WINDOWS_PART" "do Windows" "$(json_get "$PLAN_PATH" '.disk.windows.offsetBytes')"
+assert_windows_not_larger_than_plan "$WINDOWS_PART" "$(json_get "$PLAN_PATH" '.disk.windows.sizeBytes')"
+step "partição do Windows confere ($WINDOWS_PART, ntfs, offset bate com o plano)"
 
 # --- boot do Windows presente no disco alvo (parte de 4.2) ---
 BOOT_PART="$(boot_part_path)"
 [[ -b "$BOOT_PART" ]] || die "partição de boot do Windows não existe no disco alvo: $BOOT_PART (4.2)"
-assert_matches_plan_geometry "$BOOT_PART" "de boot do Windows" \
-  "$(json_get "$PLAN_PATH" '.disk.boot.offsetBytes')" \
-  "$(json_get "$PLAN_PATH" '.disk.boot.sizeBytes')"
+# A ESP não é tocada por nada nesta instalação: aqui o tamanho vale por
+# igualdade, e uma divergência significaria que a tabela mudou por fora.
+assert_plan_offset "$BOOT_PART" "de boot do Windows" "$(json_get "$PLAN_PATH" '.disk.boot.offsetBytes')"
+BOOT_EXPECTED_SIZE="$(json_get "$PLAN_PATH" '.disk.boot.sizeBytes')"
+BOOT_ACTUAL_SIZE="$(blockdev --getsize64 "$BOOT_PART")"
+[[ "$BOOT_ACTUAL_SIZE" -eq "$BOOT_EXPECTED_SIZE" ]] || \
+  die "tamanho da partição de boot divergente: plano diz ${BOOT_EXPECTED_SIZE}, ${BOOT_PART} tem ${BOOT_ACTUAL_SIZE} (4.2)"
 step "partição de boot do Windows confere ($BOOT_PART, geometria bate com o plano)"
 
 # --- 4.4: hash do artefato de novo, e tamanho estável antes de aceitar ---
