@@ -74,9 +74,26 @@ if ($estilo -ne 'GPT') {{
 $partition = New-Partition -DiskNumber {diskIndex} -UseMaximumSize -GptType '{LinuxFilesystemGptType}'
 if (-not $partition) {{ throw ""O Windows não criou a partição raiz do Linux no disco {diskIndex}."" }}
 
-$criada = Get-Partition -DiskNumber {diskIndex} -PartitionNumber $partition.PartitionNumber
-$guid = $criada.Guid
+$guid = $partition.Guid
 if (-not $guid) {{ throw ""O Windows não informou o GUID da partição raiz criada no disco {diskIndex}. Sem ele a partição não pode ser identificada com segurança depois do reboot."" }}
+
+# O número devolvido pela criação NÃO é o número final. O Windows numera as
+# partições pela posição no disco, então inserir uma partição fisicamente antes
+# de outra já existente renumera a outra — e o número que acabou de sair da
+# criação pode já estar apontando para a partição errada.
+#
+# Bug real, com o alvo errado sendo o pior possível: o plano guardou 6 para a
+# raiz, mas a raiz é a partição 5 — a criação devolveu o índice seguinte, não o
+# número assentado. A partição 6 é a de RECUPERAÇÃO do Windows. Só a conferência
+# de offset do lado live impediu que ela fosse formatada.
+#
+# O GUID é gravado na tabela GPT e não muda. Reler por ele dá o número que o
+# disco realmente tem agora — junto com offset e tamanho já assentados.
+$correspondentes = @(Get-Partition -DiskNumber {diskIndex} | Where-Object {{ $_.Guid -eq $guid }})
+if ($correspondentes.Count -ne 1) {{
+    throw ""Esperava exatamente 1 partição com o GUID $guid no disco {diskIndex}, encontrei $($correspondentes.Count). Sem uma correspondência única a partição não pode ser identificada com segurança.""
+}}
+$criada = $correspondentes[0]
 
 Write-Output ""{SuccessMarker} $($criada.PartitionNumber) $guid $($criada.Offset) $($criada.Size)""";
 

@@ -12,7 +12,7 @@ LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${LIB_DIR}/common.sh"
 
 require_root
-require_cmd lsblk blkid findmnt sha256sum jq
+require_cmd lsblk blkid findmnt blockdev sha256sum jq
 
 PLAN_PATH="${1:?uso: revalidate.sh <plan.json>}"
 [[ -f "$PLAN_PATH" ]] || die "plano não encontrado: $PLAN_PATH"
@@ -75,6 +75,25 @@ step "geometria confere (${ACTUAL_SIZE_BYTES} bytes)"
 windows_part_path() { echo "${TARGET_DISK}${WINDOWS_PART_NUMBER}"; }
 boot_part_path() { echo "${TARGET_DISK}${BOOT_PART_NUMBER}"; }
 
+# Windows e boot só têm o número no plano (não carregam GUID), e número não é
+# identificador: o Windows renumera partições por posição no disco. Sem conferir
+# a geometria, "existe uma partição com este número e ela é ntfs" seria aceito
+# como prova de que é A partição do plano — e não é. Offset e tamanho vêm do
+# plano e são fatos físicos: se batem, é ela.
+assert_matches_plan_geometry() {
+  local part="$1" name="$2" expected_offset="$3" expected_size="$4"
+  local sys_start actual_offset actual_size
+  sys_start="$(cat "/sys/class/block/$(basename "$part")/start" 2>/dev/null || true)"
+  if [[ -n "$sys_start" ]]; then
+    actual_offset=$(( sys_start * 512 ))
+    [[ "$actual_offset" -eq "$expected_offset" ]] || \
+      die "offset da partição ${name} divergente: plano diz ${expected_offset}, ${part} está em ${actual_offset} (4.2)"
+  fi
+  actual_size="$(blockdev --getsize64 "$part")"
+  [[ "$actual_size" -eq "$expected_size" ]] || \
+    die "tamanho da partição ${name} divergente: plano diz ${expected_size}, ${part} tem ${actual_size} (4.2)"
+}
+
 # --- 4.3: partição do Windows no filesystem esperado, ou causa é criptografia ---
 WINDOWS_PART="$(windows_part_path)"
 [[ -b "$WINDOWS_PART" ]] || die "partição do Windows não existe no disco alvo: $WINDOWS_PART (4.2)"
@@ -86,12 +105,18 @@ if [[ "$WINDOWS_FSTYPE" != "ntfs" ]]; then
   die "partição do Windows não está no filesystem esperado (ntfs); encontrado: ${WINDOWS_FSTYPE:-desconhecido} (4.3)"
 fi
 
-step "partição do Windows confere ($WINDOWS_PART, ntfs)"
+assert_matches_plan_geometry "$WINDOWS_PART" "do Windows" \
+  "$(json_get "$PLAN_PATH" '.disk.windows.offsetBytes')" \
+  "$(json_get "$PLAN_PATH" '.disk.windows.sizeBytes')"
+step "partição do Windows confere ($WINDOWS_PART, ntfs, geometria bate com o plano)"
 
 # --- boot do Windows presente no disco alvo (parte de 4.2) ---
 BOOT_PART="$(boot_part_path)"
 [[ -b "$BOOT_PART" ]] || die "partição de boot do Windows não existe no disco alvo: $BOOT_PART (4.2)"
-step "partição de boot do Windows presente ($BOOT_PART)"
+assert_matches_plan_geometry "$BOOT_PART" "de boot do Windows" \
+  "$(json_get "$PLAN_PATH" '.disk.boot.offsetBytes')" \
+  "$(json_get "$PLAN_PATH" '.disk.boot.sizeBytes')"
+step "partição de boot do Windows confere ($BOOT_PART, geometria bate com o plano)"
 
 # --- 4.4: hash do artefato de novo, e tamanho estável antes de aceitar ---
 ARTIFACT_WINDOWS_PATH="$(json_get "$PLAN_PATH" '.distribution.isoWindowsPath')"
