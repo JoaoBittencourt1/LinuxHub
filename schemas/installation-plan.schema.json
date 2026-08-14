@@ -35,11 +35,6 @@
     "installMode": {
       "enum": ["replace", "dualboot"]
     },
-    "unattendedMechanism": {
-      "type": "string",
-      "enum": ["None", "Subiquity", "UbiquityPreseed", "Archinstall", "OwnLiveInstaller"],
-      "description": "own-linux-installer: qual mecanismo desatendido esta transação usa. O validador o consome para decidir se disk.installer precisa (instalador próprio) ou não pode (instalador nativo da distro) carregar identidade em dual-boot."
-    },
     "distribution": {
       "$ref": "#/$defs/distribution"
     },
@@ -106,10 +101,6 @@
         },
         "isoSizeBytes": {
           "$ref": "#/$defs/positiveInteger"
-        },
-        "expectedIdentity": {
-          "type": "string",
-          "description": "own-linux-installer task 2.6 (D6): ID= esperado em /etc/os-release dentro do squashfs. Só preenchido para o mecanismo OwnLiveInstaller."
         }
       }
     },
@@ -237,7 +228,6 @@
         "number",
         "offsetBytes",
         "partitionUuid",
-        "sizeBytes",
         "finalSizeGiB",
         "stagingSizeBytes"
       ],
@@ -260,13 +250,6 @@
             { "type": "string", "minLength": 1 }
           ]
         },
-        "sizeBytes": {
-          "oneOf": [
-            { "type": "null" },
-            { "$ref": "#/$defs/positiveInteger" }
-          ],
-          "description": "own-linux-installer: tamanho OBSERVADO da partição raiz, lido do Windows depois de criá-la com -UseMaximumSize. Não é derivável de finalSizeGiB. Nulo até a partição existir; obrigatório junto com o resto da identidade observada, porque é o que o instalador live confere contra o dispositivo antes do mkfs."
-        },
         "finalSizeGiB": {
           "type": "integer",
           "minimum": 0
@@ -274,10 +257,6 @@
         "stagingSizeBytes": {
           "type": "integer",
           "minimum": 0
-        },
-        "stagingEspDirectory": {
-          "type": "string",
-          "description": "own-linux-installer task 2.6 (D5): caminho relativo dentro da ESP do espaço temporário de boot para a mídia live própria. Ausente nos caminhos preservados."
         }
       }
     },

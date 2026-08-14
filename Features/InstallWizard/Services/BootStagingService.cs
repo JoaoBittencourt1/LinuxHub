@@ -54,26 +54,6 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "ou apagada depois de selecionada no wizard.");
             }
 
-            // Task 2.2/2.4 (design.md D16): só este par desvia para a mídia live própria.
-            // Qualquer outro par — os dois caminhos preservados, dual-boot manual e modo
-            // substituir — segue exatamente o código abaixo, inalterado (task 2.3).
-            bool usesOwnLiveMedia =
-                request.Mode == Common.Models.InstallMode.DualBoot &&
-                request.Mechanism == Common.Models.UnattendedInstallMechanism.OwnLiveInstaller;
-
-            if (usesOwnLiveMedia)
-            {
-                if (!request.IsUefi)
-                {
-                    throw new InvalidOperationException(
-                        "O instalador próprio (mídia live) é UEFI apenas (design.md D16). " +
-                        "Em firmware BIOS legado, use o dual-boot manual ou o modo substituir.");
-                }
-
-                InstallUefiOwnLiveMedia(request);
-                return;
-            }
-
             IIsoBootEntryBuilder isoEntryBuilder = _isoBootEntryBuilders.Resolve(request.LiveSession);
 
             string grubCfg = GrubConfigBuilder.BuildConfig(
@@ -137,43 +117,6 @@ namespace LinuxHub.Features.InstallWizard.Services
                 efiPathOnVolume: efiPathOnVolume);
 
             string output = ElevatedPowerShellRunner.Run(script, "instalação do GRUB2 na EFI System Partition e registro da entrada BCD");
-            BootConfigurationService.ExtractGuidOrThrow(output);
-        }
-
-        /// <summary>
-        /// Task 2.2: mesmo mecanismo de staging de <see cref="InstallUefi"/> (ESP de sistema +
-        /// BCD), mas a entrada de boot carrega o kernel da partição FAT32 da mídia live
-        /// (<see cref="LiveMediaStagingService"/>), não a ISO da distro. A distro segue sendo
-        /// lida do <see cref="BootStagingRequest.IsoPath"/> original, mas só como dado — quem a
-        /// monta e extrai é o instalador live (fase 6), nunca esta função.
-        ///
-        /// A partição da mídia live já foi criada e preenchida antes deste ponto, no fluxo; o
-        /// GRUB a localiza por <c>search --file</c>, então nenhum caminho precisa ser
-        /// interpolado aqui.
-        /// </summary>
-        private void InstallUefiOwnLiveMedia(BootStagingRequest request)
-        {
-            EfiSystemPartitionLocation? esp = _espLocator.FindSystemEfiSystemPartition();
-            if (esp is null)
-            {
-                throw new InvalidOperationException(
-                    "Não foi possível localizar a EFI System Partition de onde esta máquina bootou, " +
-                    "necessária para registrar a entrada de boot da instalação.");
-            }
-
-            string grubCfg = OwnLiveMediaBootEntryBuilder.Build();
-
-            char driveLetter = PickFreeDriveLetter();
-            string grubEfiSource = _grubAssets.GetUefiBootloaderPath();
-            const string efiPathOnVolume = @"\EFI\linuxhub\grubx64.efi";
-
-            string script = BuildEspStagingAndBcdScript(
-                esp.DiskIndex, esp.PartitionIndex, driveLetter, grubEfiSource, grubCfg,
-                description: $"{request.DistroName} ({BootConfigurationService.StagingEntryMarker})",
-                efiPathOnVolume: efiPathOnVolume);
-
-            string output = ElevatedPowerShellRunner.Run(
-                script, "instalação do GRUB2 na EFI System Partition e registro da entrada BCD (mídia live própria)");
             BootConfigurationService.ExtractGuidOrThrow(output);
         }
 

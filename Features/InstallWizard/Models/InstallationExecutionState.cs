@@ -97,34 +97,10 @@ namespace LinuxHub.Features.InstallWizard.Models
         public const string WindowsInstallerConfigWritten = "windows.installer-config-written";
         public const string WindowsTemporaryBootPrepared = "windows.temporary-boot-prepared";
 
-        // own-linux-installer task 9.1: os quatro reservados pelo D13.2 do change anterior
-        // agora Armed=true (InstallationStepCatalog).
+        // Reserved for the own-installer change (D13.2). Declared now, Armed=false.
         public const string LiveIsoMounted = "live.iso-mounted";
         public const string LiveDistributionExtracted = "live.distribution-extracted";
         public const string TargetSystemConfigured = "target.system-configured";
-
-        /// <summary>
-        /// own-linux-installer: o que falta ao sistema extraído para ele arrancar — kernel e
-        /// cadeia de boot assinada — é INSTALADO a partir do repositório apt que a própria ISO
-        /// carrega, antes de qualquer coisa ser copiada para a ESP.
-        ///
-        /// Existe porque extrair o filesystem de uma ISO moderna não produz um sistema
-        /// arrancável. A ISO de desktop do Ubuntu é <c>fsimage-layered</c> desde a 23.10, e a
-        /// camada que o <c>install-sources.yaml</c> declara como padrão não tem kernel, nem
-        /// módulos, nem bootloader: eles vêm do <c>pool/</c>, que é o que o instalador da
-        /// própria distro faz.
-        ///
-        /// É um passo separado porque é uma unidade de trabalho que falha sozinha e significa
-        /// outra coisa: sem separar, "não consegui instalar o kernel" e "não consegui escrever
-        /// na ESP" apareceriam como o mesmo passo incompleto no registro.
-        /// </summary>
-        public const string TargetBootPackagesInstalled = "target.boot-packages-installed";
-
         public const string TargetBootloaderInstalled = "target.bootloader-installed";
-
-        // own-linux-installer task 9.2 (design.md D12): sem este passo, "instalado" significa
-        // só "os comandos rodaram". Required, não compensável — verifica o resultado antes de
-        // a instalação ser declarada concluída.
-        public const string TargetInstallationVerified = "target.installation-verified";
     }
 }

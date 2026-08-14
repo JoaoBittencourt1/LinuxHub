@@ -129,68 +129,6 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             }
         }
 
-        /// <summary>
-        /// own-linux-installer: o provider real procura a ISO da mídia live em
-        /// <c>%ProgramData%</c>. Nenhum teste pode depender de um arquivo de 384 MB existir na
-        /// máquina — o resultado dependeria de a máquina ter rodado o build da mídia.
-        /// </summary>
-        private sealed class FakeLiveMediaProvider : ILiveMediaProvider
-        {
-            public string GetIsoPath() => @"C:\ProgramData\LinuxHub\LiveMedia\linuxhub-live.iso";
-        }
-
-        /// <summary>
-        /// own-linux-installer: o registro precisa resolver o mecanismo que o catálogo declara
-        /// para o Ubuntu. Registrar só um mecanismo acoplava a suíte à declaração do catálogo:
-        /// trocar a declaração fazia 11 testes falharem por "mecanismo não registrado", que não
-        /// é o que nenhum deles se propõe a verificar.
-        /// </summary>
-        private sealed class FakeOwnLiveInstallerPreparer : IUnattendedInstallPreparer
-        {
-            public UnattendedInstallMechanism Mechanism => UnattendedInstallMechanism.OwnLiveInstaller;
-
-            public UnattendedPreparationResult Prepare(
-                InstallerConfig config, int diskIndex, StagingPartition? staging) =>
-                new(SeedPartitionNumber: 0,
-                    BootParameters: new UnattendedBootParameters(
-                        IsUnattended: true, KernelParameters: string.Empty, ExtraInitrdGrubPath: null));
-        }
-
-        /// <summary>Como o de raiz, o service real ELEVA (cria partição, formata, monta a ISO).
-        /// Nenhum teste pode tocar o concreto.</summary>
-        private sealed class FakeLiveMediaStagingService : ILiveMediaStagingService
-        {
-            public int CreateCalls { get; private set; }
-            public string? CopiedFrom { get; private set; }
-
-            public long RequiredBytesFor(long liveMediaIsoSizeBytes) =>
-                liveMediaIsoSizeBytes + 512L * 1024 * 1024;
-
-            public LiveMediaStagingPartition Create(int diskIndex, long liveMediaIsoSizeBytes)
-            {
-                CreateCalls++;
-                return new(diskIndex, 5, "BBBBBBBB-CCCC-DDDD-EEEE-FFFFFFFFFFFF",
-                    OffsetBytes: 290L * 1024 * 1024 * 1024, SizeBytes: 1024L * 1024 * 1024);
-            }
-
-            public void CopyLiveFiles(LiveMediaStagingPartition partition, string liveMediaIsoWindowsPath) =>
-                CopiedFrom = liveMediaIsoWindowsPath;
-        }
-
-        /// <summary>own-linux-installer: o service real ELEVA para criar partição no disco —
-        /// nenhum teste pode tocar o concreto.</summary>
-        private sealed class FakeLinuxRootPartitionService : ILinuxRootPartitionService
-        {
-            public int CreateCalls { get; private set; }
-
-            public LinuxRootPartition Create(int diskIndex)
-            {
-                CreateCalls++;
-                return new(diskIndex, 6, "CCCCCCCC-DDDD-EEEE-FFFF-000000000000",
-                    OffsetBytes: 300L * 1024 * 1024 * 1024, SizeBytes: 50L * 1024 * 1024 * 1024);
-            }
-        }
-
         private sealed class FakeStagingPartitionService : IStagingPartitionService
         {
             public int CreateCalls { get; private set; }
@@ -322,18 +260,13 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             public InstallationPlan ReadValidated(string path) =>
                 Current ?? throw new InvalidOperationException("No plan.");
 
-            public void UpdateStagingIdentity(
-                int number,
-                long offsetBytes,
-                string partitionUuid,
-                long? observedSizeBytes = null)
+            public void UpdateStagingIdentity(int number, long offsetBytes, string partitionUuid)
             {
                 if (Current is null)
                     throw new InvalidOperationException("No plan.");
                 Current.Disk.Installer.Number = number;
                 Current.Disk.Installer.OffsetBytes = offsetBytes;
                 Current.Disk.Installer.PartitionUuid = partitionUuid;
-                Current.Disk.Installer.SizeBytes = observedSizeBytes;
                 InstallationPlanValidator.Validate(Current);
                 StagingIdentityUpdates++;
             }
@@ -413,11 +346,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 isoInfo,
                 new InstallerConfigBuilder(new FakeEspLocatorService()),
                 configWriter ?? new FakeInstallerConfigWriter(),
-                new UnattendedInstallPreparerRegistry(
-                    [new FakeUnattendedInstallPreparer(), new FakeOwnLiveInstallerPreparer()]),
-                bootStaging,
-                new FakeLinuxRootPartitionService(),
-                new FakeLiveMediaStagingService());
+                new UnattendedInstallPreparerRegistry([new FakeUnattendedInstallPreparer()]),
+                bootStaging);
 
             var vm = new InstallWizardViewModel(
                 iso,
@@ -429,8 +359,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
                 isoInfo,
                 flowRunner,
                 interruptedTransactionProbe: interruptedProbe ?? new FakeInterruptedTransactionProbe(),
-                compatibilityFacts: compatibilityFacts ?? FakeCompatibilityFactsProbe.Compatible(),
-                liveMediaProvider: new FakeLiveMediaProvider());
+                compatibilityFacts: compatibilityFacts ?? FakeCompatibilityFactsProbe.Compatible());
 
             // ResolvedIsoPath só é preenchido pelo download ou pela seleção manual; o wizard
             // recusa instalar sem ele, então o teste passa pelo caminho de download falso.

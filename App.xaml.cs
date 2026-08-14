@@ -63,7 +63,6 @@ namespace LinuxHub
                     new UbiquityInstallPreparer(
                         cloudInitSeedWriter, diskLayoutProvider, unattendedInitrdWriter),
                     new ArchinstallInstallPreparer(diskLayoutProvider, archinstallScriptWriter),
-                    new OwnLiveInstallerPreparer(),
                 ]);
 
             IGrubAssetProvider grubAssetProvider = new GrubAssetProvider();
@@ -94,9 +93,7 @@ namespace LinuxHub
                 installerConfigBuilder,
                 installerConfigWriter,
                 unattendedPreparerRegistry,
-                bootStagingService,
-                new LinuxRootPartitionService(installationPlanMutationGuard),
-                new LiveMediaStagingService(installationPlanMutationGuard));
+                bootStagingService);
 
             // Phase 5: recovery/compensation exist but stay unreachable until phase 8 (§7.1).
             // Not injected into InstallationFlowRunner — task 5.9.
@@ -121,8 +118,7 @@ namespace LinuxHub
                 bootSecurityService,
                 stagingPartitionService,
                 isoFileInfoProvider,
-                installationFlowRunner,
-                liveMediaProvider: new LiveMediaProvider());
+                installationFlowRunner);
             installWizardViewModel.CatalogOutcome = catalogOutcome;
 
             IUpdateCheckService updateCheckService = new GitHubUpdateCheckService();

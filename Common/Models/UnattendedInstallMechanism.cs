@@ -37,18 +37,6 @@ namespace LinuxHub.Common.Models
         /// PARTUUIDs e emite o JSON já dentro da sessão live (design.md, decisão 9).
         /// </summary>
         Archinstall,
-
-        /// <summary>
-        /// Instalador próprio (openspec/changes/own-linux-installer, decisões D0/D1): extrai o
-        /// filesystem que a ISO live já carrega para a partição alvo, num ambiente de execução
-        /// próprio (mídia live do LinuxHub), em vez de delegar ao instalador nativo da distro.
-        /// Bash fixo e versionado, lendo o plano publicado — não gerado por instalação.
-        ///
-        /// Task 2.1: só o valor existe aqui. Nenhuma distro o declara no catálogo até a fase 11
-        /// (validação em VM) passar — §7.1, mesmo padrão de <c>InstallationSafetySwitches</c>.
-        /// Escopo UEFI apenas (D16): <see cref="UnattendedInstallMechanismExtensions.RequiresUefi"/>.
-        /// </summary>
-        OwnLiveInstaller,
     }
 
     public static class UnattendedInstallMechanismExtensions
@@ -61,13 +49,5 @@ namespace LinuxHub.Common.Models
         /// </summary>
         public static bool SupportsDesktopEnvironmentChoice(this UnattendedInstallMechanism mechanism) =>
             mechanism == UnattendedInstallMechanism.Archinstall;
-
-        /// <summary>
-        /// Task 2.4 (design.md D16): a mídia live própria é UEFI apenas. Nenhuma tarefa de BIOS
-        /// legado para este mecanismo — dual-boot manual e modo substituir continuam cobrindo
-        /// BIOS legado pelos caminhos preservados.
-        /// </summary>
-        public static bool RequiresUefi(this UnattendedInstallMechanism mechanism) =>
-            mechanism == UnattendedInstallMechanism.OwnLiveInstaller;
     }
 }

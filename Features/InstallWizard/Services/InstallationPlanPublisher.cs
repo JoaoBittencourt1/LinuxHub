@@ -82,17 +82,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             return plan;
         }
 
-        /// <param name="observedSizeBytes">
-        /// Tamanho real da partição recém-criada, lido do Windows. Obrigatório no caminho do
-        /// instalador próprio, onde a partição nasce com <c>-UseMaximumSize</c> e o tamanho só
-        /// existe depois da criação; nulo no modo substituir, cuja partição de staging tem
-        /// tamanho de política, já registrado em <c>stagingSizeBytes</c> antes de publicar.
-        /// </param>
-        public void UpdateStagingIdentity(
-            int number,
-            long offsetBytes,
-            string partitionUuid,
-            long? observedSizeBytes = null)
+        public void UpdateStagingIdentity(int number, long offsetBytes, string partitionUuid)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(partitionUuid);
 
@@ -113,7 +103,6 @@ namespace LinuxHub.Features.InstallWizard.Services
                 Current.Disk.Installer.Number = number;
                 Current.Disk.Installer.OffsetBytes = offsetBytes;
                 Current.Disk.Installer.PartitionUuid = partitionUuid;
-                Current.Disk.Installer.SizeBytes = observedSizeBytes;
 
                 InstallationPlanValidator.Validate(Current);
                 AtomicJsonFile.Write(
@@ -154,7 +143,6 @@ namespace LinuxHub.Features.InstallWizard.Services
         public static bool InstallerIdentityAlreadySet(this InstallationPlan plan) =>
             plan.Disk.Installer.Number.HasValue
             || plan.Disk.Installer.OffsetBytes.HasValue
-            || plan.Disk.Installer.PartitionUuid is not null
-            || plan.Disk.Installer.SizeBytes.HasValue;
+            || plan.Disk.Installer.PartitionUuid is not null;
     }
 }

@@ -26,21 +26,6 @@ namespace LinuxHub.Features.InstallWizard.Models
         [JsonPropertyName("installMode")]
         public string InstallMode { get; set; } = string.Empty;
 
-        /// <summary>
-        /// own-linux-installer: qual mecanismo desatendido esta transação usa, como string
-        /// (o nome do valor de <see cref="LinuxHub.Common.Models.UnattendedInstallMechanism"/>).
-        ///
-        /// Existe porque o validador precisa distinguir dois planos de dual-boot que são
-        /// legítimos e mutuamente exclusivos: no caminho do instalador nativo, quem cria a
-        /// partição raiz é o instalador da distro, então <c>disk.installer</c> NÃO pode ter
-        /// identidade; no caminho do instalador próprio, o app cria a partição antes do reboot
-        /// e a identidade é obrigatória — é ela que o instalador live lê para saber onde
-        /// escrever (memória do projeto: "ler, nunca deduzir o disco").
-        /// </summary>
-        [JsonPropertyName("unattendedMechanism")]
-        public string UnattendedMechanism { get; set; } =
-            nameof(LinuxHub.Common.Models.UnattendedInstallMechanism.None);
-
         [JsonPropertyName("distribution")]
         public InstallationPlanDistribution Distribution { get; set; } = new();
 
@@ -103,18 +88,6 @@ namespace LinuxHub.Features.InstallWizard.Models
 
         [JsonPropertyName("isoSizeBytes")]
         public long IsoSizeBytes { get; set; }
-
-        /// <summary>
-        /// own-linux-installer task 2.6 (design.md D6): identidade de distribuição esperada
-        /// DENTRO do artefato — o valor de <c>ID=</c> em <c>/etc/os-release</c> no squashfs. Só
-        /// preenchido para o mecanismo <see cref="LinuxHub.Common.Models.UnattendedInstallMechanism.OwnLiveInstaller"/>;
-        /// os caminhos preservados não extraem nada e não precisam desta verificação. O nome da
-        /// distro nunca seleciona caminho de código (§2) — este campo só alimenta uma
-        /// comparação de igualdade do lado live, nunca um <c>if</c> por identidade.
-        /// </summary>
-        [JsonPropertyName("expectedIdentity")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public string ExpectedIdentity { get; set; } = string.Empty;
     }
 
     public sealed class InstallationPlanLocale
@@ -195,7 +168,7 @@ namespace LinuxHub.Features.InstallWizard.Models
 
     /// <summary>
     /// Observed staging identity (<see cref="Number"/>/<see cref="OffsetBytes"/>/
-    /// <see cref="PartitionUuid"/>/<see cref="SizeBytes"/>) may be null until the partition is created —
+    /// <see cref="PartitionUuid"/>) may be null until the staging partition is created —
     /// the only post-publish mutation allowed (spec). Policy sizes stay in GiB (D3);
     /// staging size is exact bytes because it is derived from the ISO, not a user GiB choice.
     /// </summary>
@@ -210,40 +183,11 @@ namespace LinuxHub.Features.InstallWizard.Models
         [JsonPropertyName("partitionUuid")]
         public string? PartitionUuid { get; set; }
 
-        /// <summary>
-        /// Tamanho OBSERVADO da partição, em bytes, lido do Windows depois de criá-la — não uma
-        /// política nem uma conversão de <see cref="FinalSizeGiB"/>.
-        ///
-        /// Existe porque a partição raiz é criada com <c>-UseMaximumSize</c>: o tamanho real só
-        /// é conhecido depois da criação, e não é derivável dos GiB que o usuário escolheu (o
-        /// encolhimento reserva folga de alinhamento). O instalador live confere este valor
-        /// contra <c>blockdev --getsize64</c> antes do <c>mkfs</c> — é uma das asserções que
-        /// provam que a partição que ele vai formatar é a mesma que o app criou.
-        ///
-        /// Nulo até a partição existir, como o resto da identidade observada. Sem este campo o
-        /// instalador live morria em <c>.disk.installer.sizeBytes</c> ausente, já com a
-        /// revalidação inteira aprovada.
-        /// </summary>
-        [JsonPropertyName("sizeBytes")]
-        public long? SizeBytes { get; set; }
-
         [JsonPropertyName("finalSizeGiB")]
         public int FinalSizeGiB { get; set; }
 
         [JsonPropertyName("stagingSizeBytes")]
         public long StagingSizeBytes { get; set; }
-
-        /// <summary>
-        /// own-linux-installer task 2.6 (design.md D5): caminho relativo, dentro da ESP, do
-        /// espaço temporário que o boot staging cria só para chegar até a mídia live própria.
-        /// A instalação live remove este diretório no fim — mas só depois de provar, pelo
-        /// marcador de posse (o próprio <see cref="InstallationPlan.PlanId"/>), que ele
-        /// pertence à transação corrente (D5). Vazio nos caminhos preservados, que não usam a
-        /// mídia live e não criam este espaço.
-        /// </summary>
-        [JsonPropertyName("stagingEspDirectory")]
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-        public string? StagingEspDirectory { get; set; }
     }
 
     public sealed class InstallationPlanRuntime

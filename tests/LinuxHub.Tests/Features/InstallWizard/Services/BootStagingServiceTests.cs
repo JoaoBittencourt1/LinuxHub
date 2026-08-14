@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Services;
 using Xunit;
 
@@ -179,105 +178,6 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             Assert.Contains(@"C:\boot\grub", script);
             Assert.Contains("set timeout=10", script);
-        }
-
-        /// <summary>
-        /// own-linux-installer task 2.3 (design.md D16): dual-boot manual (Mechanism == None) é
-        /// um dos dois caminhos preservados. Precisa seguir o código de sempre — a prova é que
-        /// a mensagem de erro é a do caminho antigo (ISO ausente), nunca a da mídia live
-        /// própria, mesmo quando IsUefi é true.
-        /// </summary>
-        [Fact]
-        public void InstallStagingBootloader_DualBootManual_UsesThePreservedPath()
-        {
-            var service = new BootStagingService(
-                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator(), new PermissiveInstallationPlanMutationGuard());
-
-            string missingPath = Path.Combine(Path.GetTempPath(), $"linuxhub-missing-{Guid.NewGuid():N}.iso");
-            var request = new BootStagingRequest(
-                DistroName: "Ubuntu",
-                IsoPath: missingPath,
-                IsUefi: true,
-                TargetDiskIndex: 0,
-                Mode: InstallMode.DualBoot,
-                Mechanism: UnattendedInstallMechanism.None);
-
-            var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
-            Assert.Contains(missingPath, error.Message);
-        }
-
-        /// <summary>
-        /// own-linux-installer task 2.3 (design.md D16): modo substituir é o segundo caminho
-        /// preservado — continua pelo código de sempre mesmo se, por engano, o mecanismo novo
-        /// estivesse marcado (que hoje nunca acontece: nenhuma distro o declara ainda, §7.1).
-        /// A prova, de novo, é a mensagem de erro do caminho antigo.
-        /// </summary>
-        [Fact]
-        public void InstallStagingBootloader_ReplaceMode_NeverRoutesToOwnLiveMedia()
-        {
-            var service = new BootStagingService(
-                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator(), new PermissiveInstallationPlanMutationGuard());
-
-            var request = new BootStagingRequest(
-                DistroName: "Ubuntu",
-                IsoPath: "/linuxhub.iso",
-                IsUefi: true,
-                TargetDiskIndex: 0,
-                Mode: InstallMode.Replace,
-                Mechanism: UnattendedInstallMechanism.OwnLiveInstaller);
-
-            var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
-            Assert.Contains("EFI System Partition", error.Message);
-            Assert.DoesNotContain("mídia live própria", error.Message);
-        }
-
-        /// <summary>own-linux-installer task 2.4 (design.md D16): o mecanismo novo é UEFI
-        /// apenas — recusa antes de tocar em qualquer coisa quando o firmware não é UEFI.</summary>
-        [Fact]
-        public void InstallStagingBootloader_OwnLiveInstaller_RefusesNonUefiFirmware()
-        {
-            var service = new BootStagingService(
-                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator(), new PermissiveInstallationPlanMutationGuard());
-
-            var request = new BootStagingRequest(
-                DistroName: "Ubuntu",
-                IsoPath: "/linuxhub.iso",
-                IsUefi: false,
-                TargetDiskIndex: 0,
-                Mode: InstallMode.DualBoot,
-                Mechanism: UnattendedInstallMechanism.OwnLiveInstaller);
-
-            var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
-            Assert.Contains("UEFI apenas", error.Message);
-        }
-
-        /// <summary>
-        /// own-linux-installer task 2.2: o par certo entra no caminho novo — a prova é a
-        /// mensagem da ESP (o passo seguinte desse caminho), não a da ISO ausente do caminho
-        /// preservado.
-        ///
-        /// A entrada de boot não interpola caminho nenhum: o kernel é carregado de uma partição
-        /// FAT32 que o GRUB localiza por <c>search --file</c>. Quem exige e usa o caminho da
-        /// mídia é <c>InstallationFlowRunner</c>, antes disto, na hora de copiar os arquivos.
-        /// </summary>
-        [Fact]
-        public void InstallStagingBootloader_OwnLiveInstaller_TakesTheOwnMediaPath()
-        {
-            var service = new BootStagingService(
-                new FakeEspLocator(), new FakeGrubAssets(), new FakeMbrBackup(), new FakeBootConfiguration(), IsoBootEntryBuilders, new FakeIsoHostPartitionLocator(), new PermissiveInstallationPlanMutationGuard());
-
-            var request = new BootStagingRequest(
-                DistroName: "Ubuntu",
-                IsoPath: "/linuxhub.iso",
-                IsUefi: true,
-                TargetDiskIndex: 0,
-                Mode: InstallMode.DualBoot,
-                Mechanism: UnattendedInstallMechanism.OwnLiveInstaller);
-
-            // FakeEspLocator devolve null de propósito: chegar na mensagem da ESP prova que o
-            // despacho entrou em InstallUefiOwnLiveMedia e não no caminho preservado.
-            var error = Assert.Throws<InvalidOperationException>(() => service.InstallStagingBootloader(request));
-            Assert.Contains("EFI System Partition", error.Message);
         }
 
         [Fact]

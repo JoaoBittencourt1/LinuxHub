@@ -23,7 +23,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private readonly ICompatibilityPreflightRunner _compatibilityPreflight;
         private readonly IInterruptedTransactionProbe _interruptedTransactionProbe;
         private readonly ICompatibilityFactsProbe _compatibilityFacts;
-        private readonly ILiveMediaProvider _liveMediaProvider;
         private ConfirmationViewModel? _pendingConfirmation;
         private string? _installStatus;
         private CompatibilityPreflightReport? _lastCompatibilityReport;
@@ -44,8 +43,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             IInstallationFlowRunner flowRunner,
             ICompatibilityPreflightRunner? compatibilityPreflight = null,
             IInterruptedTransactionProbe? interruptedTransactionProbe = null,
-            ICompatibilityFactsProbe? compatibilityFacts = null,
-            ILiveMediaProvider? liveMediaProvider = null)
+            ICompatibilityFactsProbe? compatibilityFacts = null)
         {
             Iso = iso ?? throw new ArgumentNullException(nameof(iso));
             Target = target ?? throw new ArgumentNullException(nameof(target));
@@ -58,7 +56,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             _compatibilityPreflight = compatibilityPreflight ?? CompatibilityPreflightRunner.CreateDefault();
             _interruptedTransactionProbe = interruptedTransactionProbe ?? new InterruptedTransactionProbe();
             _compatibilityFacts = compatibilityFacts ?? new CompatibilityFactsProbe();
-            _liveMediaProvider = liveMediaProvider ?? new LiveMediaProvider();
 
             Iso.Notify += (title, message, isError) => Notify?.Invoke(title, message, isError);
 
@@ -459,9 +456,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 Timezone: Regional.Timezone,
                 DesktopEnvironment: IsDesktopEnvironmentStepVisible
                     ? Regional.DesktopEnvironment
-                    : string.Empty,
-                OwnLiveMediaWindowsPath: Iso.ActiveMechanism == UnattendedInstallMechanism.OwnLiveInstaller
-                    ? _liveMediaProvider.GetIsoPath()
-                    : null);
+                    : string.Empty);
     }
 }

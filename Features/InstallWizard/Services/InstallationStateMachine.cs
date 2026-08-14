@@ -5,7 +5,7 @@ namespace LinuxHub.Features.InstallWizard.Services
 {
     /// <summary>
     /// Applies legal state transitions. Pure regarding I/O — callers persist after each
-    /// successful mutation.
+    /// successful mutation. Adapted from REDACTED under GPL-3.0.
     /// </summary>
     public sealed class InstallationStateMachine
     {
@@ -156,25 +156,6 @@ namespace LinuxHub.Features.InstallWizard.Services
             Touch();
         }
 
-        /// <summary>
-        /// own-linux-installer: este método é chamado de um único lugar em C#
-        /// (<c>InstallationFlowRunner.Run</c>), e SÓ para os mecanismos cuja instalação termina
-        /// do lado Windows — Subiquity, UbiquityPreseed, Archinstall, dual-boot manual, modo
-        /// substituir. Para esses, o boot ficar preparado É o fim do que este processo
-        /// acompanha; o resto acontece dentro do instalador nativo da distro, depois do reboot,
-        /// fora do nosso controle.
-        ///
-        /// Por isso a checagem de "passo obrigatório incompleto" olha só a fase
-        /// <c>windows</c>. Os passos <c>live.*</c>/<c>target.*</c> (D12) são reais e
-        /// obrigatórios — mas só para o mecanismo <c>OwnLiveInstaller</c>, cujo fim de
-        /// transação NUNCA passa por este método: é o instalador live (bash, pós-reboot) quem
-        /// escreve o estado terminal direto no registro espelhado, depois de completar esses
-        /// passos em sequência (e falhar antes disso se qualquer fase falhar, via `set -e`).
-        /// Validá-los aqui bloquearia toda instalação Subiquity/Ubiquity/Archinstall, que nunca
-        /// inicia nem vai iniciar um passo live/target — foi exatamente o bug real encontrado
-        /// ao testar dual-boot desatendido do Ubuntu numa VM (armar os passos quebrou o
-        /// MarkSucceeded de todo mecanismo, não só do novo).
-        /// </summary>
         public void MarkSucceeded()
         {
             if (!string.IsNullOrEmpty(State.ActiveStep))
@@ -186,7 +167,6 @@ namespace LinuxHub.Features.InstallWizard.Services
             foreach (InstallationStepDefinition step in InstallationStepCatalog.All)
             {
                 if (step.Required && step.Armed &&
-                    InstallationStepCatalog.PhaseOf(step.Id) == InstallationPhase.Windows &&
                     !State.CompletedSteps.Contains(step.Id, StringComparer.Ordinal))
                 {
                     throw new InvalidOperationException(

@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Models;
 
 namespace LinuxHub.Features.InstallWizard.Services
@@ -56,7 +55,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             ValidateDistribution(plan.Distribution, errors);
             ValidateLocale(plan.Locale, errors);
             ValidateAccount(plan.Account, errors);
-            ValidateDisk(plan.Firmware, plan.InstallMode, plan.UnattendedMechanism, plan.Disk, errors);
+            ValidateDisk(plan.Firmware, plan.InstallMode, plan.Disk, errors);
             ValidateRuntime(plan.Runtime, errors);
             ValidateWindowsPathDrives(plan, errors);
 
@@ -131,7 +130,6 @@ namespace LinuxHub.Features.InstallWizard.Services
         private static void ValidateDisk(
             string firmware,
             string installMode,
-            string unattendedMechanism,
             InstallationPlanDisk? disk,
             ICollection<string> errors)
         {
@@ -206,14 +204,13 @@ namespace LinuxHub.Features.InstallWizard.Services
                     disk.Recovery, "disk.recovery", disk.LogicalSectorSizeBytes, disk.SizeBytes, errors);
             }
 
-            ValidateInstaller(disk, installMode, unattendedMechanism, errors);
+            ValidateInstaller(disk, installMode, errors);
             ValidateGeometry(disk, errors);
         }
 
         private static void ValidateInstaller(
             InstallationPlanDisk disk,
             string installMode,
-            string unattendedMechanism,
             ICollection<string> errors)
         {
             InstallationPlanInstallerPartition? installer = disk.Installer;
@@ -261,49 +258,10 @@ namespace LinuxHub.Features.InstallWizard.Services
                     installer.StagingSizeBytes == 0,
                     errors,
                     "disk.installer.stagingSizeBytes must be 0 for dual-boot (no staging partition).");
-
-                // own-linux-installer: dois planos de dual-boot são legítimos e a identidade da
-                // partição raiz é obrigatória em um e proibida no outro.
-                //
-                // Instalador nativo (Subiquity/Ubiquity): quem cria a partição raiz a partir do
-                // espaço livre é o instalador da distro, DEPOIS do reboot — não há o que
-                // registrar antes, e uma identidade preenchida aqui seria invenção.
-                //
-                // Instalador próprio: o app cria a partição antes do reboot, e a identidade é o
-                // ÚNICO jeito de o instalador live saber onde escrever. Sem ela ele teria de
-                // deduzir qual partição é o alvo — exatamente o que a memória do projeto
-                // ("ler, nunca deduzir o disco") proíbe, e como o incidente de 2026-08-05
-                // começou.
-                bool usesOwnLiveInstaller = string.Equals(
-                    unattendedMechanism,
-                    nameof(UnattendedInstallMechanism.OwnLiveInstaller),
-                    StringComparison.Ordinal);
-
-                // No caminho próprio a identidade é PERMITIDA, não exigida aqui: o plano é
-                // publicado e validado no primeiro passo, antes de a partição existir, e só
-                // depois de criá-la é que a identidade é registrada (mesma mecânica que o
-                // modo substituir já usa para a staging). Quem exige a presença dela é o
-                // consumidor — o instalador live para antes de qualquer escrita se o plano
-                // chegar sem identidade.
-                if (!usesOwnLiveInstaller)
-                {
-                    Require(
-                        !installer.Number.HasValue,
-                        errors,
-                        "disk.installer identity must remain unset for dual-boot.");
-                }
-                else if (installer.Number.HasValue)
-                {
-                    // Registrada a identidade, o tamanho observado vem junto ou não vem nunca:
-                    // é ele que o instalador live confere contra o dispositivo antes do mkfs.
-                    // Um plano com número e offset mas sem tamanho passaria daqui e morreria do
-                    // outro lado do reboot, depois da revalidação inteira — que foi exatamente
-                    // o que aconteceu.
-                    Require(
-                        installer.SizeBytes is > 0,
-                        errors,
-                        "disk.installer.sizeBytes must be recorded (positive) once the root partition identity is set.");
-                }
+                Require(
+                    !installer.Number.HasValue,
+                    errors,
+                    "disk.installer identity must remain unset for dual-boot.");
             }
             else if (isReplace)
             {
@@ -356,56 +314,22 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "disk.recovery must start at or after the original Windows partition end.");
             }
 
-            if (disk.Installer?.OffsetBytes is not { } installerOffset)
+            if (disk.Installer?.OffsetBytes is not { } stagingOffset ||
+                disk.Installer.StagingSizeBytes <= 0)
+            {
                 return;
+            }
 
-            // Dois tamanhos, um de cada caminho, e nunca os dois ao mesmo tempo:
-            // stagingSizeBytes é o tamanho de política da partição de staging do modo
-            // substituir; sizeBytes é o tamanho observado da raiz criada pelo instalador
-            // próprio. Qualquer um dos dois define uma extensão real no disco.
-            long installerSize = disk.Installer.StagingSizeBytes > 0
-                ? disk.Installer.StagingSizeBytes
-                : disk.Installer.SizeBytes ?? 0;
-            if (installerSize <= 0)
-                return;
-
-            long installerEnd = installerOffset + installerSize;
-            Require(
-                installerEnd <= disk.SizeBytes,
-                errors,
-                "disk.installer extent would run past the end of the disk.");
-
-            // A extensão do instalador é comparada com boot e recuperação, mas NUNCA com
-            // disk.windows — e a exclusão é a parte importante desta regra.
-            //
-            // O plano é publicado antes de qualquer mudança no disco, então disk.windows
-            // guarda a geometria ORIGINAL. A partição do instalador nasce depois, no espaço
-            // que o encolhimento abriu — ou seja, dentro do que ERA a partição do Windows.
-            // Comparar as duas é comparar o antes com o depois: a sobreposição é sempre
-            // verdadeira no papel e sempre falsa no disco.
-            //
-            // Bug real: a instalação parava com "disk.installer extent would overlap
-            // disk.windows" com a raiz criada corretamente no espaço livre. Windows terminava
-            // em 135.466.582.016 pelo tamanho antigo; a raiz começava em 81.779.490.816, que
-            // estava livre havia minutos.
-            //
-            // Boot e recuperação ficam: o encolhimento não mexe em nenhuma das duas (ele corta
-            // pelo fim da partição do Windows), então a geometria delas no plano continua
-            // valendo, e invadir qualquer uma seria dano real.
-            //
-            // Quem protege o Windows não é esta regra: a partição é criada pela própria API do
-            // Windows, em espaço livre, e o lado live confere PARTUUID, offset e tamanho antes
-            // de formatar.
-            var installerNeighbours = named.Where(n => n.Name != "disk.windows");
-            foreach ((string name, InstallationPlanPartitionIdentity partition) in installerNeighbours)
+            long stagingEnd = stagingOffset + disk.Installer.StagingSizeBytes;
+            foreach ((string name, InstallationPlanPartitionIdentity partition) in named)
             {
                 long end = partition.OffsetBytes + partition.SizeBytes;
-                bool overlapsInstaller =
-                    installerOffset < end && partition.OffsetBytes < installerEnd;
+                bool overlapsStaging =
+                    stagingOffset < end && partition.OffsetBytes < stagingEnd;
                 Require(
-                    !overlapsInstaller,
+                    !overlapsStaging,
                     errors,
-                    $"disk.installer extent would overlap {name}.");
+                    $"disk.installer staging extent would overlap {name}.");
             }
         }
 

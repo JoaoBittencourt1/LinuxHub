@@ -129,6 +129,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
         [InlineData("ubuntu", true)]
         [InlineData("mint", false)]
         [InlineData("xubuntu", false)]
+        // Arch fica em None no catálogo: o autoinstall só é declarado para o Ubuntu, e o
+        // toggle segue a declaração, nunca a identidade da distro.
         [InlineData("arch", false)]
         public void AutoinstallToggle_IsVisibleOnlyForDistrosWithAMechanism(
             string distroId, bool expected)

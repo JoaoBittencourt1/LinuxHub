@@ -348,33 +348,6 @@ Free up space on the disk, pick a larger target, or reduce the size reserved for
   <data name="Wizard_InstallStepStagingBoot" xml:space="preserve">
     <value>Staging the Linux bootloader…</value>
   </data>
-  <!-- own-linux-installer task 10.6: live installer progress screen text (D14). Source of
-       live-media/rootfs-overlay/opt/linuxhub/catalog/strings.linux.json — a parity test in
-       tests/LinuxHub.Tests keeps the two copies from drifting apart. -->
-  <data name="Install_DiscoveringPlan" xml:space="preserve">
-    <value>Locating the installation plan…</value>
-  </data>
-  <data name="Install_Revalidating" xml:space="preserve">
-    <value>Revalidating the disk…</value>
-  </data>
-  <data name="Install_PreparingDisk" xml:space="preserve">
-    <value>Preparing the disk…</value>
-  </data>
-  <data name="Install_Extracting" xml:space="preserve">
-    <value>Extracting the system…</value>
-  </data>
-  <data name="Install_Configuring" xml:space="preserve">
-    <value>Configuring the system…</value>
-  </data>
-  <data name="Install_InstallingBootloader" xml:space="preserve">
-    <value>Installing the boot loader…</value>
-  </data>
-  <data name="Install_Verifying" xml:space="preserve">
-    <value>Verifying the installation…</value>
-  </data>
-  <data name="Install_Complete" xml:space="preserve">
-    <value>Installation complete. Restart your computer.</value>
-  </data>
   <data name="Wizard_RollbackEncryptionDivergence" xml:space="preserve">
     <value>Volume protection (BitLocker or equivalent) did not return to its pre-install state. Re-enable protection manually in Windows settings.</value>
   </data>
