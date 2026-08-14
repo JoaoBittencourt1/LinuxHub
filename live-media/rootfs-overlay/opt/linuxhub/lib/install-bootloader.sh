@@ -57,26 +57,52 @@ else
 fi
 
 # --- 8.4: cadeia assinada copiada do ALVO já extraído, não da mídia de execução (D8) ---
-SIGNED_CHAIN_SOURCE_DIR=""
-for candidate_dir in "${TARGET_MOUNT}/boot/efi/EFI/ubuntu" "${TARGET_MOUNT}/boot/efi/EFI/debian"; do
-  if [[ -f "${candidate_dir}/shimx64.efi" ]]; then
-    SIGNED_CHAIN_SOURCE_DIR="$candidate_dir"
-    break
-  fi
-done
-[[ -n "$SIGNED_CHAIN_SOURCE_DIR" ]] || die "cadeia assinada não encontrada no alvo extraído (8.4) — deveria ter sido pega em 6.4"
+#
+# A origem é `/usr/lib` dentro do alvo, que é onde os PACOTES põem os binários
+# assinados — e não `/boot/efi/EFI/<vendor>`, que é onde o `grub-install` os
+# deixaria depois de rodar.
+#
+# A diferença não é estilística: numa instalação nova o `/boot/efi` do alvo está
+# vazio (a ESP é do Windows e só é montada aqui), então procurar ali achava nada
+# e a fase morria dizendo que a cadeia "deveria ter sido pega em 6.4". Ler de
+# /usr/lib não depende de nenhum passo anterior ter escrito na ESP — depende só
+# de os pacotes estarem instalados, que é o que a fase 7.5 garante e verifica.
+SHIM_SOURCE="${TARGET_MOUNT}/usr/lib/shim/shimx64.efi.signed"
+GRUB_SOURCE="${TARGET_MOUNT}/usr/lib/grub/x86_64-efi-signed/grubx64.efi.signed"
+MOK_SOURCE="${TARGET_MOUNT}/usr/lib/shim/mmx64.efi.signed"
 
-cp "${SIGNED_CHAIN_SOURCE_DIR}/shimx64.efi" "${VENDOR_DIR}/shimx64.efi"
-for grub_name in grubx64.efi grub.efi; do
-  if [[ -f "${SIGNED_CHAIN_SOURCE_DIR}/${grub_name}" ]]; then
-    cp "${SIGNED_CHAIN_SOURCE_DIR}/${grub_name}" "${VENDOR_DIR}/grubx64.efi"
-    break
-  fi
-done
-[[ -f "${VENDOR_DIR}/grubx64.efi" ]] || die "GRUB assinado ausente na origem (8.4)"
-if [[ -f "${SIGNED_CHAIN_SOURCE_DIR}/mmx64.efi" ]]; then
-  cp "${SIGNED_CHAIN_SOURCE_DIR}/mmx64.efi" "${VENDOR_DIR}/mmx64.efi"
+[[ -f "$SHIM_SOURCE" ]] || die "shim assinado ausente no alvo: ${SHIM_SOURCE#$TARGET_MOUNT} (8.4) — a fase 7.5 deveria tê-lo instalado"
+[[ -f "$GRUB_SOURCE" ]] || die "GRUB assinado ausente no alvo: ${GRUB_SOURCE#$TARGET_MOUNT} (8.4) — a fase 7.5 deveria tê-lo instalado"
+
+cp "$SHIM_SOURCE" "${VENDOR_DIR}/shimx64.efi"
+cp "$GRUB_SOURCE" "${VENDOR_DIR}/grubx64.efi"
+# O MokManager é o que permite ao usuário gerenciar chaves quando o Secure Boot
+# recusa algo. Opcional porque vem de um pacote separado (shim-helpers), mas sem
+# ele um Secure Boot que rejeite a cadeia não deixa saída pela interface do shim.
+if [[ -f "$MOK_SOURCE" ]]; then
+  cp "$MOK_SOURCE" "${VENDOR_DIR}/mmx64.efi"
+else
+  log "aviso: mmx64.efi (MokManager) não encontrado no alvo — a cadeia funciona, mas sem tela de gestão de chaves do Secure Boot"
 fi
+
+# --- onde o GRUB assinado procura a configuração: LIDO do binário ---
+#
+# O prefixo fica COMPILADO dentro do grubx64.efi assinado. O do Debian é
+# `/EFI/debian`. Ele não procura a configuração ao lado de si mesmo: mesmo
+# carregado de EFI/LinuxHub, vai ler /EFI/debian/grub.cfg na ESP. Sem o stub
+# nesse caminho exato, o boot cai no shell do GRUB — que é a falha mais cara
+# possível, porque só aparece no reboot final, com tudo já instalado.
+#
+# O nome do vendor não é escrito aqui (§2: nome de distro não seleciona caminho
+# de código). É lido do próprio artefato, e exige-se um único valor: se o binário
+# declarar mais de um prefixo, não há como saber qual vale, e adivinhar aqui
+# custaria o boot.
+mapfile -t GRUB_PREFIXES < <(grep -aoE '/EFI/[A-Za-z0-9_.-]+' "$GRUB_SOURCE" | sort -u)
+if [[ "${#GRUB_PREFIXES[@]}" -ne 1 ]]; then
+  die "o GRUB assinado declara ${#GRUB_PREFIXES[@]} prefixos (${GRUB_PREFIXES[*]:-nenhum}) — sem um único, não dá para saber onde ele lê a configuração (8.4)"
+fi
+GRUB_PREFIX="${GRUB_PREFIXES[0]}"
+log "prefixo lido do GRUB assinado: ${GRUB_PREFIX}"
 
 # --- stub de configuração encadeando pela raiz (D8), espelhado no diretório
 # de vendor da distro dentro do alvo, porque é lá que o GRUB assinado da
@@ -88,7 +114,24 @@ set prefix=(\$root)/boot/grub
 configfile \$prefix/grub.cfg
 "
 printf '%s' "$GRUB_STUB" > "${VENDOR_DIR}/grub.cfg"
-printf '%s' "$GRUB_STUB" > "${SIGNED_CHAIN_SOURCE_DIR}/grub.cfg"
+
+# O stub no caminho que o binário procura. Guardado pela mesma regra de posse do
+# D5: se o diretório já existe sem o nosso marcador, ele é de outra instalação —
+# sobrescrever a configuração de boot de outro sistema seria exatamente o tipo de
+# dano que esta transação existe para não causar.
+PREFIX_DIR="${ESP_MOUNT}${GRUB_PREFIX}"
+PREFIX_MARKER="${PREFIX_DIR}/${MARKER_NAME}"
+if [[ -d "$PREFIX_DIR" ]]; then
+  if [[ ! -f "$PREFIX_MARKER" || "$(cat "$PREFIX_MARKER")" != "$PLAN_ID" ]]; then
+    strict_umount "$ESP_MOUNT"
+    die "a ESP já tem ${GRUB_PREFIX} de outra instalação — o GRUB assinado leria a configuração dela, e sobrescrevê-la quebraria aquele sistema (8.4)"
+  fi
+else
+  mkdir -p "$PREFIX_DIR"
+  printf '%s' "$PLAN_ID" > "$PREFIX_MARKER"
+fi
+printf '%s' "$GRUB_STUB" > "${PREFIX_DIR}/grub.cfg"
+sync
 
 # --- 8.2 + geração real do grub.cfg do alvo, com os-prober desligado ---
 _target_binds_mounted=0

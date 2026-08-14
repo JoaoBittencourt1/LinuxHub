@@ -24,6 +24,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 InstallationStepIds.WindowsTemporaryBootPrepared,
                 InstallationStepIds.LiveIsoMounted,
                 InstallationStepIds.LiveDistributionExtracted,
+                InstallationStepIds.TargetBootloaderPackagesInstalled,
                 InstallationStepIds.TargetSystemConfigured,
                 InstallationStepIds.TargetBootloaderInstalled,
                 InstallationStepIds.TargetInstallationVerified,
@@ -41,6 +42,15 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             Assert.True(InstallationStepCatalog.Get(InstallationStepIds.LiveDistributionExtracted).Armed);
             Assert.True(InstallationStepCatalog.Get(InstallationStepIds.TargetSystemConfigured).Armed);
             Assert.True(InstallationStepCatalog.Get(InstallationStepIds.TargetBootloaderInstalled).Armed);
+
+            // A cadeia de boot assinada é instalada, não pressuposta: o squashfs de uma ISO
+            // live do Debian traz o kernel mas não o bootloader. Compensável porque, quando ele
+            // roda, nada fora da partição alvo (já nossa desde o mkfs) foi tocado.
+            InstallationStepDefinition bootPackages =
+                InstallationStepCatalog.Get(InstallationStepIds.TargetBootloaderPackagesInstalled);
+            Assert.True(bootPackages.Armed);
+            Assert.True(bootPackages.Required);
+            Assert.True(bootPackages.Compensatable);
             Assert.True(InstallationStepCatalog.Get(InstallationStepIds.WindowsTemporaryBootPrepared).Armed);
 
             // Task 9.2/9.4 (D12/D5): passo novo, obrigatório, não compensável — só o bootloader
@@ -130,6 +140,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             [
                 InstallationStepIds.LiveIsoMounted,
                 InstallationStepIds.LiveDistributionExtracted,
+                InstallationStepIds.TargetBootloaderPackagesInstalled,
                 InstallationStepIds.TargetSystemConfigured,
                 InstallationStepIds.TargetBootloaderInstalled,
                 InstallationStepIds.TargetInstallationVerified,
@@ -137,9 +148,14 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             // run-installer.sh chama os scripts de fase nesta ordem física — concatenar o
             // conteúdo deles na mesma ordem reproduz a sequência real de execução.
+            //
+            // install-bootloader-packages.sh roda ANTES de configure-target.sh porque precisa
+            // do artefato ainda montado: a cadeia assinada vem do pool/ da ISO, e o volume do
+            // Windows (de onde a ISO é lida) é solto logo depois.
             string[] phaseScriptsInOrder =
             [
                 "verify-and-extract.sh", // live.iso-mounted, live.distribution-extracted
+                "install-bootloader-packages.sh", // target.bootloader-packages-installed
                 "configure-target.sh",   // target.system-configured
                 "install-bootloader.sh", // target.bootloader-installed
                 "verify-installation.sh", // target.installation-verified

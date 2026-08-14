@@ -33,6 +33,14 @@ namespace LinuxHub.Features.InstallWizard.Services
             // (a ESP do Windows) e por isso não é compensável.
             new(Models.InstallationStepIds.LiveIsoMounted, Required: true, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.LiveDistributionExtracted, Required: true, Compensatable: true, Armed: true),
+            // Antes de target.system-configured, e não por gosto: a cadeia assinada vem do
+            // pool/ da ISO, então este passo precisa do artefato ainda montado — e o volume do
+            // Windows, de onde a ISO é lida, é solto logo depois da extração.
+            //
+            // Compensável: desfazer é remover pacotes de um sistema que ainda não é o de
+            // ninguém — a partição alvo já é nossa desde o mkfs. Nada fora dela foi tocado
+            // ainda; a ESP só entra no passo target.bootloader-installed.
+            new(Models.InstallationStepIds.TargetBootloaderPackagesInstalled, Required: true, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.TargetSystemConfigured, Required: true, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.TargetBootloaderInstalled, Required: true, Compensatable: false, Armed: true),
             new(Models.InstallationStepIds.TargetInstallationVerified, Required: true, Compensatable: false, Armed: true),

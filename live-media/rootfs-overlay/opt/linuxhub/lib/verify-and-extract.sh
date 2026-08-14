@@ -20,20 +20,22 @@ TARGET_PART="${3:?uso: verify-and-extract.sh <plan.json> <artefato.iso> <partiç
 EXPECTED_IDENTITY="$(json_get "$PLAN_PATH" '.distribution.expectedIdentity')"
 
 # Capacidades de que as fases 7 e 8 dependem — presença é propriedade do
-# artefato real, nunca de documentação (task 6.4). A cadeia de boot assinada
-# entra aqui com nomes alternativos: distros diferentes empacotam em
-# caminhos ligeiramente diferentes (research/D8).
+# artefato real, nunca de documentação (task 6.4).
+#
+# `usr/sbin/update-grub` SAIU desta lista, e não por relaxamento: ele não existe
+# no squashfs de uma ISO live do Debian. Ela traz só `grub-common`; quem fornece
+# o update-grub é o `grub2-common`, que fica no `pool/` da própria ISO junto com
+# `grub-efi-amd64-signed` e `shim-signed`. Exigi-lo aqui era exigir do artefato
+# algo que a distro deliberadamente deixa para a instalação — e reprovaria todo
+# artefato válido. O bootloader passou a ser instalado (fase 7.5) em vez de
+# pressuposto; o que se verifica aqui é a matéria-prima dessa instalação.
 REQUIRED_PATHS=(
   "usr/sbin/update-initramfs"
-  "usr/sbin/update-grub"
   "usr/sbin/locale-gen"
   "usr/sbin/chroot"
+  "usr/bin/lsinitramfs"
+  "var/lib/dpkg/status"
   "etc/os-release"
-)
-REQUIRED_SIGNED_CHAIN_CANDIDATES=(
-  "boot/efi/EFI/ubuntu/shimx64.efi"
-  "boot/efi/EFI/debian/shimx64.efi"
-  "boot/efi/EFI/BOOT/BOOTX64.EFI"
 )
 
 ISO_MOUNT="/run/linuxhub/iso"
@@ -69,17 +71,60 @@ for rel_path in "${REQUIRED_PATHS[@]}"; do
   fi
 done
 
-SIGNED_CHAIN_FOUND=0
-for candidate in "${REQUIRED_SIGNED_CHAIN_CANDIDATES[@]}"; do
-  if [[ -e "${SQUASH_MOUNT}/${candidate}" ]]; then
-    SIGNED_CHAIN_FOUND=1
-    break
+# --- 6.4b: kernel DENTRO do artefato, não pressuposto ---
+#
+# É a diferença que decidiu qual distro este caminho suporta. A ISO do Ubuntu
+# desde a 23.10 é `fsimage-layered`: a camada base não tem kernel nem módulos,
+# porque o instalador dele os instala depois. Extrair aquilo produziria um
+# sistema que não arranca — e o erro só apareceria no reboot final, com o
+# Windows já encolhido e a partição já formatada.
+#
+# Aqui a pergunta não é o nome da distro (§2), é se o artefato tem kernel.
+if ! compgen -G "${SQUASH_MOUNT}/boot/vmlinuz-*" >/dev/null; then
+  strict_umount "$SQUASH_MOUNT"; strict_umount "$ISO_MOUNT"
+  die "artefato sem kernel em /boot — o sistema extraído não arrancaria (6.4)"
+fi
+if ! compgen -G "${SQUASH_MOUNT}/lib/modules/*/kernel" >/dev/null; then
+  strict_umount "$SQUASH_MOUNT"; strict_umount "$ISO_MOUNT"
+  die "artefato sem módulos de kernel em /lib/modules — o sistema extraído não arrancaria (6.4)"
+fi
+step "kernel presente no artefato: $(basename "$(compgen -G "${SQUASH_MOUNT}/boot/vmlinuz-*" | head -1)")"
+
+# --- 6.4c: os pacotes do bootloader, no repositório que a ISO carrega ---
+#
+# A cadeia assinada não vem pronta no squashfs do Debian; vem do `pool/` da
+# própria ISO, que é um repositório apt completo. Verificar AGORA, antes de
+# extrair, é o que o D6 pede: descobrir que o bootloader é inalcançável depois
+# de formatar e extrair seria descobrir tarde demais.
+# O nome da suíte (trixie, bookworm, …) NÃO é escrito aqui: fixá-lo seria
+# deduzir a versão da distro a partir do nome, e amarrar o instalador a um
+# release. Procura-se a suíte que o artefato declara, e exige-se exatamente uma
+# com repositório binário — ambiguidade para, não escolhe.
+mapfile -t ISO_SUITES < <(
+  find "${ISO_MOUNT}/dists" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' 2>/dev/null |
+  while IFS= read -r suite; do
+    if compgen -G "${ISO_MOUNT}/dists/${suite}/main/binary-amd64/Packages*" >/dev/null; then
+      printf '%s\n' "$suite"
+    fi
+  done
+)
+if [[ "${#ISO_SUITES[@]}" -ne 1 ]]; then
+  strict_umount "$SQUASH_MOUNT"; strict_umount "$ISO_MOUNT"
+  die "esperava exatamente 1 suíte apt na ISO, encontrei ${#ISO_SUITES[@]} (${ISO_SUITES[*]:-nenhuma}) — o bootloader não teria de onde sair sem ambiguidade (6.4)"
+fi
+ISO_SUITE="${ISO_SUITES[0]}"
+step "repositório apt da ISO: suíte '${ISO_SUITE}'"
+# Procurados por NOME em todo o pool, não por caminho fixo: a árvore do pool é
+# organizada pela primeira letra do pacote-fonte, que não é a do binário
+# (grub2-common vem de "grub2", shim-signed de "shim-signed"). Escrever o
+# caminho à mão seria codificar um detalhe de empacotamento que não nos pertence.
+for pkg in grub-efi-amd64-signed shim-signed grub2-common efibootmgr; do
+  if [[ -z "$(find "${ISO_MOUNT}/pool" -name "${pkg}_*.deb" -print -quit 2>/dev/null)" ]]; then
+    strict_umount "$SQUASH_MOUNT"; strict_umount "$ISO_MOUNT"
+    die "pacote do bootloader ausente no pool da ISO: ${pkg} (6.4)"
   fi
 done
-if [[ "$SIGNED_CHAIN_FOUND" -eq 0 ]]; then
-  strict_umount "$SQUASH_MOUNT"; strict_umount "$ISO_MOUNT"
-  die "cadeia de boot assinada ausente no artefato (nenhum candidato de D8 encontrado) (6.4)"
-fi
+step "pacotes do bootloader presentes no pool da ISO"
 
 # --- 6.5: extrai para a partição alvo, com progresso ---
 TARGET_MOUNT="/mnt/linuxhub-target"
@@ -111,4 +156,7 @@ strict_umount "$SQUASH_MOUNT"
 strict_umount "$ISO_MOUNT"
 
 log "extração concluída e verificada em $TARGET_MOUNT"
-printf '%s\n' "$TARGET_MOUNT"
+# Segunda linha: a suíte apt que a ISO declara. A instalação do bootloader
+# (7.5) precisa dela e ela já foi descoberta e desambiguada aqui — redescobrir
+# lá seria duas verdades sobre o mesmo artefato, que é como elas divergem.
+printf '%s\n%s\n' "$TARGET_MOUNT" "$ISO_SUITE"

@@ -230,6 +230,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             machine.CompleteStep(InstallationStepIds.LiveIsoMounted);
             machine.StartStep(InstallationStepIds.LiveDistributionExtracted);
             machine.CompleteStep(InstallationStepIds.LiveDistributionExtracted);
+            machine.StartStep(InstallationStepIds.TargetBootloaderPackagesInstalled);
+            machine.CompleteStep(InstallationStepIds.TargetBootloaderPackagesInstalled);
             machine.StartStep(InstallationStepIds.TargetSystemConfigured);
             machine.CompleteStep(InstallationStepIds.TargetSystemConfigured);
             machine.StartStep(InstallationStepIds.TargetBootloaderInstalled);

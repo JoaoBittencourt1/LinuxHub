@@ -102,6 +102,19 @@ namespace LinuxHub.Features.InstallWizard.Models
         public const string LiveIsoMounted = "live.iso-mounted";
         public const string LiveDistributionExtracted = "live.distribution-extracted";
         public const string TargetSystemConfigured = "target.system-configured";
+
+        /// <summary>
+        /// own-linux-installer: a cadeia de boot assinada é INSTALADA no alvo, a partir do
+        /// repositório apt que a própria ISO carrega, antes de ser copiada para a ESP.
+        ///
+        /// É um passo próprio porque é uma unidade de trabalho que pode falhar sozinha e
+        /// significa algo distinto: o squashfs de uma ISO live do Debian traz o kernel mas não
+        /// o bootloader (só <c>grub-common</c>; <c>grub2-common</c>, <c>grub-efi-amd64-signed</c>
+        /// e <c>shim-signed</c> vivem no <c>pool/</c>). Sem separar, "falhou ao instalar o grub"
+        /// e "falhou ao escrever na ESP" apareceriam como o mesmo passo incompleto no registro.
+        /// </summary>
+        public const string TargetBootloaderPackagesInstalled = "target.bootloader-packages-installed";
+
         public const string TargetBootloaderInstalled = "target.bootloader-installed";
 
         // own-linux-installer task 9.2 (design.md D12): sem este passo, "instalado" significa
