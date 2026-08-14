@@ -12,6 +12,8 @@ set -euo pipefail
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common.sh
 source "${LIB_DIR}/common.sh"
+# Falha sem `die` sai calada; este trap dá nome ao que parou (common.sh).
+trap_uncaught_errors
 
 require_root
 # ntfsfix saiu daqui de propósito: ele existia para limpar o flag "dirty" e

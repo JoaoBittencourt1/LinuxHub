@@ -8,6 +8,8 @@ set -euo pipefail
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common.sh
 source "${LIB_DIR}/common.sh"
+# Falha sem `die` sai calada; este trap dá nome ao que parou (common.sh).
+trap_uncaught_errors
 
 require_root
 require_cmd mount efibootmgr grub-script-check chroot blkid findmnt
@@ -195,7 +197,13 @@ if [[ -n "$STAGING_DIR_REL" && "$STAGING_DIR_REL" != "null" ]]; then
   if [[ -d "$STAGING_DIR" ]]; then
     if [[ -f "$STAGING_MARKER" && "$(cat "$STAGING_MARKER")" == "$PLAN_ID" ]]; then
       rm -rf "$STAGING_DIR"
-      [[ -d "$STAGING_DIR" ]] && die "espaço temporário da ESP não foi removido (8.6)"
+      # `if`, e não `[[ … ]] && die`: no caminho de SUCESSO (o diretório sumiu) a
+      # lista `&&` devolve 1, e esse 1 sobe como status do bloco. Mesma armadilha
+      # que matou a fase 5 sem imprimir nada — e aqui seria pior, no último passo
+      # do último script, depois da ESP já escrita.
+      if [[ -d "$STAGING_DIR" ]]; then
+        die "espaço temporário da ESP não foi removido (8.6)"
+      fi
     else
       log "aviso: espaço temporário $STAGING_DIR_REL não tem marcador desta transação — não removido (8.6)"
     fi

@@ -9,6 +9,8 @@ set -euo pipefail
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=common.sh
 source "${LIB_DIR}/common.sh"
+# Falha sem `die` sai calada; este trap dá nome ao que parou (common.sh).
+trap_uncaught_errors
 
 require_root
 require_cmd unsquashfs mount rsync blkid

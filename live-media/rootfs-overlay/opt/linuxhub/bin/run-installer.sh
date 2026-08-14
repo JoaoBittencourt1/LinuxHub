@@ -15,6 +15,8 @@ require_cmd jq mount findmnt
 
 on_fatal_error() {
   local exit_code=$?
+  local failed_command="${BASH_COMMAND:-<desconhecido>}"
+  local failed_line="${BASH_LINENO[0]:-?}"
 
   # Volta o console para a tty1 ANTES de imprimir. Se a tela de progresso subiu,
   # o Xorg trocou o VT ativo — e a mensagem de erro sairia num VT que ninguém
@@ -32,7 +34,16 @@ on_fatal_error() {
     echo "#  A INSTALAÇÃO PAROU (código $exit_code)"
     echo "#"
     echo "#  Nada foi escrito no disco depois deste ponto."
-    echo "#  A mensagem da causa está logo acima desta caixa."
+    # O comando que falhou, sempre. A frase "a causa está logo acima" era uma
+    # promessa que o instalador nem sempre cumpria: quando o `set -e` dispara sem
+    # ninguém chamar `die`, não há nada acima — e a caixa virava uma mentira
+    # educada. Bug real: o preparo do disco saiu com código 1 e zero linhas de
+    # causa, porque uma função devolvia 1 no caminho de sucesso.
+    echo "#  Comando que falhou (linha $failed_line):"
+    echo "#    $failed_command"
+    echo "#"
+    echo "#  Se houver uma linha 'ERRO:' acima, ela diz a causa."
+    echo "#  Se não houver, a falha veio do comando acima, sem causa declarada."
     echo "#"
     echo "#  Diagnóstico: journalctl -b  |  cat $LINUXHUB_UI_LOG"
     echo "############################################################"

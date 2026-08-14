@@ -30,6 +30,28 @@ die() {
   exit 1
 }
 
+# Um `set -e` disparado sem `die` sai calado: código 1 e nenhuma linha na tela.
+# Foi assim que o preparo do disco morreu no caminho de sucesso, com a caixa de
+# erro dizendo "a causa está logo acima desta caixa" e nada acima dela.
+#
+# Este trap nomeia o que ninguém nomeou: o script, a linha e o comando que
+# devolveu o status não-zero. Não substitui um `die` com causa — mas transforma
+# "parou" em "parou aqui", que é a diferença entre depurar e adivinhar.
+#
+# Todo script de fase instala este trap logo após dar source neste arquivo.
+report_uncaught_error() {
+  local status=$?
+  local line="${1:-?}" command="${2:-?}"
+  log "ERRO NÃO TRATADO em $(basename "${BASH_SOURCE[1]:-$0}"), linha ${line}: status ${status}"
+  log "  comando: ${command}"
+  log "  (nenhum 'die' foi chamado — isto é falha de código, não condição prevista)"
+  exit "$status"
+}
+
+trap_uncaught_errors() {
+  trap 'report_uncaught_error "$LINENO" "$BASH_COMMAND"' ERR
+}
+
 require_root() {
   if [[ "${EUID}" -ne 0 ]]; then
     die "precisa rodar como root"
@@ -112,7 +134,18 @@ assert_partition_idle() {
       dump_holders_diagnostic "$device"
       die "partição $device tem usuário aberto (amostra $sample de 2)"
     fi
-    [[ "$sample" -eq 1 ]] && sleep 1
+    # `if`, e NUNCA `[[ … ]] && sleep 1`. Na segunda amostra a condição é falsa, a
+    # lista `&&` devolve 1, esse 1 vira o status do laço e o status da função — e
+    # o `set -e` do chamador mata a instalação no CAMINHO DE SUCESSO, sem
+    # mensagem nenhuma, porque ninguém chamou `die`.
+    #
+    # Bug real: a instalação parou no preparo do disco com "código 1" e uma caixa
+    # de erro dizendo "a causa está logo acima", com nada acima. Uma função que
+    # devolve fracasso quando teve sucesso é pior que uma que falha: ela mente
+    # sobre o que aconteceu.
+    if [[ "$sample" -eq 1 ]]; then
+      sleep 1
+    fi
   done
 }
 
