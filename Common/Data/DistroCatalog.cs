@@ -42,17 +42,19 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2004",
                 BeginnerRating = 5,
                 IsTested = true,
-                // O instalador próprio NÃO serve para o Ubuntu, e isto não é falta de teste:
-                // desde a 23.10 a ISO do desktop é `fsimage-layered`. A de 24.04.4 traz 41
-                // arquivos .squashfs (uma base, um delta por variante, um por idioma), e a base
-                // não contém kernel nem módulos — `/boot` só tem memtest e `/lib/modules` está
-                // vazio. O instalador do Ubuntu extrai as camadas e depois instala kernel e
-                // bootloader a partir do `pool/`. Extrair o squashfs, que é o que o instalador
-                // próprio faz, produziria um sistema que não arranca.
+                // ATENÇÃO — MUDANÇA LOCAL DE TESTE, NÃO PUBLICAR.
+                // O gate §7.1 (own-linux-installer, task 11.11) manda declarar o mecanismo
+                // próprio só DEPOIS de uma instalação completa validada em VM com snapshot.
+                // Está assim para tornar esse teste possível: sem declarar, o caminho é
+                // inalcançável e não há como exercitá-lo nem em VM.
                 //
-                // O caminho próprio é exercitado com o Debian, cuja ISO live tem UM
-                // filesystem.squashfs com o kernel dentro (ver a entrada "debian" abaixo).
-                UnattendedInstall = UnattendedInstallMechanism.Subiquity,
+                // A ISO do desktop é `fsimage-layered` desde a 23.10: 41 arquivos .squashfs, e
+                // a camada base (`casper/minimal.squashfs`, a que o `install-sources.yaml`
+                // declara como padrão) NÃO traz kernel nem módulos — `/boot` só tem memtest e
+                // `/lib/modules` está vazio. O kernel e o bootloader saem do `pool/` da própria
+                // ISO, que é um repositório apt completo (`dists/noble/main`), exatamente como
+                // o instalador do Ubuntu faz. Ver install-target-packages.sh.
+                UnattendedInstall = UnattendedInstallMechanism.OwnLiveInstaller,
                 // De releases.ubuntu.com/24.04/SHA256SUMS, obtido em 2026-08-11.
                 Sha256 = "3a4c9877b483ab46d7c3fbe165a0db275e1ae3cfe56a5657e5a47c2f99a99d1e",
                 SizeBytes = 6655619072,
@@ -64,46 +66,6 @@ namespace LinuxHub.Common.Data
                     "pack://application:,,,/Assets/Images/Ubuntu/ubuntu1.jpg",
                     "pack://application:,,,/Assets/Images/Ubuntu/ubuntu2.png"
                 }
-            },
-            new()
-            {
-                // Alvo do instalador próprio. Escolhido pelo formato do artefato, não pela
-                // marca: a ISO live do Debian tem UM `live/filesystem.squashfs`, e ele traz o
-                // kernel (`linux-image-6.12.94+deb13-amd64`) e os módulos dentro. Verificado em
-                // 2026-08-14 no `.contents` e no `.packages` publicados pelo próprio Debian.
-                //
-                // O que ela NÃO traz é o bootloader: só `grub-common`, sem `grub2-common`,
-                // `grub-efi-amd64-signed`, `shim-signed` ou `efibootmgr`. Esses vêm do `pool/`
-                // da própria ISO, que é um repositório apt completo (`dists/trixie/main`) — o
-                // instalador live os instala offline, de dentro do chroot.
-                Id = "debian",
-                Name = "Debian",
-                Family = "Debian",
-                Version = "13.6.0",
-                CreatedYear = "1993",
-                BeginnerRating = 3,
-                // Continua false: o caminho próprio ainda não completou uma instalação de ponta
-                // a ponta. "Testado" para o usuário significa que instalar funciona.
-                IsTested = false,
-                // ATENÇÃO — MUDANÇA LOCAL DE TESTE, NÃO PUBLICAR.
-                // O gate §7.1 (own-linux-installer, task 11.11) manda declarar o mecanismo
-                // próprio só DEPOIS de uma instalação completa validada em VM com snapshot.
-                // Está assim para tornar esse teste possível: sem declarar, o caminho é
-                // inalcançável e não há como exercitá-lo nem em VM.
-                UnattendedInstall = UnattendedInstallMechanism.OwnLiveInstaller,
-                // De cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/SHA256SUMS,
-                // obtido em 2026-08-14.
-                Sha256 = "1aa47465568cfc259b93ea7687a510d7f109df766daabbc69139ed99a25a71c9",
-                SizeBytes = 3800989696,
-                // Sem asset local: o projeto não tem logo do Debian em Assets/Images. O
-                // CatalogMerge já trata distro sem asset local (é o caso de qualquer distro
-                // anunciada só pelo catálogo remoto), então o vazio aqui segue o caminho que já
-                // existe em vez de apontar para um arquivo inexistente.
-                ImagePath = string.Empty,
-                DownloadLink = "https://www.debian.org/CD/live/",
-                DirectDownloadLink =
-                    "https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid/debian-live-13.6.0-amd64-gnome.iso",
-                CarouselImages = Array.Empty<string>()
             },
             new()
             {

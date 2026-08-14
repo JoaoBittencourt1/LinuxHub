@@ -187,18 +187,19 @@ LINUXHUB_WINDOWS_MOUNT_WRITABLE="no"
 log "registro deixa de ser espelhado no Windows a partir daqui: o volume foi remontado em somente-leitura para a fase de escrita em disco"
 
 if ! mapfile -t EXTRACTION < <("${LIB_DIR}/verify-and-extract.sh" "$PLAN_PATH" "$ARTIFACT_PATH" "$TARGET_PART") \
-   || [[ "${#EXTRACTION[@]}" -lt 2 ]]; then
+   || [[ "${#EXTRACTION[@]}" -lt 3 ]]; then
   die "a verificação/extração do artefato não passou"
 fi
 TARGET_MOUNT="${EXTRACTION[0]}"
 ISO_SUITE="${EXTRACTION[1]}"
+KERNEL_PACKAGE="${EXTRACTION[2]}"
 
-# A cadeia de boot assinada NÃO vem no squashfs de uma ISO live do Debian — ela
-# vive no pool/ da própria ISO. Por isso esta fase roda aqui, com o artefato
-# ainda alcançável: depois de soltar o volume do Windows não haveria de onde
-# instalar, e uma instalação que baixa da internet falha na casa de quem não tem.
+# Kernel e cadeia assinada não vêm no squashfs de uma ISO em camadas — vivem no
+# pool/ da própria ISO. Por isso esta fase roda aqui, com o artefato ainda
+# alcançável: depois de soltar o volume do Windows não haveria de onde instalar,
+# e uma instalação que baixa da internet falha na casa de quem não tem.
 emit_progress "install.configuring"
-"${LIB_DIR}/install-bootloader-packages.sh" "$ARTIFACT_PATH" "$ISO_SUITE" "$TARGET_MOUNT"
+"${LIB_DIR}/install-boot-packages.sh" "$ARTIFACT_PATH" "$ISO_SUITE" "$KERNEL_PACKAGE" "$TARGET_MOUNT"
 
 # Só agora solta o volume do Windows: a instalação do bootloader escreve na
 # ESP do mesmo disco, e nada deste disco deve estar montado nesse momento além

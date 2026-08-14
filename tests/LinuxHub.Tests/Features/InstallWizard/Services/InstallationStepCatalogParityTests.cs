@@ -24,7 +24,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
                 InstallationStepIds.WindowsTemporaryBootPrepared,
                 InstallationStepIds.LiveIsoMounted,
                 InstallationStepIds.LiveDistributionExtracted,
-                InstallationStepIds.TargetBootloaderPackagesInstalled,
+                InstallationStepIds.TargetBootPackagesInstalled,
                 InstallationStepIds.TargetSystemConfigured,
                 InstallationStepIds.TargetBootloaderInstalled,
                 InstallationStepIds.TargetInstallationVerified,
@@ -47,7 +47,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             // live do Debian traz o kernel mas não o bootloader. Compensável porque, quando ele
             // roda, nada fora da partição alvo (já nossa desde o mkfs) foi tocado.
             InstallationStepDefinition bootPackages =
-                InstallationStepCatalog.Get(InstallationStepIds.TargetBootloaderPackagesInstalled);
+                InstallationStepCatalog.Get(InstallationStepIds.TargetBootPackagesInstalled);
             Assert.True(bootPackages.Armed);
             Assert.True(bootPackages.Required);
             Assert.True(bootPackages.Compensatable);
@@ -140,7 +140,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             [
                 InstallationStepIds.LiveIsoMounted,
                 InstallationStepIds.LiveDistributionExtracted,
-                InstallationStepIds.TargetBootloaderPackagesInstalled,
+                InstallationStepIds.TargetBootPackagesInstalled,
                 InstallationStepIds.TargetSystemConfigured,
                 InstallationStepIds.TargetBootloaderInstalled,
                 InstallationStepIds.TargetInstallationVerified,
@@ -155,7 +155,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             string[] phaseScriptsInOrder =
             [
                 "verify-and-extract.sh", // live.iso-mounted, live.distribution-extracted
-                "install-bootloader-packages.sh", // target.bootloader-packages-installed
+                "install-boot-packages.sh", // target.boot-packages-installed
                 "configure-target.sh",   // target.system-configured
                 "install-bootloader.sh", // target.bootloader-installed
                 "verify-installation.sh", // target.installation-verified

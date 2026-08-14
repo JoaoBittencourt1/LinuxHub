@@ -40,7 +40,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // Compensável: desfazer é remover pacotes de um sistema que ainda não é o de
             // ninguém — a partição alvo já é nossa desde o mkfs. Nada fora dela foi tocado
             // ainda; a ESP só entra no passo target.bootloader-installed.
-            new(Models.InstallationStepIds.TargetBootloaderPackagesInstalled, Required: true, Compensatable: true, Armed: true),
+            new(Models.InstallationStepIds.TargetBootPackagesInstalled, Required: true, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.TargetSystemConfigured, Required: true, Compensatable: true, Armed: true),
             new(Models.InstallationStepIds.TargetBootloaderInstalled, Required: true, Compensatable: false, Armed: true),
             new(Models.InstallationStepIds.TargetInstallationVerified, Required: true, Compensatable: false, Armed: true),
