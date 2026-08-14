@@ -362,8 +362,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             // Dois tamanhos, um de cada caminho, e nunca os dois ao mesmo tempo:
             // stagingSizeBytes é o tamanho de política da partição de staging do modo
             // substituir; sizeBytes é o tamanho observado da raiz criada pelo instalador
-            // próprio. Qualquer um dos dois define uma extensão real no disco, e nenhuma
-            // extensão real pode invadir Windows, boot ou recuperação.
+            // próprio. Qualquer um dos dois define uma extensão real no disco.
             long installerSize = disk.Installer.StagingSizeBytes > 0
                 ? disk.Installer.StagingSizeBytes
                 : disk.Installer.SizeBytes ?? 0;
@@ -376,7 +375,29 @@ namespace LinuxHub.Features.InstallWizard.Services
                 errors,
                 "disk.installer extent would run past the end of the disk.");
 
-            foreach ((string name, InstallationPlanPartitionIdentity partition) in named)
+            // A extensão do instalador é comparada com boot e recuperação, mas NUNCA com
+            // disk.windows — e a exclusão é a parte importante desta regra.
+            //
+            // O plano é publicado antes de qualquer mudança no disco, então disk.windows
+            // guarda a geometria ORIGINAL. A partição do instalador nasce depois, no espaço
+            // que o encolhimento abriu — ou seja, dentro do que ERA a partição do Windows.
+            // Comparar as duas é comparar o antes com o depois: a sobreposição é sempre
+            // verdadeira no papel e sempre falsa no disco.
+            //
+            // Bug real: a instalação parava com "disk.installer extent would overlap
+            // disk.windows" com a raiz criada corretamente no espaço livre. Windows terminava
+            // em 135.466.582.016 pelo tamanho antigo; a raiz começava em 81.779.490.816, que
+            // estava livre havia minutos.
+            //
+            // Boot e recuperação ficam: o encolhimento não mexe em nenhuma das duas (ele corta
+            // pelo fim da partição do Windows), então a geometria delas no plano continua
+            // valendo, e invadir qualquer uma seria dano real.
+            //
+            // Quem protege o Windows não é esta regra: a partição é criada pela própria API do
+            // Windows, em espaço livre, e o lado live confere PARTUUID, offset e tamanho antes
+            // de formatar.
+            var installerNeighbours = named.Where(n => n.Name != "disk.windows");
+            foreach ((string name, InstallationPlanPartitionIdentity partition) in installerNeighbours)
             {
                 long end = partition.OffsetBytes + partition.SizeBytes;
                 bool overlapsInstaller =

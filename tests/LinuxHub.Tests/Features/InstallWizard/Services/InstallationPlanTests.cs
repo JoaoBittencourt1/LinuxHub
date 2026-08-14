@@ -156,20 +156,44 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         /// <summary>
-        /// A extensão observada da raiz não pode invadir Windows, boot ou recuperação. Antes
-        /// desta regra a checagem de sobreposição só olhava <c>stagingSizeBytes</c>, que é 0 no
-        /// instalador próprio — ou seja, a partição que este caminho realmente cria era a única
-        /// que ninguém conferia.
+        /// A raiz nasce DENTRO do que era a partição do Windows, e isso é o esperado, não um
+        /// erro: o plano é publicado antes de qualquer mudança no disco, então
+        /// <c>disk.windows</c> guarda a geometria original, e a raiz ocupa o espaço que o
+        /// encolhimento abriu depois.
+        ///
+        /// Bug real: comparar a extensão da raiz com a do Windows fazia toda instalação parar
+        /// com "disk.installer extent would overlap disk.windows" — com a raiz criada
+        /// corretamente, pela API do Windows, em espaço que estava livre havia minutos. É
+        /// comparar o antes com o depois: sempre verdadeiro no papel, sempre falso no disco.
         /// </summary>
         [Fact]
-        public void Validate_OwnLiveInstaller_RejectsRootExtentOverlappingWindows()
+        public void Validate_OwnLiveInstaller_AcceptsRootInsideTheOriginalWindowsExtent()
         {
             InstallationPlan plan = ValidUefiPlan();
             plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.OwnLiveInstaller);
             plan.Disk.Installer.Number = 6;
-            plan.Disk.Installer.OffsetBytes = plan.Disk.Windows.OffsetBytes;
+            // No meio do que era a partição do Windows — exatamente onde o encolhimento libera.
+            plan.Disk.Installer.OffsetBytes = plan.Disk.Windows.OffsetBytes + (100L * 1024 * 1024 * 1024);
             plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-            plan.Disk.Installer.SizeBytes = plan.Disk.Windows.SizeBytes;
+            plan.Disk.Installer.SizeBytes = 50L * 1024 * 1024 * 1024;
+
+            InstallationPlanValidator.Validate(plan);
+        }
+
+        /// <summary>
+        /// Recuperação e boot continuam valendo: o encolhimento corta pelo FIM da partição do
+        /// Windows e não move nenhuma das duas, então a geometria delas no plano ainda descreve
+        /// o disco — e invadir qualquer uma seria dano real.
+        /// </summary>
+        [Fact]
+        public void Validate_OwnLiveInstaller_RejectsRootExtentOverlappingRecovery()
+        {
+            InstallationPlan plan = ValidUefiPlan();
+            plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.OwnLiveInstaller);
+            plan.Disk.Installer.Number = 6;
+            plan.Disk.Installer.OffsetBytes = plan.Disk.Recovery!.OffsetBytes;
+            plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+            plan.Disk.Installer.SizeBytes = plan.Disk.Recovery.SizeBytes;
 
             var error = Assert.Throws<InstallationPlanValidationException>(
                 () => InstallationPlanValidator.Validate(plan));
