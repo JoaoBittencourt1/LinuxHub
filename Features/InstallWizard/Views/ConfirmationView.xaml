@@ -3,14 +3,19 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:sys="clr-namespace:System.Windows.Controls;assembly=PresentationFramework"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-             xmlns:loc="clr-namespace:LinuxHub.Common.Localization">
+             xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
+             xmlns:anim="clr-namespace:LinuxHub.Common.Animations">
 
     <UserControl.Resources>
         <sys:BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
 
-    <ui:Card Margin="0,0,0,16" BorderBrush="#FF5C5C" BorderThickness="1">
-        <StackPanel>
+    <ui:Card Margin="0,0,0,16"
+             BorderBrush="#FF5C5C"
+             BorderThickness="1"
+             anim:Entrance.Effect="FadeUp">
+        <StackPanel anim:Entrance.ChildEffect="FadeUp"
+                    anim:Entrance.ChildStagger="60">
             <TextBlock Text="{loc:Loc Wizard_ConfirmationTitle}" FontWeight="SemiBold" Opacity="0.85" Margin="0,0,0,10"/>
             <TextBlock Text="{Binding Summary}" TextWrapping="Wrap" Margin="0,0,0,12"/>
 
@@ -22,8 +27,8 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <ui:Button Content="{loc:Loc Wizard_CancelButton}" Margin="0,0,8,0" Command="{Binding CancelCommand}"/>
-                <ui:Button Content="{loc:Loc Wizard_ConfirmButton}" Appearance="Danger" Command="{Binding ConfirmCommand}"/>
+                <ui:Button Content="{loc:Loc Wizard_CancelButton}" Margin="0,0,8,0" anim:Hover.Effect="Pop" Command="{Binding CancelCommand}"/>
+                <ui:Button Content="{loc:Loc Wizard_ConfirmButton}" Appearance="Danger" anim:Hover.Effect="Pop" anim:Hover.GlowColor="SystemFillColorCritical" Command="{Binding ConfirmCommand}"/>
             </StackPanel>
         </StackPanel>
     </ui:Card>

@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
-             xmlns:conv="clr-namespace:LinuxHub.Features.Catalog.Views.Converters">
+             xmlns:conv="clr-namespace:LinuxHub.Features.Catalog.Views.Converters"
+             xmlns:anim="clr-namespace:LinuxHub.Common.Animations">
 
     <UserControl.Resources>
         <conv:RatingToStarsConverter x:Key="RatingToStars"/>
@@ -22,15 +23,26 @@
                    HorizontalAlignment="Left"
                    VerticalAlignment="Top"
                    Panel.ZIndex="10"
+                   anim:Entrance.Effect="FadeFromLeft"
+                   anim:Hover.Effect="Pop"
                    Margin="0,0,0,10"/>
 
         <!-- Imagem da distro -->
-        <ui:Card Grid.Column="0" Margin="0,50,10,0">
+        <ui:Card Grid.Column="0"
+                 Margin="0,50,10,0"
+                 anim:Entrance.Effect="FadeScale"
+                 anim:Entrance.Delay="80"
+                 anim:Hover.Effect="Glow"
+                 anim:Hover.GlowColor="{Binding AccentColor}">
             <Image Source="{Binding ImagePath}" Stretch="Uniform"/>
         </ui:Card>
 
         <!-- Painel de informações -->
-        <StackPanel Grid.Column="1" Margin="20,50,0,0" VerticalAlignment="Top">
+        <StackPanel Grid.Column="1"
+                    Margin="20,50,0,0"
+                    VerticalAlignment="Top"
+                    anim:Entrance.ChildEffect="FadeUp"
+                    anim:Entrance.ChildStagger="65">
             <TextBlock Text="{Binding Name}"
                        FontSize="28"
                        FontWeight="Bold"
@@ -74,6 +86,7 @@
                 <ui:Button Grid.Column="0"
                            Width="32"
                            Height="32"
+                           anim:Hover.Effect="Pop"
                            Icon="{ui:SymbolIcon ChevronLeft24}"
                            Command="{Binding PrevCommand}"/>
 
@@ -87,6 +100,7 @@
                 <ui:Button Grid.Column="2"
                            Width="32"
                            Height="32"
+                           anim:Hover.Effect="Pop"
                            Icon="{ui:SymbolIcon ChevronRight24}"
                            Command="{Binding NextCommand}"/>
             </Grid>
@@ -96,6 +110,7 @@
                        Command="{Binding InstallNowCommand}"
                        Appearance="Primary"
                        Icon="{ui:SymbolIcon Desktop24}"
+                       anim:Hover.Effect="Glow"
                        HorizontalAlignment="Stretch"
                        HorizontalContentAlignment="Center"
                        Height="40"
@@ -105,6 +120,7 @@
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="{loc:Loc CatalogDetail_DownloadLabel}" FontSize="15" VerticalAlignment="Center" Margin="0,0,6,0"/>
                 <ui:HyperlinkButton Content="{loc:Loc CatalogDetail_DownloadLinkText}"
+                                     anim:Hover.Effect="Pop"
                                      Command="{Binding OpenDownloadLinkCommand}"/>
             </StackPanel>
         </StackPanel>

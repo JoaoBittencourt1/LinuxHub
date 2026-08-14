@@ -1,8 +1,12 @@
 using System.Globalization;
 using System.Reflection;
 using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using LinuxHub.Common.Animations;
 using LinuxHub.Common.Localization;
 using LinuxHub.Common.Models;
+using LinuxHub.Common.Theming;
 using LinuxHub.Features.Catalog.ViewModels;
 using LinuxHub.Features.Catalog.Views;
 using LinuxHub.Features.InstallWizard.ViewModels;
@@ -20,6 +24,12 @@ namespace LinuxHub.Shell
     /// </summary>
     public partial class MainWindow : FluentWindow
     {
+        /// <summary>Deslocamento vertical do marcador até o segundo botão de navegação:
+        /// altura do primeiro (42) mais a margem que os separa (6).</summary>
+        private const double InstallNavIndicatorOffset = 48d;
+
+        private static readonly Duration NavIndicatorDuration = new(TimeSpan.FromMilliseconds(340));
+
         private readonly CatalogView _catalogView;
         private readonly InstallWizardView _installWizardView;
         private readonly InstallWizardViewModel _installWizardViewModel;
@@ -61,6 +71,7 @@ namespace LinuxHub.Shell
             ContentHost.Content = _catalogView;
             CatalogNavButton.Appearance = ControlAppearance.Secondary;
             InstallNavButton.Appearance = ControlAppearance.Transparent;
+            MoveNavIndicator(0d);
         }
 
         private void ShowInstallWizard()
@@ -68,12 +79,39 @@ namespace LinuxHub.Shell
             ContentHost.Content = _installWizardView;
             InstallNavButton.Appearance = ControlAppearance.Secondary;
             CatalogNavButton.Appearance = ControlAppearance.Transparent;
+            MoveNavIndicator(InstallNavIndicatorOffset);
         }
+
+        private void MoveNavIndicator(double offsetY) =>
+            NavIndicatorOffset.BeginAnimation(
+                TranslateTransform.YProperty,
+                new DoubleAnimation(offsetY, NavIndicatorDuration)
+                {
+                    EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.35 },
+                });
 
         private void LanguageButton_Click(object sender, RoutedEventArgs e)
         {
             LanguageMenu.PlacementTarget = LanguageButton;
             LanguageMenu.IsOpen = true;
+        }
+
+        private void ThemeButton_Click(object sender, RoutedEventArgs e)
+        {
+            ThemeManager.Instance.Toggle();
+
+            ThemeIcon.Symbol = ThemeManager.Instance.IsDark
+                ? SymbolRegular.WeatherMoon24
+                : SymbolRegular.WeatherSunny24;
+
+            ThemeIconRotation.BeginAnimation(
+                RotateTransform.AngleProperty,
+                new DoubleAnimation(0d, 360d, new Duration(TimeSpan.FromMilliseconds(650)))
+                {
+                    EasingFunction = new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = 0.4 },
+                });
+
+            Entrance.Play(RootGrid, EntranceEffect.Fade, TimeSpan.Zero);
         }
 
         private void PortugueseMenuItem_Click(object sender, RoutedEventArgs e) =>

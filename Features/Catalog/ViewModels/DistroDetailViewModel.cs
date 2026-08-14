@@ -23,6 +23,7 @@ namespace LinuxHub.Features.Catalog.ViewModels
             CreatedYear = distro.CreatedYear;
             BeginnerRating = distro.BeginnerRating;
             ImagePath = distro.ImagePath;
+            AccentColor = distro.AccentColor;
             DownloadLink = distro.DownloadLink;
             CarouselItems = distro.CarouselImages;
 
@@ -51,6 +52,7 @@ namespace LinuxHub.Features.Catalog.ViewModels
         public string CreatedYear { get; }
         public int BeginnerRating { get; }
         public string ImagePath { get; }
+        public string AccentColor { get; }
         public string DownloadLink { get; }
         public IReadOnlyList<string> CarouselItems { get; }
 

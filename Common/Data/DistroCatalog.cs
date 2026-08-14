@@ -27,6 +27,7 @@ namespace LinuxHub.Common.Data
                 BeginnerRating = 5,
                 SupportsAutoinstall = true,
                 ImagePath = "pack://application:,,,/Assets/Images/Ubuntu.png",
+                AccentColor = "#E95420",
                 DownloadLink = "https://ubuntu.com/download/desktop",
                 DirectDownloadLink = "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-desktop-amd64.iso",
                 CarouselImages = new[]
@@ -44,6 +45,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2006",
                 BeginnerRating = 5,
                 ImagePath = "pack://application:,,,/Assets/Images/mint.png",
+                AccentColor = "#87CF3E",
                 DownloadLink = "https://linuxmint.com/download.php",
                 DirectDownloadLink = "https://mint.portalidea.com.br/iso/stable/22.2/linuxmint-22.2-cinnamon-64bit.iso",
                 CarouselImages = new[]
@@ -61,6 +63,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2008",
                 BeginnerRating = 5,
                 ImagePath = "pack://application:,,,/Assets/Images/zorin.png",
+                AccentColor = "#1CA0E3",
                 DownloadLink = "https://zorin.com/os/download/",
                 DirectDownloadLink = "https://mirror.umd.edu/zorin/18/Zorin-OS-18-Core-64-bit-r2.iso",
                 CarouselImages = new[]
@@ -79,6 +82,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2017",
                 BeginnerRating = 3,
                 ImagePath = "pack://application:,,,/Assets/Images/popos.png",
+                AccentColor = "#48B9C7",
                 DownloadLink = "https://system76.com/pop/",
                 DirectDownloadLink = "https://iso.pop-os.org/24.04/amd64/generic/22/pop-os_24.04_amd64_generic_22.iso",
                 CarouselImages = new[]
@@ -96,6 +100,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2003",
                 BeginnerRating = 3,
                 ImagePath = "pack://application:,,,/Assets/Images/fedora.png",
+                AccentColor = "#51A2DA",
                 DownloadLink = "https://www.fedoraproject.org/pt-br/workstation/download",
                 DirectDownloadLink = "https://download.fedoraproject.org/pub/fedora/linux/releases/43/KDE/x86_64/iso/Fedora-KDE-Desktop-Live-43-1.6.x86_64.iso",
                 CarouselImages = new[]
@@ -114,6 +119,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2005",
                 BeginnerRating = 4,
                 ImagePath = "pack://application:,,,/Assets/Images/Kubuntu.png",
+                AccentColor = "#0079C1",
                 DownloadLink = "https://kubuntu.org/archives/getkubuntu.html",
                 // Link direto do Kubuntu está indisponível na origem; mantido como no código
                 // original (aponta para o instalador do Pop!_OS) — correção de URL está fora
@@ -133,6 +139,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2006",
                 BeginnerRating = 4,
                 ImagePath = "pack://application:,,,/Assets/Images/Xubuntu.png",
+                AccentColor = "#0044AA",
                 DownloadLink = "https://xubuntu.org/download/",
                 DirectDownloadLink = "https://ftp.ussg.iu.edu/linux/xubuntu/releases/25.10/release/xubuntu-25.10-desktop-amd64.iso",
                 CarouselImages = new[]
@@ -149,6 +156,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2011",
                 BeginnerRating = 3,
                 ImagePath = "pack://application:,,,/Assets/Images/manjaro.png",
+                AccentColor = "#35BF5C",
                 DownloadLink = "https://manjaro.org/products/download/x86",
                 DirectDownloadLink = "https://download.manjaro.org/xfce/25.0.10/manjaro-xfce-25.0.10-251013-linux612.iso",
                 CarouselImages = new[]
@@ -166,6 +174,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2002",
                 BeginnerRating = 1,
                 ImagePath = "pack://application:,,,/Assets/Images/arch.png",
+                AccentColor = "#1793D1",
                 DownloadLink = "https://archlinux.org/download/",
                 DirectDownloadLink = "https://mirror.adectra.com/archlinux/iso/2026.01.01/archlinux-2026.01.01-x86_64.iso",
                 CarouselImages = new[]
@@ -185,6 +194,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2019",
                 BeginnerRating = 2,
                 ImagePath = "pack://application:,,,/Assets/Images/endeavouros.png",
+                AccentColor = "#7E3FF2",
                 DownloadLink = "https://endeavouros.com/",
                 DirectDownloadLink = "https://mirrors.gigenet.com/endeavouros/iso/EndeavourOS_Ganymede-2025.11.24.iso",
                 CarouselImages = new[]
@@ -203,6 +213,7 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2013",
                 BeginnerRating = 1,
                 ImagePath = "pack://application:,,,/Assets/Images/kali.png",
+                AccentColor = "#367BF0",
                 DownloadLink = "https://www.kali.org/get-kali/",
                 DirectDownloadLink = "https://cdimage.kali.org/kali-2025.4/kali-linux-2025.4-installer-amd64.iso",
                 CarouselImages = new[]

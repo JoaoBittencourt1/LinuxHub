@@ -6,7 +6,9 @@
              xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
              xmlns:conv="clr-namespace:LinuxHub.Features.InstallWizard.Views.Converters"
              xmlns:models="clr-namespace:LinuxHub.Common.Models"
-             xmlns:views="clr-namespace:LinuxHub.Features.InstallWizard.Views">
+             xmlns:anim="clr-namespace:LinuxHub.Common.Animations"
+             xmlns:views="clr-namespace:LinuxHub.Features.InstallWizard.Views"
+             anim:Entrance.Effect="FadeFromRight">
 
     <UserControl.Resources>
         <sys:BooleanToVisibilityConverter x:Key="BoolToVis"/>
@@ -16,7 +18,10 @@
 
     <Grid>
         <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
-            <StackPanel MaxWidth="640" HorizontalAlignment="Stretch">
+            <StackPanel MaxWidth="640"
+                        HorizontalAlignment="Stretch"
+                        anim:Entrance.ChildEffect="FadeUp"
+                        anim:Entrance.ChildStagger="55">
 
                 <TextBlock Text="{loc:Loc Wizard_Title}" FontSize="22" FontWeight="Bold" Margin="0,0,0,16"/>
 
@@ -44,7 +49,12 @@
                         </StackPanel>
 
                         <!-- ISO manual -->
+                        <!-- Cada bloco que aparece/some conforme a escolha do usuário tem a
+                             própria animação de entrada, além da cascata do painel: sem isso
+                             a troca de opção substituiria um bloco pelo outro num salto seco,
+                             sem nada indicando o que mudou. -->
                         <Grid Margin="0,0,0,12"
+                              anim:Entrance.Effect="FadeUp"
                               Visibility="{Binding Iso.IsManualIsoVisible, Converter={StaticResource BoolToVis}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -59,12 +69,14 @@
                             <ui:Button Grid.Column="1"
                                        Content="{loc:Loc Wizard_SearchButton}"
                                        Margin="8,0,0,0"
+                                       anim:Hover.Effect="Pop"
                                        Click="BrowseIso_Click"/>
                         </Grid>
 
                         <!-- ISOs já baixadas: só aparece sozinha (sem o combo de baixar outra
                              junto) pra não deixar dois campos disputando qual ISO vale. -->
                         <StackPanel Visibility="{Binding Iso.IsDownloadedIsosVisible, Converter={StaticResource BoolToVis}}"
+                                    anim:Entrance.Effect="FadeUp"
                                     Margin="0,0,0,10">
                             <TextBlock Text="{loc:Loc Wizard_DownloadedIsosLabel}" Opacity="0.7" Margin="0,0,0,6"/>
 
@@ -84,6 +96,7 @@
 
                                 <ui:Button Content="{loc:Loc Wizard_DownloadAnotherIsoButton}"
                                            Margin="10,0,0,0"
+                                           anim:Hover.Effect="Pop"
                                            Command="{Binding Iso.DownloadAnotherIsoCommand}"/>
                             </StackPanel>
                         </StackPanel>
@@ -91,6 +104,7 @@
                         <!-- Escolher distro pra baixar: só aparece quando ainda não há ISO
                              nenhuma baixada, ou quando o usuário pediu pra baixar outra. -->
                         <StackPanel Visibility="{Binding Iso.IsDistroPickerVisible, Converter={StaticResource BoolToVis}}"
+                                    anim:Entrance.Effect="FadeUp"
                                     Margin="0,0,0,10">
                             <TextBlock Text="{loc:Loc Wizard_SelectedDistributionLabel}" Opacity="0.7" Margin="0,0,0,6"/>
 
@@ -103,16 +117,22 @@
                                 <ui:Button Content="{loc:Loc Wizard_DownloadIsoButton}"
                                            Appearance="Primary"
                                            Margin="10,0,0,0"
+                                           anim:Hover.Effect="Pop"
+                                           anim:Entrance.Effect="FadeScale"
                                            Command="{Binding Iso.DownloadIsoCommand}"
                                            Visibility="{Binding Iso.IsDownloadButtonVisible, Converter={StaticResource BoolToVis}}"/>
 
                                 <ui:Button Content="{loc:Loc Wizard_CancelDownloadButton}"
                                            Margin="10,0,0,0"
+                                           anim:Hover.Effect="Pop"
+                                           anim:Entrance.Effect="FadeScale"
                                            Command="{Binding Iso.CancelDownloadCommand}"
                                            Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}"/>
 
                                 <ui:Button Content="{loc:Loc Wizard_BackToDownloadedIsoButton}"
                                            Margin="10,0,0,0"
+                                           anim:Hover.Effect="Pop"
+                                           anim:Entrance.Effect="FadeScale"
                                            Command="{Binding Iso.UseDownloadedIsoCommand}"
                                            Visibility="{Binding Iso.IsBackToDownloadedVisible, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
@@ -122,6 +142,7 @@
                         <StackPanel Orientation="Horizontal"
                                     Margin="0,4,0,10"
                                     VerticalAlignment="Center"
+                                    anim:Entrance.Effect="FadeUp"
                                     Visibility="{Binding Iso.IsDownloading, Converter={StaticResource BoolToVis}}">
                             <ProgressBar Width="260"
                                          Value="{Binding Iso.DownloadPercent, Mode=OneWay}"
@@ -133,6 +154,7 @@
                              a ponta (ver DistroInfo.SupportsAutoinstall) — pras demais o wizard
                              só prepara o boot até o instalador nativo, sem essa opção. -->
                         <StackPanel Margin="0,0,0,10"
+                                    anim:Entrance.Effect="FadeUp"
                                     Visibility="{Binding Iso.IsAutoinstallToggleVisible, Converter={StaticResource BoolToVis}}">
                             <ui:ToggleSwitch IsChecked="{Binding Iso.UseAutoinstall}">
                                 <ui:ToggleSwitch.Content>
@@ -172,6 +194,9 @@
                                    Width="24" Height="24"
                                    Margin="0,0,8,0"
                                    VerticalAlignment="Top"
+                                   anim:Entrance.Effect="FadeScale"
+                                   anim:Hover.Effect="Glow"
+                                   anim:Hover.GlowColor="{Binding Iso.DisplayedDistro.AccentColor}"
                                    Source="{Binding Iso.DisplayedDistro.ImagePath, TargetNullValue={x:Null}}"
                                    Visibility="{Binding Iso.IsIsoReadyForInstall, Converter={StaticResource BoolToVis}}"/>
                             <TextBlock Grid.Column="1"
@@ -199,6 +224,7 @@
 
                 <!-- Disco (substituir) -->
                 <ui:Card Margin="0,0,0,16"
+                         anim:Entrance.Effect="FadeUp"
                          Visibility="{Binding Target.IsReplaceMode, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Wizard_TargetDiskTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
@@ -221,6 +247,7 @@
 
                 <!-- Partição (dual-boot) -->
                 <ui:Card Margin="0,0,0,16"
+                         anim:Entrance.Effect="FadeUp"
                          Visibility="{Binding Target.IsDualBootMode, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Wizard_DualBootPartitionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
@@ -255,6 +282,7 @@
                 <!-- Usuário: só existe pro fluxo de autoinstall — sem ele é o instalador
                      nativo da ISO que vai perguntar isso. -->
                 <ui:Card Margin="0,0,0,16"
+                         anim:Entrance.Effect="FadeUp"
                          Visibility="{Binding IsAccountStepVisible, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="{loc:Loc Wizard_UserSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,10"/>
@@ -292,13 +320,17 @@
                             Message="{loc:Loc Wizard_WarningBanner}"
                             Margin="0,0,0,16"/>
 
-                <Border Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
+                <Border anim:Entrance.Effect="FadeUp"
+                        Visibility="{Binding IsConfirming, Converter={StaticResource BoolToVis}}">
                     <views:ConfirmationView DataContext="{Binding PendingConfirmation}"/>
                 </Border>
 
-                <Border Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
+                <Border anim:Entrance.Effect="FadeUp"
+                        Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
                     <ui:Button Content="{loc:Loc Wizard_InstallButton}"
                                Appearance="Success"
+                               anim:Hover.Effect="Glow"
+                               anim:Hover.GlowColor="SystemFillColorSuccess"
                                HorizontalAlignment="Stretch"
                                HorizontalContentAlignment="Center"
                                Height="44"
@@ -315,9 +347,11 @@
              cliques em tudo que está atrás. Mexer no alvo ou no tamanho com um shrink já
              em andamento não teria efeito algum e só confundiria. -->
         <Border Background="#CC000000"
+                anim:Entrance.Effect="Fade"
                 Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVis}}">
             <ui:Card MaxWidth="420"
                      Margin="24"
+                     anim:Entrance.Effect="FadeScale"
                      HorizontalAlignment="Center"
                      VerticalAlignment="Center">
                 <StackPanel>

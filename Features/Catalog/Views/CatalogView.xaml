@@ -3,7 +3,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              xmlns:conv="clr-namespace:LinuxHub.Features.Catalog.Views.Converters"
-             xmlns:catalog="clr-namespace:LinuxHub.Features.Catalog.Views">
+             xmlns:anim="clr-namespace:LinuxHub.Common.Animations"
+             xmlns:catalog="clr-namespace:LinuxHub.Features.Catalog.Views"
+             anim:Entrance.Effect="FadeFromRight">
 
     <UserControl.Resources>
         <conv:NullToVisibilityConverter x:Key="NullToVis"/>
@@ -21,18 +23,35 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
+                        <!-- Stagger em vez de um atraso fixo: os cartões são gerados a
+                             partir da coleção, então o índice de cada um só existe em
+                             runtime — é ele que escalona a entrada. -->
                         <ui:Card Width="132"
                                  Height="160"
                                  Margin="8"
                                  Padding="10"
                                  Cursor="Hand"
+                                 anim:Entrance.Effect="FadeUp"
+                                 anim:Entrance.Stagger="45"
+                                 anim:Hover.Effect="Lift"
+                                 anim:Hover.GlowColor="{Binding AccentColor}"
                                  MouseLeftButtonUp="DistroTile_MouseLeftButtonUp">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="*"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <Image Source="{Binding ImagePath}" Stretch="Uniform" Margin="4"/>
+                                <!-- Caixa fixa, e não só Stretch="Uniform": sem largura e
+                                     altura explícitas, cada logo dimensiona a linha pelo
+                                     próprio formato (o Zorin é largo e baixo, o EndeavourOS
+                                     é alto), e aí tanto a arte quanto o nome logo abaixo
+                                     ficavam em alturas diferentes de cartão para cartão. -->
+                                <Image Source="{Binding ImagePath}"
+                                       Stretch="Uniform"
+                                       Width="100"
+                                       Height="100"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
                                 <TextBlock Grid.Row="1"
                                            Text="{Binding Name}"
                                            FontWeight="SemiBold"
@@ -54,12 +73,14 @@
              elemento é uma corrida (o Binding pode resolver contra o DataContext
              novo, não o do CatalogViewModel, e falhar silenciosamente pro
              Visibility padrão = Visible). -->
-        <Grid Visibility="{Binding SelectedDistroDetail, Converter={StaticResource NullToVis}, ConverterParameter=Invert}">
+        <Grid anim:Entrance.Effect="FadeScale"
+              Visibility="{Binding SelectedDistroDetail, Converter={StaticResource NullToVis}, ConverterParameter=Invert}">
             <catalog:DistroDetailView DataContext="{Binding SelectedDistroDetail}"/>
         </Grid>
 
         <!-- Overlay de imagem em tela cheia -->
         <Grid Background="#CC000000"
+              anim:Entrance.Effect="Fade"
               Visibility="{Binding FullscreenImagePath, Converter={StaticResource NullToVis}, ConverterParameter=Invert}"
               MouseLeftButtonUp="FullscreenOverlay_MouseLeftButtonUp">
             <!-- TargetNullValue: o overlay fica colapsado sem imagem, mas o binding ainda é
@@ -67,6 +88,7 @@
             <Image Source="{Binding FullscreenImagePath, TargetNullValue={x:Null}}"
                    Stretch="Uniform"
                    Margin="48"
+                   anim:Entrance.Effect="FadeScale"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"/>
         </Grid>

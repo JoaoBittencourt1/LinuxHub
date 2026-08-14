@@ -23,6 +23,13 @@ namespace LinuxHub.Common.Models
         public string DescriptionKey => $"Distro_{Id}_Description";
         public string MaintainerKey => $"Distro_{Id}_Maintainer";
         public string ImagePath { get; set; } = string.Empty;
+
+        /// <summary>Cor da marca da distro, em hexadecimal (ex.: <c>#E95420</c>), usada como
+        /// brilho quando o ponteiro passa sobre ela. Fica como dado puro, e não em recurso
+        /// de localização, porque não é prosa — é identidade visual, igual ao nome próprio
+        /// e à URL (ver constitution.md, exceção da regra de strings).</summary>
+        public string AccentColor { get; set; } = string.Empty;
+
         public string DownloadLink { get; set; } = string.Empty;
         public string DirectDownloadLink { get; set; } = string.Empty;
         public string[] CarouselImages { get; set; } = Array.Empty<string>();
