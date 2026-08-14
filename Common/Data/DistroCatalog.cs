@@ -42,19 +42,25 @@ namespace LinuxHub.Common.Data
                 CreatedYear = "2004",
                 BeginnerRating = 5,
                 IsTested = true,
-                // ATENÇÃO — MUDANÇA LOCAL DE TESTE, NÃO PUBLICAR.
-                // O gate §7.1 (own-linux-installer, task 11.11) manda declarar o mecanismo
-                // próprio só DEPOIS de uma instalação completa validada em VM com snapshot.
-                // Está assim para tornar esse teste possível: sem declarar, o caminho é
-                // inalcançável e não há como exercitá-lo nem em VM.
+                // O instalador próprio (OwnLiveInstaller) NÃO é declarado aqui, e é o gate §7.1
+                // (own-linux-installer, task 11.11) que manda: o mecanismo só fica alcançável
+                // pelo usuário DEPOIS de uma instalação completa validada em VM com snapshot.
+                // Essa validação ainda não passou de ponta a ponta.
                 //
-                // A ISO do desktop é `fsimage-layered` desde a 23.10: 41 arquivos .squashfs, e
-                // a camada base (`casper/minimal.squashfs`, a que o `install-sources.yaml`
-                // declara como padrão) NÃO traz kernel nem módulos — `/boot` só tem memtest e
-                // `/lib/modules` está vazio. O kernel e o bootloader saem do `pool/` da própria
-                // ISO, que é um repositório apt completo (`dists/noble/main`), exatamente como
-                // o instalador do Ubuntu faz. Ver install-target-packages.sh.
-                UnattendedInstall = UnattendedInstallMechanism.OwnLiveInstaller,
+                // Onde a validação parou (2026-08-14): o caminho live vai da descoberta do
+                // plano até o preparo do disco. Falta exercitar o mkfs, a extração, a
+                // instalação de kernel/bootloader a partir do pool da ISO e a escrita na ESP.
+                //
+                // O suporte à ISO em camadas do Ubuntu está implementado: desde a 23.10 ela é
+                // `fsimage-layered` (41 arquivos .squashfs), e a camada que o
+                // `casper/install-sources.yaml` declara como padrão não traz kernel nem
+                // módulos — eles saem do `pool/`, que é um repositório apt completo
+                // (`dists/noble/main`). Ver install-boot-packages.sh.
+                //
+                // Para exercitar em VM: trocar para OwnLiveInstaller aqui e ligar
+                // InstallationSafetySwitches.AllowVirtualDiskForVmValidation. Os dois voltam
+                // ao estado seguro antes de qualquer commit.
+                UnattendedInstall = UnattendedInstallMechanism.Subiquity,
                 // De releases.ubuntu.com/24.04/SHA256SUMS, obtido em 2026-08-11.
                 Sha256 = "3a4c9877b483ab46d7c3fbe165a0db275e1ae3cfe56a5657e5a47c2f99a99d1e",
                 SizeBytes = 6655619072,
