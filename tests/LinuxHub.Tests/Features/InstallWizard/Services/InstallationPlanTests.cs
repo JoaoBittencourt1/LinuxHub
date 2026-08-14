@@ -128,8 +128,53 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             plan.Disk.Installer.Number = 6;
             plan.Disk.Installer.OffsetBytes = 300L * 1024 * 1024 * 1024;
             plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+            plan.Disk.Installer.SizeBytes = 50L * 1024 * 1024 * 1024;
 
             InstallationPlanValidator.Validate(plan);
+        }
+
+        /// <summary>
+        /// Identidade registrada sem tamanho observado é recusada: é o tamanho que o instalador
+        /// live confere contra o dispositivo antes do mkfs. Sem esta regra o plano passava aqui
+        /// e a instalação morria do outro lado do reboot, depois de revalidar disco, geometria,
+        /// partições e o hash de vários GB — todo esse trabalho para descobrir um campo que
+        /// nunca foi escrito.
+        /// </summary>
+        [Fact]
+        public void Validate_OwnLiveInstaller_RejectsInstallerIdentityWithoutObservedSize()
+        {
+            InstallationPlan plan = ValidUefiPlan();
+            plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.OwnLiveInstaller);
+            plan.Disk.Installer.Number = 6;
+            plan.Disk.Installer.OffsetBytes = 300L * 1024 * 1024 * 1024;
+            plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+
+            var error = Assert.Throws<InstallationPlanValidationException>(
+                () => InstallationPlanValidator.Validate(plan));
+
+            Assert.Contains("sizeBytes", error.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// A extensão observada da raiz não pode invadir Windows, boot ou recuperação. Antes
+        /// desta regra a checagem de sobreposição só olhava <c>stagingSizeBytes</c>, que é 0 no
+        /// instalador próprio — ou seja, a partição que este caminho realmente cria era a única
+        /// que ninguém conferia.
+        /// </summary>
+        [Fact]
+        public void Validate_OwnLiveInstaller_RejectsRootExtentOverlappingWindows()
+        {
+            InstallationPlan plan = ValidUefiPlan();
+            plan.UnattendedMechanism = nameof(UnattendedInstallMechanism.OwnLiveInstaller);
+            plan.Disk.Installer.Number = 6;
+            plan.Disk.Installer.OffsetBytes = plan.Disk.Windows.OffsetBytes;
+            plan.Disk.Installer.PartitionUuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+            plan.Disk.Installer.SizeBytes = plan.Disk.Windows.SizeBytes;
+
+            var error = Assert.Throws<InstallationPlanValidationException>(
+                () => InstallationPlanValidator.Validate(plan));
+
+            Assert.Contains("overlap", error.Message, StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
@@ -350,7 +395,8 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             public string? PublishedPath { get; }
             public string Publish(InstallationPlan plan, string password) => PublishedPath!;
             public InstallationPlan ReadValidated(string path) => Current!;
-            public void UpdateStagingIdentity(int number, long offsetBytes, string partitionUuid) { }
+            public void UpdateStagingIdentity(
+                int number, long offsetBytes, string partitionUuid, long? observedSizeBytes = null) { }
             public void Clear() { }
         }
     }

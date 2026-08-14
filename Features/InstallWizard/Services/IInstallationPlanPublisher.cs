@@ -26,8 +26,18 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// <summary>
         /// Sole post-publish mutation: records the observed staging partition identity,
         /// revalidates the full document, and replaces atomically.
+        ///
+        /// <paramref name="observedSizeBytes"/> é o tamanho real da partição criada. Fica nulo
+        /// no modo substituir (tamanho de política, já no plano) e é preenchido no instalador
+        /// próprio, onde a partição nasce com <c>-UseMaximumSize</c> e o tamanho só passa a
+        /// existir depois de criá-la — é ele que o instalador live confere antes do
+        /// <c>mkfs</c>.
         /// </summary>
-        void UpdateStagingIdentity(int number, long offsetBytes, string partitionUuid);
+        void UpdateStagingIdentity(
+            int number,
+            long offsetBytes,
+            string partitionUuid,
+            long? observedSizeBytes = null);
 
         void Clear();
     }

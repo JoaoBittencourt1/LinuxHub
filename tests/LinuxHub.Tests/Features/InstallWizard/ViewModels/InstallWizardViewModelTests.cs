@@ -322,13 +322,18 @@ namespace LinuxHub.Tests.Features.InstallWizard.ViewModels
             public InstallationPlan ReadValidated(string path) =>
                 Current ?? throw new InvalidOperationException("No plan.");
 
-            public void UpdateStagingIdentity(int number, long offsetBytes, string partitionUuid)
+            public void UpdateStagingIdentity(
+                int number,
+                long offsetBytes,
+                string partitionUuid,
+                long? observedSizeBytes = null)
             {
                 if (Current is null)
                     throw new InvalidOperationException("No plan.");
                 Current.Disk.Installer.Number = number;
                 Current.Disk.Installer.OffsetBytes = offsetBytes;
                 Current.Disk.Installer.PartitionUuid = partitionUuid;
+                Current.Disk.Installer.SizeBytes = observedSizeBytes;
                 InstallationPlanValidator.Validate(Current);
                 StagingIdentityUpdates++;
             }

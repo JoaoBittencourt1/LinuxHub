@@ -168,7 +168,7 @@ namespace LinuxHub.Features.InstallWizard.Services
                 // qualquer escrita, em vez de escolher um alvo sozinho.
                 LinuxRootPartition root = _linuxRootPartition.Create(request.TargetDiskIndex);
                 _planPublisher.UpdateStagingIdentity(
-                    root.PartitionNumber, root.OffsetBytes, root.PartitionUuid);
+                    root.PartitionNumber, root.OffsetBytes, root.PartitionUuid, root.SizeBytes);
             });
 
             StagingPartition? staging = null;

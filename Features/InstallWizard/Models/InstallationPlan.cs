@@ -195,7 +195,7 @@ namespace LinuxHub.Features.InstallWizard.Models
 
     /// <summary>
     /// Observed staging identity (<see cref="Number"/>/<see cref="OffsetBytes"/>/
-    /// <see cref="PartitionUuid"/>) may be null until the staging partition is created —
+    /// <see cref="PartitionUuid"/>/<see cref="SizeBytes"/>) may be null until the partition is created —
     /// the only post-publish mutation allowed (spec). Policy sizes stay in GiB (D3);
     /// staging size is exact bytes because it is derived from the ISO, not a user GiB choice.
     /// </summary>
@@ -209,6 +209,23 @@ namespace LinuxHub.Features.InstallWizard.Models
 
         [JsonPropertyName("partitionUuid")]
         public string? PartitionUuid { get; set; }
+
+        /// <summary>
+        /// Tamanho OBSERVADO da partição, em bytes, lido do Windows depois de criá-la — não uma
+        /// política nem uma conversão de <see cref="FinalSizeGiB"/>.
+        ///
+        /// Existe porque a partição raiz é criada com <c>-UseMaximumSize</c>: o tamanho real só
+        /// é conhecido depois da criação, e não é derivável dos GiB que o usuário escolheu (o
+        /// encolhimento reserva folga de alinhamento). O instalador live confere este valor
+        /// contra <c>blockdev --getsize64</c> antes do <c>mkfs</c> — é uma das asserções que
+        /// provam que a partição que ele vai formatar é a mesma que o app criou.
+        ///
+        /// Nulo até a partição existir, como o resto da identidade observada. Sem este campo o
+        /// instalador live morria em <c>.disk.installer.sizeBytes</c> ausente, já com a
+        /// revalidação inteira aprovada.
+        /// </summary>
+        [JsonPropertyName("sizeBytes")]
+        public long? SizeBytes { get; set; }
 
         [JsonPropertyName("finalSizeGiB")]
         public int FinalSizeGiB { get; set; }

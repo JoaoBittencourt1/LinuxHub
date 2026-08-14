@@ -292,6 +292,18 @@ namespace LinuxHub.Features.InstallWizard.Services
                         errors,
                         "disk.installer identity must remain unset for dual-boot.");
                 }
+                else if (installer.Number.HasValue)
+                {
+                    // Registrada a identidade, o tamanho observado vem junto ou não vem nunca:
+                    // é ele que o instalador live confere contra o dispositivo antes do mkfs.
+                    // Um plano com número e offset mas sem tamanho passaria daqui e morreria do
+                    // outro lado do reboot, depois da revalidação inteira — que foi exatamente
+                    // o que aconteceu.
+                    Require(
+                        installer.SizeBytes is > 0,
+                        errors,
+                        "disk.installer.sizeBytes must be recorded (positive) once the root partition identity is set.");
+                }
             }
             else if (isReplace)
             {
@@ -344,22 +356,35 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "disk.recovery must start at or after the original Windows partition end.");
             }
 
-            if (disk.Installer?.OffsetBytes is not { } stagingOffset ||
-                disk.Installer.StagingSizeBytes <= 0)
-            {
+            if (disk.Installer?.OffsetBytes is not { } installerOffset)
                 return;
-            }
 
-            long stagingEnd = stagingOffset + disk.Installer.StagingSizeBytes;
+            // Dois tamanhos, um de cada caminho, e nunca os dois ao mesmo tempo:
+            // stagingSizeBytes é o tamanho de política da partição de staging do modo
+            // substituir; sizeBytes é o tamanho observado da raiz criada pelo instalador
+            // próprio. Qualquer um dos dois define uma extensão real no disco, e nenhuma
+            // extensão real pode invadir Windows, boot ou recuperação.
+            long installerSize = disk.Installer.StagingSizeBytes > 0
+                ? disk.Installer.StagingSizeBytes
+                : disk.Installer.SizeBytes ?? 0;
+            if (installerSize <= 0)
+                return;
+
+            long installerEnd = installerOffset + installerSize;
+            Require(
+                installerEnd <= disk.SizeBytes,
+                errors,
+                "disk.installer extent would run past the end of the disk.");
+
             foreach ((string name, InstallationPlanPartitionIdentity partition) in named)
             {
                 long end = partition.OffsetBytes + partition.SizeBytes;
-                bool overlapsStaging =
-                    stagingOffset < end && partition.OffsetBytes < stagingEnd;
+                bool overlapsInstaller =
+                    installerOffset < end && partition.OffsetBytes < installerEnd;
                 Require(
-                    !overlapsStaging,
+                    !overlapsInstaller,
                     errors,
-                    $"disk.installer staging extent would overlap {name}.");
+                    $"disk.installer extent would overlap {name}.");
             }
         }
 

@@ -237,6 +237,7 @@
         "number",
         "offsetBytes",
         "partitionUuid",
+        "sizeBytes",
         "finalSizeGiB",
         "stagingSizeBytes"
       ],
@@ -258,6 +259,13 @@
             { "type": "null" },
             { "type": "string", "minLength": 1 }
           ]
+        },
+        "sizeBytes": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/positiveInteger" }
+          ],
+          "description": "own-linux-installer: tamanho OBSERVADO da partição raiz, lido do Windows depois de criá-la com -UseMaximumSize. Não é derivável de finalSizeGiB. Nulo até a partição existir; obrigatório junto com o resto da identidade observada, porque é o que o instalador live confere contra o dispositivo antes do mkfs."
         },
         "finalSizeGiB": {
           "type": "integer",
