@@ -8,6 +8,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>Assets\Icons\favicon(2).ico</ApplicationIcon>
     <Version>1.2.4</Version>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <Copyright>Copyright (C) 2026 LinuxHub contributors. Licensed under GPL-3.0-only.</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
@@ -75,9 +77,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Versioned PowerShell for recovery/preflight (D11). Copied beside the exe so
+         ScriptCatalog / the AtStartup agent can resolve Scripts\ without assuming C:. -->
+    <Content Include="Scripts\**\*.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />
     <None Remove="tests\**" />
+    <Compile Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
+    <None Remove="tools\**" />
   </ItemGroup>
 
   <ItemGroup>

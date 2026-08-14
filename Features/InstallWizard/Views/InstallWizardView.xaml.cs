@@ -1,3 +1,5 @@
+using System.Collections.Specialized;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using LinuxHub.Common.Localization;
@@ -22,19 +24,29 @@ namespace LinuxHub.Features.InstallWizard.Views
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
             if (e.OldValue is InstallWizardViewModel oldVm)
+            {
                 oldVm.Notify -= OnNotify;
+                oldVm.InstallLog.CollectionChanged -= OnInstallLogChanged;
+            }
 
             if (e.NewValue is InstallWizardViewModel newVm)
             {
                 newVm.Notify += OnNotify;
+                newVm.InstallLog.CollectionChanged += OnInstallLogChanged;
                 newVm.RaiseStartupWarnings();
             }
         }
 
+        /// <summary>ScrollViewer não acompanha o conteúdo sozinho quando ele cresce por
+        /// binding — sem isto, cada passo novo do log nasceria fora da área visível e o
+        /// usuário teria que rolar manualmente a cada linha.</summary>
+        private void OnInstallLogChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+            InstallLogScroll.ScrollToEnd();
+
         private void OnNotify(string title, string message, bool isError) =>
             MessageBox.Show(message, title, MessageBoxButton.OK, isError ? MessageBoxImage.Error : MessageBoxImage.Information);
 
-        private void BrowseIso_Click(object sender, RoutedEventArgs e)
+        private async void BrowseIso_Click(object sender, RoutedEventArgs e)
         {
             var viewModel = (InstallWizardViewModel)DataContext;
 
@@ -45,8 +57,23 @@ namespace LinuxHub.Features.InstallWizard.Views
                 CheckFileExists = true
             };
 
-            if (dialog.ShowDialog() == true)
-                viewModel.Iso.SelectManualIso(dialog.FileName);
+            if (dialog.ShowDialog() != true)
+                return;
+
+            // `async void`: exceção aqui não tem quem a observe e derruba o processo. E a
+            // seleção manual agora ABRE o arquivo para calcular o hash, então disco removível
+            // retirado, arquivo em uso ou permissão negada são falhas esperadas — não bug.
+            try
+            {
+                await viewModel.Iso.SelectManualIsoAsync(dialog.FileName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                OnNotify(
+                    LocalizationManager.Instance["Wizard_InstallErrorTitle"],
+                    ex.Message,
+                    isError: true);
+            }
         }
 
         private void PasswordBox_PasswordChanged(object sender, RoutedEventArgs e) =>

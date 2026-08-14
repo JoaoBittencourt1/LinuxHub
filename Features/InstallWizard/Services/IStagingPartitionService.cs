@@ -33,5 +33,9 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// segurança, do sistema já instalado — índice de partição não serve, porque o instalador
     /// reescreve a tabela e os números mudam.
     /// </summary>
-    public sealed record StagingPartition(int DiskIndex, int PartitionNumber, string PartitionUuid);
+    public sealed record StagingPartition(
+        int DiskIndex,
+        int PartitionNumber,
+        string PartitionUuid,
+        long OffsetBytes = 0);
 }

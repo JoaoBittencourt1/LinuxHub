@@ -26,12 +26,13 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         }
 
         [Fact]
-        public void BuildRestoreScript_ValidatesBackupSizeBeforeWriting()
+        public void VersionedRestoreMbrScript_ValidatesBackupSizeBeforeWriting()
         {
-            string script = MbrBackupService.BuildRestoreScript(diskIndex: 1, backupPath: @"C:\temp\backup.bin");
+            string script = ScriptCatalog.Read(ScriptCatalog.RestoreMbr);
 
-            Assert.Contains(@"\\.\PhysicalDrive1", script);
+            Assert.Contains("PhysicalDrive$DiskNumber", script);
             Assert.Contains("mbr.Length -ne 512", script);
+            Assert.Contains("param(", script);
         }
 
         [Fact]

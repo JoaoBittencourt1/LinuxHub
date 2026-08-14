@@ -6,12 +6,14 @@
              xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
              xmlns:conv="clr-namespace:LinuxHub.Features.InstallWizard.Views.Converters"
              xmlns:models="clr-namespace:LinuxHub.Common.Models"
+             xmlns:fx="clr-namespace:LinuxHub.Common.Ui"
              xmlns:views="clr-namespace:LinuxHub.Features.InstallWizard.Views">
 
     <UserControl.Resources>
         <sys:BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <conv:InverseBooleanConverter x:Key="InverseBool"/>
         <conv:EnumMatchConverter x:Key="EnumMatch"/>
+        <conv:FalseToVisibleConverter x:Key="FalseToVisible"/>
     </UserControl.Resources>
 
     <Grid>
@@ -62,6 +64,17 @@
                                        Click="BrowseIso_Click"/>
                         </Grid>
 
+                        <!-- Verificação da ISO selecionada manualmente: só uma leitura completa
+                             do arquivo prova a integridade dele, e isso pode levar dezenas de
+                             segundos numa ISO de vários GB — sem isto a UI pareceria travada. -->
+                        <StackPanel Orientation="Horizontal"
+                                    Margin="0,0,0,12"
+                                    VerticalAlignment="Center"
+                                    Visibility="{Binding Iso.IsVerifyingManualIso, Converter={StaticResource BoolToVis}}">
+                            <ProgressBar Width="260" Value="{Binding Iso.ManualVerificationPercent, Mode=OneWay}"/>
+                            <TextBlock Text="{loc:Loc Wizard_VerifyingIsoLabel}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+
                         <!-- ISOs já baixadas: só aparece sozinha (sem o combo de baixar outra
                              junto) pra não deixar dois campos disputando qual ISO vale. -->
                         <StackPanel Visibility="{Binding Iso.IsDownloadedIsosVisible, Converter={StaticResource BoolToVis}}"
@@ -95,10 +108,28 @@
                             <TextBlock Text="{loc:Loc Wizard_SelectedDistributionLabel}" Opacity="0.7" Margin="0,0,0,6"/>
 
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- Sem DisplayMemberPath: cada item carrega o ícone de risco
+                                     das distros nunca testadas (DistroInfo.IsTested), para a
+                                     escolha já nascer informada em vez de o usuário descobrir
+                                     depois de reiniciar. -->
                                 <ComboBox Width="220"
                                           ItemsSource="{Binding Iso.Distros}"
-                                          DisplayMemberPath="Name"
-                                          SelectedItem="{Binding Iso.SelectedDistro}"/>
+                                          SelectedItem="{Binding Iso.SelectedDistro}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="Warning24"
+                                                               FontSize="16"
+                                                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                                               VerticalAlignment="Center"
+                                                               Margin="0,0,6,0"
+                                                               ToolTipService.ToolTip="{loc:Loc Wizard_UntestedDistroTooltip}"
+                                                               Visibility="{Binding IsTested, Converter={StaticResource FalseToVisible}}"/>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
 
                                 <ui:Button Content="{loc:Loc Wizard_DownloadIsoButton}"
                                            Appearance="Primary"
@@ -116,6 +147,15 @@
                                            Command="{Binding Iso.UseDownloadedIsoCommand}"
                                            Visibility="{Binding Iso.IsBackToDownloadedVisible, Converter={StaticResource BoolToVis}}"/>
                             </StackPanel>
+
+                            <!-- Substitui o botão de download quando a distro escolhida não tem
+                                 hash de referência publicado — a UI explica o motivo em vez de
+                                 só sumir com o botão (artifact-integrity spec). -->
+                            <TextBlock Text="{loc:Loc Wizard_DistroNotVerifiableMessage}"
+                                       Margin="0,6,0,0"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       Visibility="{Binding Iso.IsSelectedDistroUnverifiable, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>
 
                         <!-- Progresso -->
@@ -276,13 +316,75 @@
                                         Margin="0,0,0,4"/>
 
                         <TextBlock Text="{loc:Loc Wizard_PasswordMismatch}"
-                                   Foreground="#FF5C5C"
+                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"
                                    FontSize="12"
                                    Margin="0,0,0,8"
                                    Visibility="{Binding Account.PasswordsMismatch, Converter={StaticResource BoolToVis}}"/>
 
                         <ui:TextBox PlaceholderText="{loc:Loc Wizard_PcNamePlaceholder}"
                                     Text="{Binding Account.Hostname, UpdateSourceTrigger=PropertyChanged}"/>
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- Idioma, teclado e fuso: como a conta, só existe pro fluxo de autoinstall —
+                     sem ele quem pergunta isso é o instalador nativo da ISO. Os três campos
+                     nascem com o que foi detectado do Windows e podem ser corrigidos; o valor
+                     que aparece aqui é o que vai para a instalação. -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding IsRegionalStepVisible, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_RegionalSectionTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
+                        <TextBlock Text="{loc:Loc Wizard_RegionalSectionHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <!-- Alguma das três não teve correspondência e está mostrando o padrão
+                             declarado do mapeamento. Não bloqueia nada: só torna visível o que
+                             antes era um valor chumbado que ninguém via. -->
+                        <ui:InfoBar IsOpen="{Binding Regional.HasUndetectedSetting, Mode=OneWay}"
+                                    IsClosable="False"
+                                    Severity="Warning"
+                                    Message="{loc:Loc Wizard_RegionalFallbackWarningMessage}"
+                                    Margin="0,0,0,10"/>
+
+                        <TextBlock Text="{loc:Loc Wizard_LocaleLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                        <ComboBox Margin="0,0,0,10"
+                                  ItemsSource="{Binding Regional.AvailableLocales}"
+                                  SelectedValuePath="Value"
+                                  SelectedValue="{Binding Regional.Locale}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding NativeName}"/>
+                                        <TextBlock Text="{Binding Value}" Opacity="0.6" Margin="8,0,0,0"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <TextBlock Text="{loc:Loc Wizard_KeymapLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                        <ComboBox Margin="0,0,0,10"
+                                  ItemsSource="{Binding Regional.AvailableKeymaps}"
+                                  SelectedItem="{Binding Regional.Keymap}"/>
+
+                        <TextBlock Text="{loc:Loc Wizard_TimezoneLabel}" Opacity="0.7" Margin="0,0,0,6"/>
+                        <ComboBox ItemsSource="{Binding Regional.AvailableTimezones}"
+                                  SelectedItem="{Binding Regional.Timezone}"/>
+                    </StackPanel>
+                </ui:Card>
+
+                <!-- Ambiente gráfico: só aparece para distro cujo MECANISMO declarado suporta a
+                     escolha. A maioria das ISOs já embute um ambiente, e oferecer uma opção que
+                     seria ignorada promete um controle que o usuário não tem. Os nomes próprios
+                     são dado (§4); os rótulos ao redor vêm dos .resx. -->
+                <ui:Card Margin="0,0,0,16"
+                         Visibility="{Binding IsDesktopEnvironmentStepVisible, Converter={StaticResource BoolToVis}}">
+                    <StackPanel>
+                        <TextBlock Text="{loc:Loc Wizard_DesktopEnvironmentTitle}" FontWeight="SemiBold" Opacity="0.7" Margin="0,0,0,6"/>
+                        <TextBlock Text="{loc:Loc Wizard_DesktopEnvironmentHint}" Opacity="0.6" TextWrapping="Wrap" Margin="0,0,0,10"/>
+
+                        <ComboBox ItemsSource="{Binding Regional.AvailableDesktopEnvironments}"
+                                  DisplayMemberPath="ProfileName"
+                                  SelectedValuePath="ProfileName"
+                                  SelectedValue="{Binding Regional.DesktopEnvironment}"/>
                     </StackPanel>
                 </ui:Card>
 
@@ -299,11 +401,16 @@
                 <Border Visibility="{Binding IsIdle, Converter={StaticResource BoolToVis}}">
                     <ui:Button Content="{loc:Loc Wizard_InstallButton}"
                                Appearance="Success"
+                               Icon="{ui:SymbolIcon Play24}"
                                HorizontalAlignment="Stretch"
                                HorizontalContentAlignment="Center"
-                               Height="44"
+                               Height="52"
+                               FontSize="16"
                                FontWeight="Bold"
                                Margin="0,0,0,24"
+                               fx:PressFeedback.Enabled="True"
+                               fx:AttentionPulse.Enabled="True"
+                               fx:AttentionPulse.GlowColor="#FF16C60A"
                                Command="{Binding InstallCommand}"/>
                 </Border>
 
@@ -316,7 +423,7 @@
              em andamento não teria efeito algum e só confundiria. -->
         <Border Background="#CC000000"
                 Visibility="{Binding IsInstalling, Converter={StaticResource BoolToVis}}">
-            <ui:Card MaxWidth="420"
+            <ui:Card MaxWidth="520"
                      Margin="24"
                      HorizontalAlignment="Center"
                      VerticalAlignment="Center">
@@ -336,6 +443,30 @@
                                TextWrapping="Wrap"
                                TextAlignment="Center"
                                Margin="0,10,0,0"/>
+
+                    <!-- Log acumulado: cada passo relatado vira uma linha, nunca sobrescrita —
+                         é o que deixa visível o que está sendo feito, e não só o passo atual. -->
+                    <Border Background="#14FFFFFF"
+                            CornerRadius="4"
+                            Margin="0,14,0,0"
+                            Padding="10,8"
+                            MaxHeight="160">
+                        <ScrollViewer x:Name="InstallLogScroll"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding InstallLog}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   Opacity="0.85"
+                                                   TextWrapping="Wrap"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
                 </StackPanel>
             </ui:Card>
         </Border>

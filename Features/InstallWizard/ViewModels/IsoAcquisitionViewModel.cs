@@ -21,6 +21,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private readonly IIsoDownloadService _downloadService;
         private readonly IDistroDetectionService _detectionService;
         private readonly IDownloadedIsoRepository _downloadedIsoRepository;
+        private readonly IArtifactVerifier _artifactVerifier;
         private readonly AsyncRelayCommand _downloadIsoCommand;
         private readonly RelayCommand _cancelDownloadCommand;
         private readonly RelayCommand _downloadAnotherIsoCommand;
@@ -39,17 +40,35 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         private double _downloadPercent;
         private bool _isDownloadIndeterminate;
         private string _downloadStatusText = string.Empty;
+        private bool _isVerifyingManualIso;
+        private double _manualVerificationPercent;
 
         public IsoAcquisitionViewModel(
             IIsoDownloadService downloadService,
             IDistroDetectionService detectionService,
-            IDownloadedIsoRepository downloadedIsoRepository)
+            IDownloadedIsoRepository downloadedIsoRepository,
+            IArtifactVerifier artifactVerifier)
         {
             _downloadService = downloadService ?? throw new ArgumentNullException(nameof(downloadService));
             _detectionService = detectionService ?? throw new ArgumentNullException(nameof(detectionService));
             _downloadedIsoRepository = downloadedIsoRepository ?? throw new ArgumentNullException(nameof(downloadedIsoRepository));
+            _artifactVerifier = artifactVerifier ?? throw new ArgumentNullException(nameof(artifactVerifier));
 
-            Distros = DistroCatalog.All;
+            // Comandos antes de qualquer atribuição a propriedade: o setter de SelectedDistro
+            // chama _downloadIsoCommand.RaiseCanExecuteChanged(), então o campo precisa existir
+            // antes da primeira atribuição a SelectedDistro logo abaixo.
+            _downloadIsoCommand = new AsyncRelayCommand(
+                DownloadAsync,
+                () => !IsManualSelect && SelectedDistro is { HasVerifiableArtifact: true } && !IsDownloading);
+            _cancelDownloadCommand = new RelayCommand(() => _downloadCts?.Cancel(), () => IsDownloading);
+            _downloadAnotherIsoCommand = new RelayCommand(() => IsChoosingNewDownload = true);
+            _useDownloadedIsoCommand = new RelayCommand(UseDownloadedIso);
+
+            // Uma entrada desabilitada (DistroInfo.IsEnabled) não é oferecida no seletor de
+            // download — permanece só nos dados, ver comentário de cada entrada em
+            // DistroCatalog. Seleção manual continua reconhecendo o arquivo pelo nome mesmo
+            // assim (DistroDetectionService não filtra por IsEnabled).
+            Distros = DistroCatalog.All.Where(distro => distro.IsEnabled).ToList();
             SelectedDistro = Distros.Count > 0 ? Distros[0] : null;
 
             DownloadedIsos = new ObservableCollection<DownloadedIso>(_downloadedIsoRepository.GetAll());
@@ -60,11 +79,6 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 SelectedDownloadedIso = DownloadedIsos[0];
             else
                 _isChoosingNewDownload = true;
-
-            _downloadIsoCommand = new AsyncRelayCommand(DownloadAsync, () => !IsManualSelect && SelectedDistro is not null && !IsDownloading);
-            _cancelDownloadCommand = new RelayCommand(() => _downloadCts?.Cancel(), () => IsDownloading);
-            _downloadAnotherIsoCommand = new RelayCommand(() => IsChoosingNewDownload = true);
-            _useDownloadedIsoCommand = new RelayCommand(UseDownloadedIso);
         }
 
         public IReadOnlyList<DistroInfo> Distros { get; }
@@ -149,9 +163,17 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 if (SelectedDownloadedIso is not null)
                     SelectedDownloadedIso = null;
 
+                OnPropertyChanged(nameof(IsSelectedDistroUnverifiable));
+                _downloadIsoCommand.RaiseCanExecuteChanged();
                 NotifyIsoSelectionChanged();
             }
         }
+
+        /// <summary>A distro escolhida para baixar não tem hash de referência publicado pela
+        /// fonte oficial (ver <see cref="DistroInfo.HasVerifiableArtifact"/>) — download
+        /// automático fica desligado para ela, e a UI explica o motivo em vez de simplesmente
+        /// esconder o botão sem contexto.</summary>
+        public bool IsSelectedDistroUnverifiable => SelectedDistro is { HasVerifiableArtifact: false };
 
         public string? ManualIsoPath
         {
@@ -167,15 +189,23 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
         /// independente de ter vindo de download novo, ISO já baixada ou seleção manual.</summary>
         public bool IsIsoReadyForInstall => !string.IsNullOrWhiteSpace(ResolvedIsoPath);
 
-        /// <summary>Só a build validada de ponta a ponta (ver <see cref="DistroInfo.SupportsAutoinstall"/>)
-        /// pode oferecer o toggle — pra qualquer outra distro o wizard só prepara o boot até o
-        /// instalador nativo, sem opção de ligar o que nunca foi testado.</summary>
-        public bool IsAutoinstallToggleVisible => DisplayedDistro?.SupportsAutoinstall ?? false;
+        /// <summary>Só a build com um mecanismo validado de ponta a ponta (ver <see
+        /// cref="DistroInfo.UnattendedInstall"/>) pode oferecer o toggle — pra qualquer outra
+        /// distro o wizard só prepara o boot até o instalador nativo, sem opção de ligar o que
+        /// nunca foi testado.</summary>
+        public bool IsAutoinstallToggleVisible => DisplayedDistro?.SupportsUnattendedInstall ?? false;
 
-        /// <summary>Se a instalação automática (autoinstall/cloud-init) deve rodar. Sempre
-        /// false quando a distro não suporta, mesmo que o usuário tenha ligado o toggle antes
-        /// de trocar de distro.</summary>
+        /// <summary>Se a instalação desatendida deve rodar. Sempre false quando a distro não
+        /// tem mecanismo validado, mesmo que o usuário tenha ligado o toggle antes de trocar
+        /// de distro. Qual mecanismo será usado é decidido em <see cref="ActiveMechanism"/>.</summary>
         public bool IsAutoinstallActive => IsAutoinstallToggleVisible && _useAutoinstall;
+
+        /// <summary>O mecanismo a usar de fato nesta instalação, ou <see
+        /// cref="UnattendedInstallMechanism.None"/> quando o usuário optou por não automatizar
+        /// (ou a distro não suporta) — o que faz o boot parar no instalador interativo.</summary>
+        public UnattendedInstallMechanism ActiveMechanism => IsAutoinstallActive
+            ? DisplayedDistro!.UnattendedInstall
+            : UnattendedInstallMechanism.None;
 
         public bool UseAutoinstall
         {
@@ -251,6 +281,21 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             private set => SetProperty(ref _downloadStatusText, value);
         }
 
+        /// <summary>ISO local selecionada manualmente sendo verificada contra o hash do
+        /// catálogo — só uma leitura completa do arquivo prova a integridade dele, então isto
+        /// pode levar dezenas de segundos numa ISO de vários GB (§1.7).</summary>
+        public bool IsVerifyingManualIso
+        {
+            get => _isVerifyingManualIso;
+            private set => SetProperty(ref _isVerifyingManualIso, value);
+        }
+
+        public double ManualVerificationPercent
+        {
+            get => _manualVerificationPercent;
+            private set => SetProperty(ref _manualVerificationPercent, value);
+        }
+
         /// <summary>Caminho final da ISO pronta para uso (baixada ou selecionada manualmente).</summary>
         public string? ResolvedIsoPath { get; private set; }
 
@@ -282,19 +327,21 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             IsChoosingNewDownload = downloaded is null;
         }
 
-        /// <summary>Chamado pela View após o usuário escolher um arquivo no diálogo de seleção.</summary>
-        public void SelectManualIso(string path)
+        /// <summary>
+        /// Chamado pela View após o usuário escolher um arquivo no diálogo de seleção. Quando a
+        /// distro detectada tem hash de referência (<see cref="DistroInfo.HasVerifiableArtifact"/>),
+        /// o arquivo é lido por completo e verificado antes de ser aceito — reaproveitar um
+        /// arquivo local não dispensa a verificação (artifact-integrity spec). Uma distro
+        /// reconhecida mas sem hash de referência é aceita como não verificada, com aviso.
+        /// </summary>
+        public async Task SelectManualIsoAsync(string path)
         {
             var loc = LocalizationManager.Instance;
 
             if (!IsValidIso(path))
             {
                 Notify?.Invoke(loc["Wizard_IsoInvalidTitle"], loc["Wizard_IsoInvalidMessage"], true);
-                ManualIsoPath = null;
-                ResolvedIsoPath = null;
-                _detectedDistro = null;
-                _isManualIsoVersionUncertain = false;
-                NotifyIsoSelectionChanged();
+                RejectManualIso();
                 return;
             }
 
@@ -306,12 +353,35 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
                 // instalador não sabe preparar. Bloquear aqui, e não só na hora de instalar,
                 // evita o usuário preencher todo o wizard pra descobrir isso só no final.
                 Notify?.Invoke(loc["Wizard_UnknownDistroTitle"], loc["Wizard_UnknownDistroMessage"], true);
-                ManualIsoPath = null;
-                ResolvedIsoPath = null;
-                _detectedDistro = null;
-                _isManualIsoVersionUncertain = false;
-                NotifyIsoSelectionChanged();
+                RejectManualIso();
                 return;
+            }
+
+            if (detection.Distro.HasVerifiableArtifact)
+            {
+                var outcome = await VerifyManualIsoAsync(path, detection.Distro);
+                if (!outcome.IsVerified)
+                {
+                    // Rejeita a seleção, mas nunca apaga o arquivo do usuário — a ISO é dele,
+                    // não do app; só o que o app baixou (IsoDownloadService) é apagado em falha.
+                    Notify?.Invoke(
+                        loc["Wizard_IsoVerificationFailedTitle"],
+                        loc.Format("Wizard_IsoVerificationFailedMessage", detection.Distro.Name),
+                        true);
+                    RejectManualIso();
+                    return;
+                }
+            }
+            else
+            {
+                // Aviso, não bloqueio: a spec exige informar a ausência de hash de referência,
+                // não recusar a seleção. SupportsUnattendedInstall já fica false para esta
+                // distro (DistroInfo), então nenhum mecanismo de instalação desatendida chega
+                // a ser oferecido para um arquivo não verificado.
+                Notify?.Invoke(
+                    loc["Wizard_IsoNoReferenceHashTitle"],
+                    loc.Format("Wizard_IsoNoReferenceHashMessage", detection.Distro.Name),
+                    false);
             }
 
             ManualIsoPath = path;
@@ -321,6 +391,32 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             // não ser a testada, pro alerta de versão incerta aparecer se o autoinstall
             // continuar ligado.
             _isManualIsoVersionUncertain = !detection.IsExpectedVersion;
+            NotifyIsoSelectionChanged();
+        }
+
+        private async Task<ArtifactVerificationResult> VerifyManualIsoAsync(string path, DistroInfo distro)
+        {
+            IsVerifyingManualIso = true;
+            ManualVerificationPercent = 0;
+
+            try
+            {
+                var progress = new Progress<double>(p => ManualVerificationPercent = p);
+                return await _artifactVerifier.VerifyFileAsync(
+                    path, distro.Sha256, distro.SizeBytes, progress, CancellationToken.None);
+            }
+            finally
+            {
+                IsVerifyingManualIso = false;
+            }
+        }
+
+        private void RejectManualIso()
+        {
+            ManualIsoPath = null;
+            ResolvedIsoPath = null;
+            _detectedDistro = null;
+            _isManualIsoVersionUncertain = false;
             NotifyIsoSelectionChanged();
         }
 
@@ -417,6 +513,15 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
             catch (OperationCanceledException)
             {
                 Notify?.Invoke(loc["Wizard_InstallSuccessTitle"], loc["Wizard_DownloadCancelled"], false);
+            }
+            catch (ArtifactVerificationException)
+            {
+                // Mensagem localizada, não ex.Message (diagnóstico em inglês, não voltado ao
+                // usuário — ver constitution §4.2). O arquivo já foi apagado por quem lançou.
+                Notify?.Invoke(
+                    loc["Wizard_IsoVerificationFailedTitle"],
+                    loc.Format("Wizard_IsoVerificationFailedMessage", distro.Name),
+                    true);
             }
             catch (Exception ex)
             {

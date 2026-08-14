@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Windows.Input;
 using LinuxHub.Common.Data;
 using LinuxHub.Common.Models;
@@ -18,7 +19,10 @@ namespace LinuxHub.Features.Catalog.ViewModels
 
         public CatalogViewModel()
         {
-            Distros = DistroCatalog.All;
+            // Uma entrada desabilitada (DistroInfo.IsEnabled) permanece no catálogo de dados —
+            // só não é oferecida na navegação. Ver o comentário de cada entrada em
+            // DistroCatalog para o motivo específico.
+            Distros = DistroCatalog.All.Where(distro => distro.IsEnabled).ToList();
             OpenDistroCommand = new RelayCommand(param => OpenDistro((DistroInfo)param!));
             CloseFullscreenCommand = new RelayCommand(() => FullscreenImagePath = null);
         }

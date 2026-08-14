@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build and test
+        run: dotnet test tests/LinuxHub.Tests/LinuxHub.Tests.csproj --configuration Release --nologo
+
+      # Task 7.3: analisa os scripts elevados versionados (D11) — o corpo deles nunca é
+      # interpolado a partir de C#, então esta é a única checagem estática que os cobre.
+      - name: PSScriptAnalyzer sobre Scripts/
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+          $results = Invoke-ScriptAnalyzer -Path Scripts -Recurse -Severity Error
+          if ($results) {
+            $results | Format-Table RuleName, Severity, ScriptName, Line -AutoSize
+            throw "PSScriptAnalyzer found $($results.Count) error-severity issue(s) under Scripts/."
+          }
+          Write-Output "PSScriptAnalyzer: no error-severity findings."

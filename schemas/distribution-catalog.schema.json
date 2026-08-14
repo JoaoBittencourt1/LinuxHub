@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linuxhub.example/schemas/distribution-catalog.schema.json",
+  "title": "LinuxHub distribution catalog",
+  "description": "Signed remote document consumed by CatalogClient (Common/Data/CatalogClient.cs). Only fields whose value should be updatable without a new app build belong here — asset paths (images) are never remote-controlled; see design.md D14 and CatalogMerge.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "distributions"],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "distributions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/distribution" }
+    }
+  },
+  "$defs": {
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "family",
+        "version",
+        "createdYear",
+        "beginnerRating",
+        "isTested",
+        "isEnabled",
+        "unattendedInstall",
+        "liveSession",
+        "downloadLink",
+        "directDownloadLink"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Must match a DistroInfo.Id already compiled into the app (CatalogMerge). Entries with an unknown id are ignored, not created."
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "family": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "createdYear": { "type": "string", "minLength": 1 },
+        "beginnerRating": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "isTested": { "type": "boolean" },
+        "isEnabled": { "type": "boolean" },
+        "unattendedInstall": {
+          "type": "string",
+          "enum": ["None", "Subiquity", "UbiquityPreseed", "Archinstall"]
+        },
+        "liveSession": {
+          "type": "string",
+          "enum": ["Casper", "Archiso"]
+        },
+        "downloadLink": { "type": "string", "format": "uri" },
+        "directDownloadLink": { "type": "string", "format": "uri" },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{64}$",
+          "description": "Required together with sizeBytes for a distribution to be offered for automatic download (artifact-integrity spec). Omit both, never just one, when the official source has no SHA-256 to publish."
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "dependentRequired": {
+        "sha256": ["sizeBytes"],
+        "sizeBytes": ["sha256"]
+      }
+    }
+  }
+}

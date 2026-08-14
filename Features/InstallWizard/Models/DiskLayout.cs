@@ -66,7 +66,10 @@ namespace LinuxHub.Features.InstallWizard.Models
         bool IsSmallestDisk,
         IReadOnlyList<PartitionLayout> Partitions,
         string DiskSignatureHex = "",
-        bool HasUniqueDiskSignature = false)
+        bool HasUniqueDiskSignature = false,
+        string Guid = "",
+        string UniqueId = "",
+        int LogicalSectorSizeBytes = 512)
     {
         /// <summary>
         /// Maior trecho contíguo utilizável do disco — onde a partição Linux nova vai nascer.
@@ -120,6 +123,18 @@ namespace LinuxHub.Features.InstallWizard.Models
 
         public PartitionLayout? EfiSystemPartition =>
             Partitions.FirstOrDefault(p => p.IsEfiSystemPartition);
+
+        /// <summary>Windows Recovery Environment partition (GPT type
+        /// <c>{de94bba4-06d1-4d40-a16a-bfd50179d6ac}</c>), when present.</summary>
+        public PartitionLayout? WindowsRecoveryPartition =>
+            Partitions.FirstOrDefault(p => string.Equals(
+                p.GptType,
+                "{de94bba4-06d1-4d40-a16a-bfd50179d6ac}",
+                StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>Active MBR partition — what BIOS firmware boots.</summary>
+        public PartitionLayout? ActiveMbrPartition =>
+            Partitions.FirstOrDefault(p => p.IsActive);
 
         /// <summary>Próximo número de partição livre — o que a partição Linux nova vai
         /// receber. Não é <c>Count + 1</c>: numeração com buracos (uma partição removida no

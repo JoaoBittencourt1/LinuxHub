@@ -9,22 +9,32 @@ namespace LinuxHub.Features.InstallWizard.Services
         private readonly IGrubAssetProvider _grubAssets;
         private readonly IMbrBackupService _mbrBackup;
         private readonly IBootConfigurationService _bootConfiguration;
+        private readonly IIsoBootEntryBuilderRegistry _isoBootEntryBuilders;
+        private readonly IIsoHostPartitionLocator _isoHostPartitions;
+        private readonly IInstallationPlanMutationGuard _mutationGuard;
 
         public BootStagingService(
             IEspLocatorService espLocator,
             IGrubAssetProvider grubAssets,
             IMbrBackupService mbrBackup,
-            IBootConfigurationService bootConfiguration)
+            IBootConfigurationService bootConfiguration,
+            IIsoBootEntryBuilderRegistry isoBootEntryBuilders,
+            IIsoHostPartitionLocator isoHostPartitions,
+            IInstallationPlanMutationGuard mutationGuard)
         {
+            _isoHostPartitions = isoHostPartitions ?? throw new ArgumentNullException(nameof(isoHostPartitions));
             _espLocator = espLocator ?? throw new ArgumentNullException(nameof(espLocator));
             _grubAssets = grubAssets ?? throw new ArgumentNullException(nameof(grubAssets));
             _mbrBackup = mbrBackup ?? throw new ArgumentNullException(nameof(mbrBackup));
             _bootConfiguration = bootConfiguration ?? throw new ArgumentNullException(nameof(bootConfiguration));
+            _isoBootEntryBuilders = isoBootEntryBuilders ?? throw new ArgumentNullException(nameof(isoBootEntryBuilders));
+            _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
         }
 
         public void InstallStagingBootloader(BootStagingRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
+            _mutationGuard.EnsurePublishedForDisk(request.TargetDiskIndex);
 
             // No modo substituir, IsoPath é um caminho GRUB dentro da partição de staging
             // (ex.: "/linuxhub.iso") — nunca existiu no sistema de arquivos do Windows, e não
@@ -44,16 +54,38 @@ namespace LinuxHub.Features.InstallWizard.Services
                     "ou apagada depois de selecionada no wizard.");
             }
 
+            IIsoBootEntryBuilder isoEntryBuilder = _isoBootEntryBuilders.Resolve(request.LiveSession);
+
             string grubCfg = GrubConfigBuilder.BuildConfig(
                 request.DistroName,
                 request.IsoPath,
                 includeWindowsChainload: !request.IsUefi,
-                enableAutoinstall: request.EnableAutoinstall);
+                unattended: request.Unattended,
+                isoEntryBuilder: isoEntryBuilder,
+                isoHostPartitionUuid: ResolveIsoHostPartitionUuid(request, isoEntryBuilder));
 
             if (request.IsUefi)
                 InstallUefi(request, grubCfg);
             else
                 InstallBios(request, grubCfg);
+        }
+
+        /// <summary>
+        /// Só as receitas que declaram precisar pagam o custo de descobrir isto — o casper acha
+        /// a ISO sozinho e não precisa de nada. No modo substituir quem sabe é o chamador (a
+        /// ISO está na staging, e o caminho dela não é consultável no Windows); no dual-boot a
+        /// ISO está num volume real e o identificador sai dele.
+        /// </summary>
+        private string ResolveIsoHostPartitionUuid(
+            BootStagingRequest request, IIsoBootEntryBuilder isoEntryBuilder)
+        {
+            if (!isoEntryBuilder.RequiresIsoHostPartitionUuid)
+                return string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(request.IsoHostPartitionUuid))
+                return request.IsoHostPartitionUuid;
+
+            return _isoHostPartitions.GetPartitionUuid(request.IsoPath);
         }
 
         private void InstallUefi(BootStagingRequest request, string grubCfg)

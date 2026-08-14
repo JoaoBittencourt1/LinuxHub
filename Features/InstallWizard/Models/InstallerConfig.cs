@@ -34,6 +34,13 @@ namespace LinuxHub.Features.InstallWizard.Models
         public string Timezone { get; set; } = string.Empty;
         public string Keymap { get; set; } = string.Empty;
 
+        /// <summary>Ambiente gráfico escolhido, quando o mecanismo permite escolher — vazio
+        /// quando a ISO já embute um. Lido apenas pelo preparer do mecanismo que o suporta;
+        /// há precedente de campo que não serve a todo caminho (<see cref="EfiPartitionIndex"/>),
+        /// e um campo de dado ignorado por quem não o usa não é violação de OCP — o que seria
+        /// violação é um <c>if</c> de identidade de distro (design.md, decisão 5).</summary>
+        public string DesktopEnvironment { get; set; } = string.Empty;
+
         // === Swap ===
         public bool SwapEnabled { get; set; }
         public int SwapSizeGb { get; set; }

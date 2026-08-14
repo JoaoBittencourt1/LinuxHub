@@ -21,8 +21,8 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <ui:Card Width="132"
-                                 Height="160"
+                        <ui:Card Width="140"
+                                 Height="168"
                                  Margin="8"
                                  Padding="10"
                                  Cursor="Hand"
@@ -38,7 +38,7 @@
                                            FontWeight="SemiBold"
                                            FontSize="12"
                                            HorizontalAlignment="Center"
-                                           Margin="0,8,0,0"
+                                           Margin="0,10,0,2"
                                            TextWrapping="Wrap"
                                            TextAlignment="Center"/>
                             </Grid>

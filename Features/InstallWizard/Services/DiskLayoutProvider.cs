@@ -23,7 +23,8 @@ namespace LinuxHub.Features.InstallWizard.Services
             using var diskSearcher = new ManagementObjectSearcher(
                 scope,
                 new ObjectQuery(
-                    "SELECT Number, SerialNumber, FriendlyName, Size, PartitionStyle, Signature " +
+                    "SELECT Number, SerialNumber, FriendlyName, Size, PartitionStyle, Signature, " +
+                    "Guid, UniqueId, LogicalSectorSize " +
                     $"FROM MSFT_Disk WHERE Number = {diskIndex}"));
 
             ManagementBaseObject disk = diskSearcher.Get().Cast<ManagementBaseObject>().FirstOrDefault()
@@ -40,6 +41,9 @@ namespace LinuxHub.Features.InstallWizard.Services
             string signatureHex = isGpt ? string.Empty : FormatSignature(disk["Signature"]);
             bool hasUniqueSignature = !isGpt && signatureHex.Length > 0 &&
                 IsUniqueDiskSignature(signatureHex, scope);
+            int logicalSectorSize = Convert.ToInt32(disk["LogicalSectorSize"] ?? 512);
+            if (logicalSectorSize is not (512 or 4096))
+                logicalSectorSize = 512;
 
             return new DiskLayout(
                 Index: diskIndex,
@@ -51,7 +55,19 @@ namespace LinuxHub.Features.InstallWizard.Services
                 IsSmallestDisk: IsUniqueExtreme(sizeBytes, allSizes, largest: false),
                 Partitions: ReadPartitions(scope, diskIndex),
                 DiskSignatureHex: signatureHex,
-                HasUniqueDiskSignature: hasUniqueSignature);
+                HasUniqueDiskSignature: hasUniqueSignature,
+                Guid: NormalizeGuid(disk["Guid"]?.ToString()),
+                UniqueId: disk["UniqueId"]?.ToString()?.Trim() ?? string.Empty,
+                LogicalSectorSizeBytes: logicalSectorSize);
+        }
+
+        internal static string NormalizeGuid(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return string.Empty;
+
+            string trimmed = raw.Trim().Trim('{', '}');
+            return Guid.TryParse(trimmed, out Guid guid) ? guid.ToString("D") : string.Empty;
         }
 
         /// <summary>8 dígitos hex minúsculos sem prefixo, mesmo formato que o `blkid` do Linux

@@ -5,8 +5,8 @@ Binários GRUB2 pré-compilados consumidos por `IGrubAssetProvider`
 app em runtime — não há toolchain GRUB (`grub-mkimage`, `grub-bios-setup`)
 nativo no Windows; foram gerados uma vez via WSL/Ubuntu (pacotes
 `grub-efi-amd64-bin`, `grub-pc-bin`, `grub-common`, `grub2-common`) e
-commitados aqui. Regenerados em 2026-07-27 (v2) depois de um teste real expor
-dois bugs na v1 — ver "Histórico" no fim deste arquivo.
+commitados aqui. Regenerados em 2026-08-04 (v3) depois de um teste real expor
+mais um bug — ver "Histórico" no fim deste arquivo.
 
 ## `uefi/grubx64.efi`
 
@@ -20,7 +20,7 @@ configfile /EFI/linuxhub/grub.cfg
 
 ```sh
 grub-mkimage -O x86_64-efi -o grubx64.efi -c early-uefi.cfg -p /boot/grub \
-  part_gpt part_msdos ntfs loopback iso9660 search search_fs_file chain fat normal linux configfile
+  part_gpt part_msdos ntfs loopback iso9660 search search_fs_file chain fat normal linux configfile test
 ```
 
 Por quê: o `grub.cfg` real (com o menu de boot, caminho da ISO etc.) é gerado
@@ -40,7 +40,7 @@ procurando `/boot/grub/grub.cfg` (onde `BootStagingService` escreve o
 
 ```sh
 grub-mkimage -O i386-pc -o core.img -c early-bios.cfg -p /boot/grub \
-  biosdisk part_msdos part_gpt ntfs loopback iso9660 search search_fs_file normal linux configfile
+  biosdisk part_msdos part_gpt ntfs loopback iso9660 search search_fs_file normal linux configfile test
 ```
 
 `boot.img` (440 bytes) e o embutimento do `core.img` no gap pós-MBR
@@ -105,3 +105,14 @@ testar de verdade. Ver `TEST_MATRIX.md`.
   `grub.cfg` real (nem UEFI nem BIOS) — trocado `grub-mkstandalone` por
   `grub-mkimage -c` com early config explícito nos dois. `boot.img` (BIOS)
   não mudou; `core.img` e `grubx64.efi` foram regenerados.
+- **v3 (2026-08-04)**: primeiro teste real ponta a ponta (Linux Mint 22.3,
+  instalação completa via staging) expôs que nenhuma das duas imagens tinha o
+  módulo `test` embutido — necessário para o comando `[`/`test` que
+  `GrubConfigBuilder.BuildIsoBootEntry` passou a gerar (detecção do nome real
+  do initrd em `/casper`, que varia por distro; ver histórico desse arquivo).
+  Sem o módulo, GRUB imprime "unknown command `['" e pede uma tecla antes de
+  seguir — o boot ainda completava porque o restante do fluxo não dependia do
+  resultado do teste, mas o aviso é um sintoma de um bug real, não cosmético.
+  `test` foi acrescentado à lista de módulos dos dois `grub-mkimage`; `boot.img`
+  não mudou pelo mesmo motivo do v2 (conteúdo do `core.img` não afeta o
+  patch nele).

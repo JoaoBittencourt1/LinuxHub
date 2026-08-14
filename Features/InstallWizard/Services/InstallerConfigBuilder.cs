@@ -13,7 +13,11 @@ namespace LinuxHub.Features.InstallWizard.Services
         int LinuxPartitionSizeGb,
         string Username,
         string Password,
-        string Hostname);
+        string Hostname,
+        string Locale,
+        string Keymap,
+        string Timezone,
+        string DesktopEnvironment = "");
 
     /// <summary>
     /// Monta um <see cref="InstallerConfig"/> a partir do estado do wizard. Não depende
@@ -22,12 +26,10 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public sealed class InstallerConfigBuilder
     {
-        private readonly ISystemInfoProvider _systemInfo;
         private readonly IEspLocatorService _espLocator;
 
-        public InstallerConfigBuilder(ISystemInfoProvider systemInfo, IEspLocatorService espLocator)
+        public InstallerConfigBuilder(IEspLocatorService espLocator)
         {
-            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
             _espLocator = espLocator ?? throw new ArgumentNullException(nameof(espLocator));
         }
 
@@ -54,9 +56,13 @@ namespace LinuxHub.Features.InstallWizard.Services
                 Password = request.Password,
                 Hostname = request.Hostname.Trim(),
 
-                Locale = _systemInfo.GetLocale(),
-                Timezone = _systemInfo.GetTimezone(),
-                Keymap = _systemInfo.GetKeymap(),
+                // Vêm do pedido, não de uma leitura do sistema feita aqui: o passo regional do
+                // wizard mostra esses três valores e permite corrigi-los, e ler de novo neste
+                // ponto reabriria a divergência entre o que o usuário viu e o que foi gravado.
+                Locale = request.Locale,
+                Timezone = request.Timezone,
+                Keymap = request.Keymap,
+                DesktopEnvironment = request.DesktopEnvironment,
 
                 SwapEnabled = true,
                 SwapSizeGb = 8
@@ -75,5 +81,8 @@ namespace LinuxHub.Features.InstallWizard.Services
 
             return cfg;
         }
+
+        public int? FindEfiPartitionIndex(int diskIndex) =>
+            _espLocator.FindEfiSystemPartitionIndex(diskIndex);
     }
 }

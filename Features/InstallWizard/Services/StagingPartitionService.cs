@@ -31,10 +31,14 @@ namespace LinuxHub.Features.InstallWizard.Services
         private const string CopyMarker = "COPY_OK:";
 
         private readonly IIsoFileInfoProvider _isoFileInfo;
+        private readonly IInstallationPlanMutationGuard _mutationGuard;
 
-        public StagingPartitionService(IIsoFileInfoProvider isoFileInfo)
+        public StagingPartitionService(
+            IIsoFileInfoProvider isoFileInfo,
+            IInstallationPlanMutationGuard mutationGuard)
         {
             _isoFileInfo = isoFileInfo ?? throw new ArgumentNullException(nameof(isoFileInfo));
+            _mutationGuard = mutationGuard ?? throw new ArgumentNullException(nameof(mutationGuard));
         }
 
         /// <summary>
@@ -57,6 +61,7 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         public StagingPartition Create(int diskIndex, long isoSizeInBytes)
         {
+            _mutationGuard.EnsurePublishedForDisk(diskIndex);
             string output = ElevatedPowerShellRunner.Run(
                 BuildCreateScript(diskIndex, RequiredBytesFor(isoSizeInBytes)),
                 $"criação da partição de instalação no disco {diskIndex}");
@@ -68,6 +73,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         {
             ArgumentNullException.ThrowIfNull(partition);
             ArgumentException.ThrowIfNullOrWhiteSpace(isoSourcePath);
+            _mutationGuard.EnsurePublishedForDisk(partition.DiskIndex);
 
             long expectedSize = _isoFileInfo.GetSizeInBytes(isoSourcePath);
 
@@ -98,7 +104,7 @@ Remove-PartitionAccessPath -DiskNumber {diskIndex} -PartitionNumber $partition.P
 $guid = (Get-Partition -DiskNumber {diskIndex} -PartitionNumber $partition.PartitionNumber).Guid
 if (-not $guid) {{ throw ""O Windows não informou o GUID da partição de instalação criada no disco {diskIndex}. Sem ele a partição não pode ser identificada com segurança depois."" }}
 
-Write-Output ""{SuccessMarker} $($partition.PartitionNumber) $guid""";
+Write-Output ""{SuccessMarker} $($partition.PartitionNumber) $guid $($partition.Offset)""";
 
         /// <summary>
         /// Confere o tamanho depois de copiar. Uma cópia truncada (disco cheio, energia,
@@ -132,20 +138,21 @@ Write-Output ""{CopyMarker} {expectedSize}""";
         {
             Match match = Regex.Match(
                 output ?? string.Empty,
-                $@"{SuccessMarker}\s*(\d+)\s+(\{{[0-9a-fA-F-]+\}}|[0-9a-fA-F-]{{36}})");
+                $@"{SuccessMarker}\s*(\d+)\s+(\{{[0-9a-fA-F-]+\}}|[0-9a-fA-F-]{{36}})\s+(\d+)");
 
             if (!match.Success)
             {
                 throw new InvalidOperationException(
-                    "A partição de instalação foi criada, mas o Windows não informou o número e " +
-                    "o identificador dela — sem esses dados a instalação não consegue continuar. " +
+                    "A partição de instalação foi criada, mas o Windows não informou o número, " +
+                    "o identificador e o offset dela — sem esses dados a instalação não consegue continuar. " +
                     $"Saída recebida: {output}");
             }
 
             return new StagingPartition(
                 diskIndex,
                 int.Parse(match.Groups[1].Value),
-                match.Groups[2].Value.Trim().Trim('{', '}').ToUpperInvariant());
+                match.Groups[2].Value.Trim().Trim('{', '}').ToUpperInvariant(),
+                long.Parse(match.Groups[3].Value));
         }
     }
 }

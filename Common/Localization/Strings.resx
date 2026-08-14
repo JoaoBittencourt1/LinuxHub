@@ -77,6 +77,18 @@
   <data name="Shell_LanguageEnUs" xml:space="preserve">
     <value>English (US)</value>
   </data>
+  <data name="Shell_ThemeTooltip" xml:space="preserve">
+    <value>Alternar tema claro/escuro</value>
+  </data>
+  <data name="Shell_ThemeSwitchToDark" xml:space="preserve">
+    <value>Usar tema escuro</value>
+  </data>
+  <data name="Shell_ThemeSwitchToLight" xml:space="preserve">
+    <value>Usar tema claro</value>
+  </data>
+  <data name="Shell_NavSectionLabel" xml:space="preserve">
+    <value>Navegar</value>
+  </data>
 
   <data name="CatalogDetail_Back" xml:space="preserve">
     <value>Voltar</value>
@@ -94,10 +106,10 @@
     <value>Instalar agora</value>
   </data>
   <data name="CatalogDetail_DownloadLabel" xml:space="preserve">
-    <value>Download:</value>
+    <value>Baixe no site oficial:</value>
   </data>
   <data name="CatalogDetail_DownloadLinkText" xml:space="preserve">
-    <value>Clique aqui para baixar!</value>
+    <value>Ir para o site oficial ↗</value>
   </data>
   <data name="CatalogDetail_LinkOpenFailedTitle" xml:space="preserve">
     <value>Erro</value>
@@ -314,6 +326,9 @@ Atenção: suspender o BitLocker não resolve — os dados continuam criptografa
   <data name="Wizard_InstallStepPreparing" xml:space="preserve">
     <value>Preparando a instalação…</value>
   </data>
+  <data name="Wizard_InstallStepPublishingPlan" xml:space="preserve">
+    <value>Publicando o plano de instalação…</value>
+  </data>
   <data name="Wizard_InstallStepShrinking" xml:space="preserve">
     <value>Encolhendo a partição do Windows…</value>
   </data>
@@ -332,6 +347,63 @@ Libere espaço no disco, escolha um alvo maior ou reduza o tamanho reservado par
   </data>
   <data name="Wizard_InstallStepStagingBoot" xml:space="preserve">
     <value>Preparando a inicialização do Linux…</value>
+  </data>
+  <data name="Wizard_RollbackEncryptionDivergence" xml:space="preserve">
+    <value>A proteção do volume (BitLocker ou equivalente) não voltou ao estado anterior à instalação. Reative a proteção manualmente nas configurações do Windows.</value>
+  </data>
+  <data name="Wizard_BitLockerQueryFailedMessage" xml:space="preserve">
+    <value>Não foi possível verificar a criptografia do volume {0}:. Sem essa confirmação a instalação não pode continuar.</value>
+  </data>
+  <data name="Wizard_InterruptedTransactionTitle" xml:space="preserve">
+    <value>Instalação anterior incompleta</value>
+  </data>
+  <data name="Wizard_InterruptedTransactionMessage" xml:space="preserve">
+    <value>Há uma transação anterior no estado "{0}". {1} Resolva ou remova essa transação antes de iniciar outra instalação.</value>
+  </data>
+  <data name="Wizard_InterruptedTransactionBlocked" xml:space="preserve">
+    <value>Não é possível iniciar uma nova instalação enquanto houver uma transação anterior não resolvida.</value>
+  </data>
+  <data name="Preflight_RejectTitle" xml:space="preserve">
+    <value>Máquina incompatível</value>
+  </data>
+  <data name="Preflight_WarnTitle" xml:space="preserve">
+    <value>Aviso de compatibilidade</value>
+  </data>
+  <data name="Preflight_RejectBlocked" xml:space="preserve">
+    <value>A verificação de compatibilidade recusou esta máquina. A instalação não pode continuar.</value>
+  </data>
+  <data name="Preflight_RejectDynamicDisk" xml:space="preserve">
+    <value>O disco do sistema é dinâmico. Converta-o para básico antes de instalar.</value>
+  </data>
+  <data name="Preflight_RejectStorageSpaces" xml:space="preserve">
+    <value>Storage Spaces não é suportado neste caminho de instalação.</value>
+  </data>
+  <data name="Preflight_RejectUsbSystemDisk" xml:space="preserve">
+    <value>O disco de sistema está em USB. Instale a partir de um disco interno.</value>
+  </data>
+  <data name="Preflight_RejectVirtualDisk" xml:space="preserve">
+    <value>Disco virtual (VHD/VHDX) não é um alvo suportado.</value>
+  </data>
+  <data name="Preflight_RejectIscsi" xml:space="preserve">
+    <value>Disco iSCSI não é um alvo suportado.</value>
+  </data>
+  <data name="Preflight_RejectRaidOrVmd" xml:space="preserve">
+    <value>Controladora RAID/Intel RST/VMD detectada e não endereçável com segurança por este instalador.</value>
+  </data>
+  <data name="Preflight_RejectIndeterminateTopology" xml:space="preserve">
+    <value>A topologia do disco não pôde ser determinada. A instalação recusa em vez de assumir o caso provável.</value>
+  </data>
+  <data name="Preflight_RejectEncryptionUnreadable" xml:space="preserve">
+    <value>Não foi possível ler o estado de criptografia do volume. A instalação recusa sem essa confirmação.</value>
+  </data>
+  <data name="Preflight_RejectEncryptionActive" xml:space="preserve">
+    <value>O volume do sistema ainda está criptografado ou com proteção ativa. Desative a proteção e conclua a descriptografia antes de instalar.</value>
+  </data>
+  <data name="Preflight_WarnBootNextSkipped" xml:space="preserve">
+    <value>A sondagem de BootNext foi pulada. Isso não conta como aprovação da ordem de boot.</value>
+  </data>
+  <data name="Preflight_WarnBootNextFailed" xml:space="preserve">
+    <value>A sondagem de BootNext falhou. Isso não conta como aprovação da ordem de boot.</value>
   </data>
   <data name="Wizard_InstallProgressHint" xml:space="preserve">
     <value>Não desligue nem feche o LinuxBit. Isso pode levar alguns minutos e o Windows vai pedir permissão de administrador.</value>
@@ -407,6 +479,30 @@ Selecione uma ISO Linux válida.</value>
   <data name="Wizard_DownloadErrorTitle" xml:space="preserve">
     <value>Erro no download</value>
   </data>
+  <data name="Wizard_VerifyingIsoLabel" xml:space="preserve">
+    <value>Verificando integridade da ISO...</value>
+  </data>
+  <data name="Wizard_IsoVerificationFailedTitle" xml:space="preserve">
+    <value>Verificação de integridade falhou</value>
+  </data>
+  <data name="Wizard_IsoVerificationFailedMessage" xml:space="preserve">
+    <value>O arquivo não corresponde ao hash publicado para {0}. Ele pode estar corrompido ou ter sido alterado — baixe novamente ou obtenha a ISO diretamente da fonte oficial.</value>
+  </data>
+  <data name="Wizard_IsoNoReferenceHashTitle" xml:space="preserve">
+    <value>Sem hash de referência</value>
+  </data>
+  <data name="Wizard_IsoNoReferenceHashMessage" xml:space="preserve">
+    <value>{0} não tem hash de referência publicado; este arquivo foi aceito sem verificação de integridade, e a instalação automática não está disponível para ele.</value>
+  </data>
+  <data name="Wizard_DistroNotVerifiableMessage" xml:space="preserve">
+    <value>Esta distro não tem hash de referência publicado pela fonte oficial — download automático desligado. Use a seleção manual se já tiver a ISO.</value>
+  </data>
+  <data name="Wizard_CatalogFallbackTitle" xml:space="preserve">
+    <value>Catálogo offline</value>
+  </data>
+  <data name="Wizard_CatalogFallbackMessage" xml:space="preserve">
+    <value>Não foi possível obter o catálogo assinado mais recente. O app está operando com os dados embutidos na versão instalada — links, versões e hashes podem estar desatualizados.</value>
+  </data>
   <data name="Wizard_ReplaceSystemDiskWarningMessage" xml:space="preserve">
     <value>Este disco hospeda o Windows em execução. Ele (e o Windows) será completamente apagado durante a instalação do Linux, após reiniciar — o wipe só acontece depois do reboot, quando o Windows não estiver mais rodando.</value>
   </data>
@@ -451,5 +547,53 @@ Selecione uma ISO Linux válida.</value>
   </data>
   <data name="Wizard_TestedDistroWarningMessage" xml:space="preserve">
     <value>A instalação automática só foi testada com o Ubuntu 24.04. As demais distribuições e versões do catálogo não foram validadas e podem falhar no meio do processo, depois do ponto em que o disco já foi alterado.</value>
+  </data>
+  <data name="CatalogDetail_UntestedWarningTitle" xml:space="preserve">
+    <value>Distro não testada</value>
+  </data>
+  <data name="CatalogDetail_UntestedWarningMessage" xml:space="preserve">
+    <value>O LinuxBit ainda não foi testado com esta distro. A instalação pode falhar ou deixar o computador sem iniciar. Por enquanto, só Ubuntu e Linux Mint foram verificados de verdade.</value>
+  </data>
+  <data name="Wizard_UntestedDistroTooltip" xml:space="preserve">
+    <value>Distro não testada — a instalação pode falhar</value>
+  </data>
+  <data name="Wizard_RegionalSectionTitle" xml:space="preserve">
+    <value>Idioma, teclado e fuso horário</value>
+  </data>
+  <data name="Wizard_RegionalSectionHint" xml:space="preserve">
+    <value>Detectados a partir do seu Windows. Confira antes de instalar — é assim que o sistema novo vai iniciar.</value>
+  </data>
+  <data name="Wizard_LocaleLabel" xml:space="preserve">
+    <value>Idioma do sistema</value>
+  </data>
+  <data name="Wizard_KeymapLabel" xml:space="preserve">
+    <value>Layout do teclado</value>
+  </data>
+  <data name="Wizard_TimezoneLabel" xml:space="preserve">
+    <value>Fuso horário</value>
+  </data>
+  <data name="Wizard_RegionalFallbackWarningMessage" xml:space="preserve">
+    <value>Alguma dessas configurações não tem equivalente conhecido no Linux e está mostrando um valor padrão. Vale conferir os três campos antes de continuar.</value>
+  </data>
+  <data name="Wizard_DesktopEnvironmentTitle" xml:space="preserve">
+    <value>Ambiente gráfico</value>
+  </data>
+  <data name="Wizard_DesktopEnvironmentHint" xml:space="preserve">
+    <value>Esta distro é instalada sem ambiente gráfico. Escolha o que será instalado junto — sem escolher, o sistema inicia em modo texto.</value>
+  </data>
+  <data name="UpdateNotice_Title" xml:space="preserve">
+    <value>Nova versão disponível</value>
+  </data>
+  <data name="UpdateNotice_Message" xml:space="preserve">
+    <value>Há uma versão mais recente do LinuxBit. Atualizar pode corrigir problemas conhecidos e melhorar sua experiência.</value>
+  </data>
+  <data name="UpdateNotice_Versions" xml:space="preserve">
+    <value>Você está usando a versão {0} — a versão {1} já está disponível.</value>
+  </data>
+  <data name="UpdateNotice_Download" xml:space="preserve">
+    <value>Baixar nova versão</value>
+  </data>
+  <data name="UpdateNotice_Dismiss" xml:space="preserve">
+    <value>Agora não</value>
   </data>
 </root>

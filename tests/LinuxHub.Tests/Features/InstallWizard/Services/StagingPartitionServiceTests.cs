@@ -14,7 +14,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [Fact]
         public void RequiredBytes_LeavesRoomBeyondTheIsoItself()
         {
-            var service = new StagingPartitionService(new FakeIsoFileInfoProvider(0));
+            var service = new StagingPartitionService(
+                new FakeIsoFileInfoProvider(0),
+                new PermissiveInstallationPlanMutationGuard());
             const long isoSize = 6_655_619_072;
 
             long required = service.RequiredBytesFor(isoSize);
@@ -37,7 +39,9 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         [InlineData(7_000_000_001)]
         public void RequiredBytes_IsAlwaysMebibyteAligned(long isoSize)
         {
-            var service = new StagingPartitionService(new FakeIsoFileInfoProvider(0));
+            var service = new StagingPartitionService(
+                new FakeIsoFileInfoProvider(0),
+                new PermissiveInstallationPlanMutationGuard());
 
             Assert.Equal(0, service.RequiredBytesFor(isoSize) % (1024 * 1024));
         }
@@ -82,11 +86,12 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
         public void CreateOutput_YieldsNumberAndNormalizedUuid()
         {
             StagingPartition parsed = StagingPartitionService.ParseCreateOutputOrThrow(
-                diskIndex: 0, output: "STAGING_OK: 4 {abcd1234-5678-90ab-cdef-1234567890ab} E");
+                diskIndex: 0, output: "STAGING_OK: 4 {abcd1234-5678-90ab-cdef-1234567890ab} 1048576");
 
             Assert.Equal(4, parsed.PartitionNumber);
             Assert.Equal("ABCD1234-5678-90AB-CDEF-1234567890AB", parsed.PartitionUuid);
             Assert.Equal(0, parsed.DiskIndex);
+            Assert.Equal(1_048_576, parsed.OffsetBytes);
         }
 
         [Fact]

@@ -35,7 +35,7 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// ficar marcada como incerta só por causa do nome do arquivo.</summary>
         private static bool MatchesExpectedVersion(string fileName, DistroInfo distro)
         {
-            if (!distro.SupportsAutoinstall)
+            if (!distro.SupportsUnattendedInstall)
                 return true;
 
             int expectedMajorVersion = DigitRun.Matches(distro.Version)

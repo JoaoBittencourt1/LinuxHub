@@ -10,6 +10,23 @@ LinuxHub-win-x64*/
 *.iso
 *_wpftmp.csproj
 
+# "bin/" above is unanchored (matches any dir named bin/ at any depth, on purpose —
+# it also needs to catch tools/CatalogPublisher/bin/ etc.), but that also swallows
+# live-media's own opt/linuxhub/bin/ (the live installer's real entrypoint dir on the
+# target filesystem, not a build artifact). Un-ignore it explicitly.
+!live-media/**/bin/
+!live-media/**/bin/**
+
+# Python bytecode cache (progress-ui.py gets analyzed by editors/tooling)
+__pycache__/
+*.pyc
+
+# Saída do build da mídia live: a ISO tem centenas de MB e é reconstruível a
+# partir de live-media/ (build-live-media.sh). O manifesto/hash acompanham a
+# ISO, não o repositório.
+live-media-out/
+live-media/out/
+
 # Temporary files
 *.user
 *.suo
@@ -27,3 +44,10 @@ LinuxHub-win-x64*/
 *.g.i.cs
 *.baml
 *.g.resources
+
+# Planning and agent config
+openspec/
+.claude/
+constitution.md
+.cursor/
+CLAUDE.md
