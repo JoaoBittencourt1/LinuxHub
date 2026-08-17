@@ -77,6 +77,9 @@
   <data name="Shell_LanguageEnUs" xml:space="preserve">
     <value>English (US)</value>
   </data>
+  <data name="Shell_ThemeTooltip" xml:space="preserve">
+    <value>Alternar entre tema claro e escuro</value>
+  </data>
 
   <data name="CatalogDetail_Back" xml:space="preserve">
     <value>Voltar</value>

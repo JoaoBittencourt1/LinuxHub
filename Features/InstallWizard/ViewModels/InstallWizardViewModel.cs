@@ -416,6 +416,7 @@ namespace LinuxHub.Features.InstallWizard.ViewModels
 
             _bootStaging.InstallStagingBootloader(new BootStagingRequest(
                 DistroName: distro.Name,
+                LiveBoot: distro.LiveBoot,
                 IsoPath: isoPathForGrub,
                 IsUefi: Target.IsUefi,
                 TargetDiskIndex: targetDiskIndex,

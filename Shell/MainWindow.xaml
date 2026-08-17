@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:loc="clr-namespace:LinuxHub.Common.Localization"
+        xmlns:anim="clr-namespace:LinuxHub.Common.Animations"
         Title="{loc:Loc Shell_Title}"
         Height="640"
         Width="1040"
@@ -12,7 +13,9 @@
         ExtendsContentIntoTitleBar="True"
         WindowStartupLocation="CenterScreen">
 
-    <Grid>
+    <!-- RootGrid é o alvo do fade que marca a troca de tema: a substituição do
+         dicionário de cores é instantânea, e sem esse pulso ela pisca na tela. -->
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -26,8 +29,24 @@
                                Margin="0,0,8,0"
                                Opacity="0.6"
                                FontSize="11"/>
+                    <ui:Button x:Name="ThemeButton"
+                               Appearance="Transparent"
+                               anim:Hover.Effect="Pop"
+                               ToolTip="{loc:Loc Shell_ThemeTooltip}"
+                               Click="ThemeButton_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon x:Name="ThemeIcon"
+                                           Symbol="WeatherMoon24"
+                                           RenderTransformOrigin="0.5,0.5">
+                                <ui:SymbolIcon.RenderTransform>
+                                    <RotateTransform x:Name="ThemeIconRotation"/>
+                                </ui:SymbolIcon.RenderTransform>
+                            </ui:SymbolIcon>
+                        </ui:Button.Icon>
+                    </ui:Button>
                     <ui:Button x:Name="LanguageButton"
                                Appearance="Transparent"
+                               anim:Hover.Effect="Pop"
                                ToolTip="{loc:Loc Shell_LanguageTooltip}"
                                Click="LanguageButton_Click">
                         <ui:Button.Icon>
@@ -53,32 +72,54 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Margin="8,12,8,8">
-                <ui:Button x:Name="CatalogNavButton"
-                           Content="{loc:Loc Shell_NavCatalog}"
-                           Appearance="Secondary"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Left"
-                           Height="42"
-                           Margin="0,0,0,6"
-                           Click="CatalogNavButton_Click">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="Grid24"/>
-                    </ui:Button.Icon>
-                </ui:Button>
+            <Grid Grid.Column="0" Margin="8,12,8,8" VerticalAlignment="Top">
+                <!-- Marcador da aba ativa. Desliza entre os botões em vez de simplesmente
+                     acender no novo: o movimento é o que liga visualmente a aba que o
+                     usuário deixou à que ele escolheu. -->
+                <Border x:Name="NavIndicator"
+                        Width="3"
+                        Height="20"
+                        Margin="0,11,0,0"
+                        CornerRadius="2"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        Background="{DynamicResource SystemAccentColorSecondaryBrush}">
+                    <Border.RenderTransform>
+                        <TranslateTransform x:Name="NavIndicatorOffset"/>
+                    </Border.RenderTransform>
+                </Border>
 
-                <ui:Button x:Name="InstallNavButton"
-                           Content="{loc:Loc Shell_NavInstall}"
-                           Appearance="Transparent"
-                           HorizontalAlignment="Stretch"
-                           HorizontalContentAlignment="Left"
-                           Height="42"
-                           Click="InstallNavButton_Click">
-                    <ui:Button.Icon>
-                        <ui:SymbolIcon Symbol="Desktop24"/>
-                    </ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
+                <StackPanel Margin="11,0,0,0"
+                            anim:Entrance.ChildEffect="FadeFromLeft"
+                            anim:Entrance.ChildStagger="70">
+                    <ui:Button x:Name="CatalogNavButton"
+                               Content="{loc:Loc Shell_NavCatalog}"
+                               Appearance="Secondary"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Left"
+                               Height="42"
+                               Margin="0,0,0,6"
+                               anim:Hover.Effect="Glow"
+                               Click="CatalogNavButton_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Grid24"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
+
+                    <ui:Button x:Name="InstallNavButton"
+                               Content="{loc:Loc Shell_NavInstall}"
+                               Appearance="Transparent"
+                               HorizontalAlignment="Stretch"
+                               HorizontalContentAlignment="Left"
+                               Height="42"
+                               anim:Hover.Effect="Glow"
+                               Click="InstallNavButton_Click">
+                        <ui:Button.Icon>
+                            <ui:SymbolIcon Symbol="Desktop24"/>
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </Grid>
 
             <ContentControl x:Name="ContentHost" Grid.Column="1"/>
         </Grid>

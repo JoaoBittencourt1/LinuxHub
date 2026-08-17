@@ -1,10 +1,10 @@
 using System.Windows;
+using LinuxHub.Common.Theming;
 using LinuxHub.Features.Catalog.ViewModels;
 using LinuxHub.Features.InstallWizard.Services;
 using LinuxHub.Features.InstallWizard.ViewModels;
 using LinuxHub.Shell;
 using Wpf.Ui.Appearance;
-using Wpf.Ui.Controls;
 
 namespace LinuxHub
 {
@@ -19,7 +19,7 @@ namespace LinuxHub
         {
             base.OnStartup(e);
 
-            ApplicationThemeManager.Apply(ApplicationTheme.Dark, WindowBackdropType.Mica, true);
+            ThemeManager.Instance.Apply(ApplicationTheme.Dark);
 
             IIsoDownloadService isoDownloadService = new IsoDownloadService();
             IDistroDetectionService distroDetectionService = new DistroDetectionService();

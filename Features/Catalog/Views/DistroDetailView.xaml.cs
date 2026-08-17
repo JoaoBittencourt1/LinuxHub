@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using LinuxHub.Common.Animations;
 using LinuxHub.Common.Localization;
 using LinuxHub.Features.Catalog.ViewModels;
 
@@ -75,6 +76,11 @@ namespace LinuxHub.Features.Catalog.Views
                     Stretch = Stretch.Uniform
                 };
 
+                // A animação é marcada no elemento em vez de disparada aqui: ela roda
+                // quando ele passa a ser visível, e nesta linha ele ainda nem entrou na
+                // árvore visual.
+                Entrance.SetEffect(video, EntranceEffect.FadeScale);
+
                 CarouselContent.Content = video;
                 video.Play();
                 _currentVideo = video;
@@ -90,6 +96,9 @@ namespace LinuxHub.Features.Catalog.Views
                 Stretch = Stretch.Uniform,
                 Cursor = Cursors.Hand
             };
+
+            Entrance.SetEffect(img, EntranceEffect.FadeScale);
+            Hover.SetEffect(img, HoverEffect.Pop);
 
             img.MouseLeftButtonUp += (_, _) => viewModel.OpenImageCommand.Execute(item);
             CarouselContent.Content = img;

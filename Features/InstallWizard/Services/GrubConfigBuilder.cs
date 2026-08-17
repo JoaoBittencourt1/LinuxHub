@@ -1,4 +1,5 @@
 using System.Text;
+using LinuxHub.Common.Models;
 
 namespace LinuxHub.Features.InstallWizard.Services
 {
@@ -38,6 +39,7 @@ namespace LinuxHub.Features.InstallWizard.Services
 
         public static string BuildConfig(
             string distroName,
+            LiveBootSystem liveBoot,
             string isoWindowsPath,
             bool includeWindowsChainload,
             bool enableAutoinstall = false)
@@ -49,7 +51,7 @@ namespace LinuxHub.Features.InstallWizard.Services
             sb.AppendLine("set timeout=10");
             sb.AppendLine("set default=0");
             sb.AppendLine();
-            sb.Append(BuildIsoBootEntry(distroName, isoWindowsPath, enableAutoinstall));
+            sb.Append(BuildIsoBootEntry(distroName, liveBoot, isoWindowsPath, enableAutoinstall));
 
             if (includeWindowsChainload)
             {
@@ -93,12 +95,22 @@ namespace LinuxHub.Features.InstallWizard.Services
         /// nada, a tela gráfica só serve para esconder a mensagem de erro se algo falhar.
         /// </summary>
         internal static string BuildIsoBootEntry(
-            string distroName, string isoWindowsPath, bool enableAutoinstall = false)
+            string distroName,
+            LiveBootSystem liveBoot,
+            string isoWindowsPath,
+            bool enableAutoinstall = false)
         {
             string isoPath = ToGrubPath(isoWindowsPath);
-            string installerParameters =
-                (enableAutoinstall ? " autoinstall" : string.Empty) + NoPromptParameter;
-            string targetParameters = enableAutoinstall ? "quiet" : "quiet splash";
+
+            var recipe = liveBoot switch
+            {
+                LiveBootSystem.Casper => CasperRecipe(enableAutoinstall),
+                LiveBootSystem.Archiso => ArchisoRecipe(),
+                _ => throw new NotSupportedException(
+                    $"Não há receita de boot validada para {distroName}. Gerar um grub.cfg " +
+                    "assumindo o layout de outra distro produz uma entrada que não boota, " +
+                    "depois do disco já ter sido alterado."),
+            };
 
             return $@"menuentry ""Instalar {distroName} (staging LinuxHub)"" {{
     insmod part_gpt
@@ -106,15 +118,59 @@ namespace LinuxHub.Features.InstallWizard.Services
     insmod ntfs
     insmod loopback
     insmod iso9660
+    insmod probe
     set gfxpayload=keep
     set isofile=""{isoPath}""
     search --no-floppy --file --set=root $isofile
-    loopback loop $isofile
-    linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile{installerParameters} --- {targetParameters}
-    initrd (loop)/casper/initrd
+{recipe.SetupLines}    loopback loop $isofile
+    {recipe.KernelLine}
+    {recipe.InitrdLine}
 }}
 ";
         }
+
+        /// <summary>As linhas que mudam de um sistema live para o outro. O resto do
+        /// menuentry (insmod, search, loopback) é igual para todos.</summary>
+        private sealed record BootRecipe(string SetupLines, string KernelLine, string InitrdLine);
+
+        private static BootRecipe CasperRecipe(bool enableAutoinstall)
+        {
+            string installerParameters =
+                (enableAutoinstall ? " autoinstall" : string.Empty) + NoPromptParameter;
+            string targetParameters = enableAutoinstall ? "quiet" : "quiet splash";
+
+            return new BootRecipe(
+                SetupLines: string.Empty,
+                KernelLine: $"linux (loop)/casper/vmlinuz boot=casper iso-scan/filename=$isofile{installerParameters} --- {targetParameters}",
+                InitrdLine: "initrd (loop)/casper/initrd");
+        }
+
+        /// <summary>
+        /// Segue o <c>/boot/grub/loopback.cfg</c> que a própria ISO do Arch traz — a receita
+        /// do fornecedor para bootar a imagem a partir de um arquivo. Nada aqui é comum com
+        /// o casper: não há <c>iso-scan/filename</c>, não há <c>boot=</c>, e o separador
+        /// <c>---</c> não se aplica.
+        ///
+        /// O <c>probe</c> é o ponto central. O hook <c>archiso_loop_mnt</c> monta a partição
+        /// que hospeda a ISO (<c>img_dev</c>) e só então abre o loopback no arquivo dentro
+        /// dela (<c>img_loop</c>, caminho relativo à raiz dessa partição). Ou seja, o kernel
+        /// precisa saber identificar a partição do Windows — e é o GRUB que lê o UUID do
+        /// filesystem real em tempo de boot, em vez de nós deduzirmos do lado do Windows como
+        /// o Linux vai nomear aquele disco. O hook aceita a forma <c>UUID=</c> literal:
+        /// <code>case "${dev}" in 'UUID='* | 'LABEL='* | ...) : ;; *) dev="${resolved_dev}" ;; esac</code>
+        ///
+        /// <c>copytoram=y</c> não é otimização: o mesmo hook só solta a partição hospedeira
+        /// nesse modo —
+        /// <code>if [ "${copytoram}" = "y" ]; then losetup -d "${_dev_loop}"; umount /run/archiso/img_dev; fi</code>
+        /// Sem isso o Windows fica montado enquanto o instalador roda, e reparticionar o
+        /// disco que segura a própria ISO falha. O custo é precisar de RAM para o airootfs
+        /// (~1 GB nesta ISO) — deixar no <c>auto</c> padrão tornaria isso dependente da
+        /// memória livre do momento, que é a diferença entre instalar e não instalar.
+        /// </summary>
+        private static BootRecipe ArchisoRecipe() =>
+            new(SetupLines: "    probe --set=isodevuuid --fs-uuid $root\n",
+                KernelLine: "linux (loop)/arch/boot/x86_64/vmlinuz-linux archisobasedir=arch img_dev=UUID=$isodevuuid img_loop=$isofile copytoram=y",
+                InitrdLine: "initrd (loop)/arch/boot/x86_64/initramfs-linux.img");
 
         internal static string BuildWindowsChainloadEntry() => @"menuentry ""Windows"" {
     insmod part_msdos

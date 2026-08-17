@@ -1,4 +1,5 @@
 using System.IO;
+using LinuxHub.Common.Models;
 using LinuxHub.Features.InstallWizard.Services;
 using Xunit;
 
@@ -87,6 +88,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
 
             var request = new BootStagingRequest(
                 DistroName: "Ubuntu",
+                LiveBoot: LiveBootSystem.Casper,
                 IsoPath: "/linuxhub.iso",
                 IsUefi: true,
                 TargetDiskIndex: 0);
@@ -109,6 +111,7 @@ namespace LinuxHub.Tests.Features.InstallWizard.Services
             string missingPath = Path.Combine(Path.GetTempPath(), $"linuxhub-missing-{Guid.NewGuid():N}.iso");
             var request = new BootStagingRequest(
                 DistroName: "Ubuntu",
+                LiveBoot: LiveBootSystem.Casper,
                 IsoPath: missingPath,
                 IsUefi: true,
                 TargetDiskIndex: 0);

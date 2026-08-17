@@ -46,6 +46,7 @@ namespace LinuxHub.Features.InstallWizard.Services
 
             string grubCfg = GrubConfigBuilder.BuildConfig(
                 request.DistroName,
+                request.LiveBoot,
                 request.IsoPath,
                 includeWindowsChainload: !request.IsUefi,
                 enableAutoinstall: request.EnableAutoinstall);
