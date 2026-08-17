@@ -11,6 +11,11 @@ namespace LinuxHub.Common.Models
         /// <summary>Quão recomendada a distro é para iniciantes, de 1 (nada) a 5 (muito).</summary>
         public int BeginnerRating { get; set; }
 
+        /// <summary>Receita de boot da ISO desta distro. Sem valor explícito, fica
+        /// <see cref="LiveBootSystem.Unsupported"/> e a geração do grub.cfg falha em vez
+        /// de chutar um layout — ver <see cref="LiveBootSystem"/>.</summary>
+        public LiveBootSystem LiveBoot { get; set; }
+
         /// <summary>Só true pra a build específica já validada de ponta a ponta (autoinstall/
         /// cloud-init/GRUB). Para as demais, o wizard só prepara o boot até o instalador
         /// nativo da própria ISO — o resto da instalação fica por conta do usuário, porque o

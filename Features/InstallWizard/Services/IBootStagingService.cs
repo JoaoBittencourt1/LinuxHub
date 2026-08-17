@@ -1,3 +1,5 @@
+using LinuxHub.Common.Models;
+
 namespace LinuxHub.Features.InstallWizard.Services
 {
     /// <summary>
@@ -15,6 +17,7 @@ namespace LinuxHub.Features.InstallWizard.Services
     /// </summary>
     public sealed record BootStagingRequest(
         string DistroName,
+        LiveBootSystem LiveBoot,
         string IsoPath,
         bool IsUefi,
         int TargetDiskIndex,

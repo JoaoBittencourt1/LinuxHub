@@ -20,8 +20,17 @@ configfile /EFI/linuxhub/grub.cfg
 
 ```sh
 grub-mkimage -O x86_64-efi -o grubx64.efi -c early-uefi.cfg -p /boot/grub \
-  part_gpt part_msdos ntfs loopback iso9660 search search_fs_file chain fat normal linux configfile
+  part_gpt part_msdos ntfs loopback iso9660 search search_fs_file chain fat normal linux configfile probe
 ```
+
+O `probe` entrou na v3 e não é opcional para o Arch: o `loopback.cfg` da ISO
+dele descobre o UUID do filesystem que hospeda a imagem com
+`probe --fs-uuid`, e passa esse UUID ao kernel em `img_dev=UUID=...` (ver
+`GrubConfigBuilder.ArchisoRecipe`). Sem o módulo, o comando não existe e a
+entrada morre no menu. A alternativa — descobrir o UUID pelo lado do Windows e
+gravar fixo no `grub.cfg` — foi descartada: exigiria deduzir como o Linux
+nomeia aquele volume, que é exatamente o tipo de palpite que este projeto não
+faz sobre disco.
 
 Por quê: o `grub.cfg` real (com o menu de boot, caminho da ISO etc.) é gerado
 em **runtime** por `GrubConfigBuilder`/`BootStagingService` — não dá pra
@@ -40,7 +49,7 @@ procurando `/boot/grub/grub.cfg` (onde `BootStagingService` escreve o
 
 ```sh
 grub-mkimage -O i386-pc -o core.img -c early-bios.cfg -p /boot/grub \
-  biosdisk part_msdos part_gpt ntfs loopback iso9660 search search_fs_file normal linux configfile
+  biosdisk part_msdos part_gpt ntfs loopback iso9660 search search_fs_file normal linux configfile probe
 ```
 
 `boot.img` (440 bytes) e o embutimento do `core.img` no gap pós-MBR
@@ -85,9 +94,11 @@ gap) cabem com folga.
 
 Ambos os caminhos (UEFI e BIOS legado) têm todo o código e os assets
 necessários, incluindo o early config que resolve como o GRUB acha o
-`grub.cfg` real. **Nada disso foi validado por um boot completo até o menu**
-— só a etapa de chegar até o `grubx64.efi`/entrada BCD foi confirmada em
-teste real (ver Histórico). A comparação byte a byte contra o
+`grub.cfg` real.
+
+**UEFI está validado de ponta a ponta** desde a v3 (2026-08-17): entrada BCD →
+`grubx64.efi` → early config → menu → sistema live do Arch bootado a partir da
+ISO em loopback. **BIOS legado continua sem nenhum boot real.** A comparação byte a byte contra o
 `grub-bios-setup` real (WSL, disco sintético em loop device) é a validação
 mais forte disponível sem QEMU/hardware pro lado BIOS, mas não substitui
 testar de verdade. Ver `TEST_MATRIX.md`.
@@ -100,6 +111,14 @@ testar de verdade. Ver `TEST_MATRIX.md`.
   `osloader` em vez de cópia de `{bootmgr}` — `0xc000007b`; ESP desmontada
   antes do `bcdedit` rodar). Corrigidos em `BootConfigurationService`/
   `BootStagingService`.
+- **v3 (2026-08-17)**: acrescentado o módulo `probe` aos dois binários, para o
+  suporte ao Arch (ver acima). Regerados com `grub-mkimage` 2.14-2ubuntu2.1 via
+  WSL/Ubuntu. A lista de módulos embutidos do `grubx64.efi` foi comparada antes
+  e depois parseando a tabela de módulos dos próprios arquivos: a única
+  diferença é a linha `probe`, e o early config e o prefixo saíram byte a byte
+  idênticos aos da v2. **Validada em boot real** (UEFI, dual-boot, ISO do Arch
+  2026.08.01) — primeira vez que um binário daqui chega ao sistema live. O
+  `core.img` (BIOS legado) continua sem teste de boot.
 - **v2 (2026-07-27, tarde)**: ao revisar o restante do pipeline depois desses
   bugs, identifiquei que a v1 não tinha nenhuma garantia de achar o
   `grub.cfg` real (nem UEFI nem BIOS) — trocado `grub-mkstandalone` por
